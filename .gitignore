@@ -1,0 +1,56 @@
+# Python (CV pipeline)
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.ipynb_checkpoints/
+
+# YOLOv8 / ML artifacts
+runs/
+weights/
+*.pt
+*.onnx
+*.engine
+
+# Arduino / PlatformIO
+firmware/esp32/.pio/
+firmware/esp32/build/
+firmware/esp32/.vscode/
+
+# KiCad
+hardware/electrical/*.bak
+hardware/electrical/*-backups/
+hardware/electrical/*.kicad_prl
+hardware/electrical/fp-info-cache
+hardware/electrical/gerber/
+hardware/electrical/__pycache__/
+
+# CAD
+hardware/mechanical/*.bak
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+logs/
+
+# Secrets / keys
+*.env
+secrets.py
