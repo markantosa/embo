@@ -4,6 +4,11 @@
 
 EMBO is a closed-loop medical device that automates and quality-controls the preparation of gelatin foam embolic agents for interventional radiology procedures. It is the first device of its kind to measure and control particle size during embolic agent preparation in real time.
 
+| | |
+|:---:|:---:|
+| ![EMBO isometric view](assets/embo%20iso.png) | ![EMBO side view](assets/embo%20side.png) |
+| *Isometric render* | *Front view* |
+
 ---
 
 ## The Problem
