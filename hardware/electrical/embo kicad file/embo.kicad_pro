@@ -652,6 +652,42 @@
           "label": "#",
           "name": "${ITEM_NUMBER}",
           "show": false
+        },
+        {
+          "group_by": false,
+          "label": "MAXIMUM_PACKAGE_HEIGHT",
+          "name": "MAXIMUM_PACKAGE_HEIGHT",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "MANUFACTURER",
+          "name": "MANUFACTURER",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "STANDARD",
+          "name": "STANDARD",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Availability",
+          "name": "Availability",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "PARTREV",
+          "name": "PARTREV",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Price",
+          "name": "Price",
+          "show": false
         }
       ],
       "filter_string": "",
@@ -702,7 +738,7 @@
         "uuid": "7ba7b830-b54e-44de-afe6-f7f489323a5a"
       }
     ],
-    "used_designators": "V1,L1,#PWR1-115,D1-7,J1-14,10Ω1,#FLG1-5,R1-36,C1-35,U1-8,Q1,F1,1nF1,100nF1-2,10Ω11,10Ω111,10Ω1111,10Ω11111,10Ω111111",
+    "used_designators": "J3-4",
     "variants": []
   },
   "sheets": [

@@ -618,6 +618,357 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Connector:Conn_01x06_Socket"
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "J"
+				(at 0 7.62 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Conn_01x06_Socket"
+				(at 0 -10.16 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Generic connector, single row, 01x06, script generated"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_locked" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "connector"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "Connector*:*_1x??_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Conn_01x06_Socket_1_1"
+				(polyline
+					(pts
+						(xy -1.27 5.08) (xy -0.508 5.08)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 2.54) (xy -0.508 2.54)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 0) (xy -0.508 0)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 -2.54) (xy -0.508 -2.54)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 -5.08) (xy -0.508 -5.08)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 -7.62) (xy -0.508 -7.62)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 4.572)
+					(mid -0.5058 5.08)
+					(end 0 5.588)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 2.032)
+					(mid -0.5058 2.54)
+					(end 0 3.048)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 -0.508)
+					(mid -0.5058 0)
+					(end 0 0.508)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 -3.048)
+					(mid -0.5058 -2.54)
+					(end 0 -2.032)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 -5.588)
+					(mid -0.5058 -5.08)
+					(end 0 -4.572)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 -8.128)
+					(mid -0.5058 -7.62)
+					(end 0 -7.112)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -5.08 5.08 0)
+					(length 3.81)
+					(name "Pin_1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 2.54 0)
+					(length 3.81)
+					(name "Pin_2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 0 0)
+					(length 3.81)
+					(name "Pin_3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -2.54 0)
+					(length 3.81)
+					(name "Pin_4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -5.08 0)
+					(length 3.81)
+					(name "Pin_5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -7.62 0)
+					(length 3.81)
+					(name "Pin_6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Connector:Conn_Coaxial"
 			(pin_names
 				(offset 1.016)
@@ -9332,7 +9683,7 @@
 		(uuid "07b13f19-10a6-4b77-9caa-3dfaee33cd78")
 	)
 	(label "M1_B1"
-		(at 158.75 71.12 180)
+		(at 156.21 76.2 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9395,7 +9746,7 @@
 		(uuid "20a262a2-6bdc-496d-97e7-9e31acb08e87")
 	)
 	(label "M2_B1"
-		(at 158.75 83.82 180)
+		(at 176.53 76.2 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9406,7 +9757,7 @@
 		(uuid "261ce574-d896-4be4-94d2-c8c509ea87ab")
 	)
 	(label "M1_B2"
-		(at 158.75 73.66 180)
+		(at 156.21 81.28 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9591,7 +9942,7 @@
 		(uuid "540c0cb6-9db4-4660-9ebb-1edfeec3b329")
 	)
 	(label "M1_A1"
-		(at 158.75 64.77 180)
+		(at 156.21 68.58 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9850,7 +10201,7 @@
 		(uuid "9899c661-2920-4d71-8d26-1951d1822c7b")
 	)
 	(label "M2_A2"
-		(at 158.75 80.01 180)
+		(at 176.53 73.66 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9955,7 +10306,7 @@
 		(uuid "bbbcc5f6-f09d-4879-96db-0ef5fb9d3679")
 	)
 	(label "M2_B2"
-		(at 158.75 86.36 180)
+		(at 176.53 81.28 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9977,7 +10328,7 @@
 		(uuid "bf5547f2-50fa-4d95-b2a5-f82453693747")
 	)
 	(label "M2_A1"
-		(at 158.75 77.47 180)
+		(at 176.53 68.58 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -10009,7 +10360,7 @@
 		(uuid "cb58a90a-313b-49ed-bb54-26af87f033bb")
 	)
 	(label "M1_A2"
-		(at 158.75 67.31 180)
+		(at 156.21 73.66 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -12599,7 +12950,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "AO4407A:SOIC127P600X175-8N"
+		(property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
 			(at 35.56 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -19825,8 +20176,8 @@
 		)
 	)
 	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 163.83 77.47 0)
+		(lib_id "Connector:Conn_01x06_Socket")
+		(at 162.56 73.66 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -19834,10 +20185,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "8eef6241-d889-49c9-ba08-905dd85ee745")
-		(property "Reference" "J5"
-			(at 166.37 77.4699 0)
+		(uuid "8d648096-7a0f-4a6a-8b99-cf229686c2a6")
+		(property "Reference" "J3"
+			(at 163.83 73.6599 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -19847,8 +20197,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "Motor 2 coil A"
-			(at 166.37 80.0099 0)
+		(property "Value" "Conn_01x06_Socket"
+			(at 149.606 64.516 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -19859,7 +20209,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 163.83 77.47 0)
+			(at 162.56 73.66 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -19870,7 +20220,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 163.83 77.47 0)
+			(at 162.56 73.66 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -19880,8 +20230,8 @@
 				)
 			)
 		)
-		(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 163.83 77.47 0)
+		(property "Description" "Generic connector, single row, 01x06, script generated"
+			(at 162.56 73.66 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -19892,15 +20242,27 @@
 			)
 		)
 		(pin "1"
-			(uuid "3783313c-f074-4527-92b9-32eba69e30f6")
+			(uuid "14a37238-dd5a-4018-b7a7-dcb222968368")
+		)
+		(pin "6"
+			(uuid "bfdefbd8-9731-4d45-9878-50deb815be04")
+		)
+		(pin "4"
+			(uuid "86701674-78ef-4178-9706-d642febe1ecd")
 		)
 		(pin "2"
-			(uuid "23a2af2d-06b8-46d4-b3a8-45beaf480bca")
+			(uuid "b3e25153-f4da-49d5-8568-c3645816a158")
+		)
+		(pin "5"
+			(uuid "cef0fb0a-d745-42a0-97ac-c8fd59d1f8eb")
+		)
+		(pin "3"
+			(uuid "1d46a3af-2f59-4270-8fa5-0036a7da3599")
 		)
 		(instances
 			(project "embo"
 				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
-					(reference "J5")
+					(reference "J3")
 					(unit 1)
 				)
 			)
@@ -23425,7 +23787,7 @@
 				)
 			)
 		)
-		(property "Footprint" "OPA2354AQDGKRQ1:SOP65P490X110-8N"
+		(property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
 			(at 232.41 40.64 0)
 			(hide yes)
 			(show_name no)
@@ -24151,7 +24513,7 @@
 				)
 			)
 		)
-		(property "Footprint" "OPA2354AQDGKRQ1:SOP65P490X110-8N"
+		(property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
 			(at 242.57 93.98 0)
 			(hide yes)
 			(show_name no)
@@ -24920,6 +25282,99 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector:Conn_01x06_Socket")
+		(at 182.88 73.66 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "cc972674-2e71-4702-b431-93efad7263b0")
+		(property "Reference" "J4"
+			(at 184.15 73.6599 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Conn_01x06_Socket"
+			(at 173.228 64.262 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 182.88 73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 182.88 73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x06, script generated"
+			(at 182.88 73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "df650dfb-6056-45ed-aaeb-89c51692730d")
+		)
+		(pin "6"
+			(uuid "6de88680-17db-482c-9366-de6b6ed04f20")
+		)
+		(pin "4"
+			(uuid "5cd4faa6-0101-4890-9363-88fc39d8daf2")
+		)
+		(pin "2"
+			(uuid "6a8d738e-265d-4e56-8312-8c96168974c5")
+		)
+		(pin "5"
+			(uuid "85383a7e-8986-418d-b07f-5aa8acebc5b6")
+		)
+		(pin "3"
+			(uuid "aec96517-8a1b-4b56-ba52-51cea7fde7c0")
+		)
+		(instances
+			(project "embo"
+				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
+					(reference "J4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Diode:BAV99")
 		(at 325.12 88.9 0)
 		(unit 1)
@@ -25074,88 +25529,6 @@
 			(project "embo"
 				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
 					(reference "#PWR026")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 163.83 71.12 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "cead7880-5db9-4702-8c69-b510a41572d6")
-		(property "Reference" "J4"
-			(at 166.37 71.1199 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "Motor 1 coil B"
-			(at 166.37 73.6599 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" ""
-			(at 163.83 71.12 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 163.83 71.12 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 163.83 71.12 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "cba8e2da-88c6-43d6-bfc3-f5a0b3ffa287")
-		)
-		(pin "2"
-			(uuid "773aaed0-3a32-4a40-aa2a-b060b47b931c")
-		)
-		(instances
-			(project "embo"
-				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
-					(reference "J4")
 					(unit 1)
 				)
 			)
@@ -26415,88 +26788,6 @@
 			(project "embo"
 				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
 					(reference "#PWR034")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 163.83 64.77 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "e341aced-392d-4856-a1e4-a58e3b5319c0")
-		(property "Reference" "J3"
-			(at 166.37 64.7699 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "Motor 1 coil A"
-			(at 166.37 67.3099 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" ""
-			(at 163.83 64.77 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 163.83 64.77 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 163.83 64.77 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "19618f74-bc8b-4d98-8f8c-c8c6433ed8aa")
-		)
-		(pin "2"
-			(uuid "f1c9d188-f602-4c80-9294-4c0289faaf61")
-		)
-		(instances
-			(project "embo"
-				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
-					(reference "J3")
 					(unit 1)
 				)
 			)
@@ -27968,88 +28259,6 @@
 			(project "embo"
 				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
 					(reference "#PWR089")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 163.83 83.82 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "f580799c-6113-493a-93e7-3d078e8172a9")
-		(property "Reference" "J6"
-			(at 166.37 83.8199 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "Motor 2 coil B"
-			(at 166.37 86.3599 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" ""
-			(at 163.83 83.82 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 163.83 83.82 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 163.83 83.82 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "c0dc3180-88d6-45df-93c7-9dc26c4cc12b")
-		)
-		(pin "2"
-			(uuid "62222a32-44b4-4e84-a1b2-3f99253b4694")
-		)
-		(instances
-			(project "embo"
-				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
-					(reference "J6")
 					(unit 1)
 				)
 			)
