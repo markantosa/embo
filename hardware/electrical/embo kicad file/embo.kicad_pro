@@ -738,7 +738,7 @@
         "uuid": "7ba7b830-b54e-44de-afe6-f7f489323a5a"
       }
     ],
-    "used_designators": "J3-4",
+    "used_designators": "R20,LED_stat1,100nF3",
     "variants": []
   },
   "sheets": [
