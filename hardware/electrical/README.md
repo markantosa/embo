@@ -5,7 +5,7 @@ KiCad schematic and PCB layout for the EMBO ESP32-S3 control board.
 ## Design spec
 
 Full design specification, component values, GPIO assignments, layout rules, and pre-submission checklist:
-[`/docs/EMBO_PCB_Design_Brief_v2.1.txt`](../../docs/EMBO_PCB_Design_Brief_v2.1.txt)
+[`/docs/EMBO_PCB_Design_Brief_v2.4.txt`](../../docs/EMBO_PCB_Design_Brief_v2.4.txt)
 
 ## Quick reference
 
