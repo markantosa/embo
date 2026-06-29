@@ -1,0 +1,155 @@
+================================================================
+EMBO — PINOUT CHEAT SHEET  (v2.4, ESP32-S3-WROOM-1-N8)
+================================================================
+
+----------------------------------------------------------------
+1. ESP32-S3 GPIO ASSIGNMENTS
+----------------------------------------------------------------
+
+GPIO  Signal          Dir    Connected to
+----  --------------  -----  ----------------------------------------
+1     UAS_ADC         In     Envelope detector output (ADC1_CH0)
+2     STATUS_LED      Out    330Ω → green LED → GND
+4     TMC_UART        Bidir  TMC2209 PDN_UART (half-duplex UART1)
+5     STEP_M1         Out    TMC2209 U5 STEP (LEDC PWM)
+6     DIR_M1          Out    TMC2209 U5 DIR
+7     EN_M1           Out    TMC2209 U5 EN (10kΩ pull-up at IC)
+8     STEP_M2         Out    TMC2209 U6 STEP (LEDC PWM)
+9     DIR_M2          Out    TMC2209 U6 DIR
+10    EN_M2           Out    TMC2209 U6 EN (10kΩ pull-up at IC)
+11    BTN1            In     IDC pin 16 → breakout button 1
+12    BTN2            In     IDC pin 17 → breakout button 2
+13    BUZ_PWM         Out    IDC pin 18 → 2N7002 gate (LEDC PWM)
+14    LIMIT_M1        In     J6 pin 2 — limit switch 1 to GND
+15    LIMIT_M2        In     J7 pin 2 — limit switch 2 to GND
+16    EC11_A (CLK)    In     IDC pin 13 → EC11 A
+17    EC11_B (DT)     In     IDC pin 14 → EC11 B
+18    EC11_SW         In     IDC pin 15 → EC11 push switch
+19    USB D−          Fixed  USB-C A7 + B7 (fixed PHY — no other use)
+20    USB D+          Fixed  USB-C A6 + B6 (fixed PHY — no other use)
+21    TOUCH_IRQ       In     IDC pin 12 → XPT2046 T_IRQ (active LOW)
+35    SPI_MOSI        Out    AD9833 SDATA + IDC pin 5 (TFT/touch)
+36    SPI_CLK         Out    AD9833 SCLK + IDC pin 7 (TFT/touch)
+37    SPI_MISO        In     IDC pin 6 (XPT2046 readback)
+38    AD9833_CS       Out    AD9833 FSYNC (active LOW, SPI Mode 2)
+39    TFT_CS          Out    IDC pin 8 → ILI9341 CS (active LOW)
+40    TFT_DC          Out    IDC pin 9 → ILI9341 DC
+41    TFT_RST         Out    IDC pin 10 → ILI9341 RESET (active LOW)
+42    TOUCH_CS        Out    IDC pin 11 → XPT2046 T_CS (active LOW)
+47    RPi_TX          Out    J3 pin 3 → RPi GPIO15 (921600 baud)
+48    RPi_RX          In     J3 pin 2 ← RPi GPIO14
+
+SPI speeds: ILI9341 via ribbon → 20 MHz max | XPT2046 → 2 MHz max
+            AD9833 direct → ~10 MHz | AD9833 uses Mode 2, rest Mode 0
+
+----------------------------------------------------------------
+2. EXTERNAL CONNECTORS (MAIN BOARD)
+----------------------------------------------------------------
+
+J1  TX Transducer     SMA edge-launch    Centre: IC1 out (47Ω+100nF)
+J2  RX Transducer     SMA edge-launch    Centre: R_in → D1 BAV99
+J3  RPi UART          JST-XH 2.5mm 3p   Pin 1: GND | 2: GPIO48 RX | 3: GPIO47 TX
+J4  Motor 1           JST-XH 2.5mm 6p   Pin 1:OA1 | 2:NC | 3:OA2 | 4:OB1 | 5:NC | 6:OB2
+J5  Motor 2           JST-XH 2.5mm 6p   Pin 1:OA1 | 2:NC | 3:OA2 | 4:OB1 | 5:NC | 6:OB2
+J6  Limit switch M1   JST-XH 2.5mm 2p   Pin 1: GND | 2: GPIO14
+J7  Limit switch M2   JST-XH 2.5mm 2p   Pin 1: GND | 2: GPIO15
+J8  LED panel         JST-XH 2.5mm 2p   Pin 1: 5V  | 2: GND
+J9  UI breakout IDC   IDC 2×10 2.54mm   20-pin ribbon (see Section 3)
+J13 USB-C programming USB-C receptacle   A6+B6→GPIO20 | A7+B7→GPIO19 | CC1/CC2→5.1kΩ GND
+J14 24V PSU input     3.5mm screw 2p     Via Q1 AO4407A → F1 polyfuse → D5 TVS
+
+----------------------------------------------------------------
+3. J9 IDC RIBBON (20-PIN, MAIN ↔ UI BREAKOUT)
+----------------------------------------------------------------
+Pin 1 = red stripe. Always GND. Both PCBs: shrouded (box) IDC headers.
+
+Pin  Signal          GPIO / Net  Dir   Notes
+---  --------------  ----------  ----  ------------------------------------------
+1    GND             —           —     Red stripe reference
+2    3.3V            3.3V rail   Out   TFT logic + breakout pull-ups
+3    GND             —           —     Extra GND
+4    5V              5V rail     Out   Buzzer supply (louder at 5V)
+5    SPI_MOSI        GPIO35      Out   ILI9341 SDI + XPT2046 T_DIN
+6    SPI_MISO        GPIO37      In    ILI9341 SDO + XPT2046 T_DO
+7    SPI_CLK         GPIO36      Out   20 MHz max via ribbon
+8    TFT_CS          GPIO39      Out   ILI9341 CS — active LOW
+9    TFT_DC          GPIO40      Out   ILI9341 data/command
+10   TFT_RST         GPIO41      Out   ILI9341 reset — active LOW
+11   TOUCH_CS        GPIO42      Out   XPT2046 CS — active LOW
+12   TOUCH_IRQ       GPIO21      In    XPT2046 IRQ — active LOW
+13   EC11_A (CLK)    GPIO16      In    Encoder A
+14   EC11_B (DT)     GPIO17      In    Encoder B
+15   EC11_SW         GPIO18      In    Encoder push switch
+16   BTN1            GPIO11      In    Push button 1
+17   BTN2            GPIO12      In    Push button 2
+18   BUZ_PWM         GPIO13      Out   2N7002 gate (LEDC PWM)
+19   GND             —           —     Extra GND
+20   NC              —           —     No connect
+
+----------------------------------------------------------------
+4. TFT MODULE (14-PIN SOCKET ON BREAKOUT)
+----------------------------------------------------------------
+
+Socket  Module label  Signal (from ribbon/net)
+------  ------------  ----------------------------------------
+1       VCC           Ribbon pin 2 (3.3V)
+2       GND           Ribbon pin 1/3/19 (GND)
+3       CS            Ribbon pin 8 (TFT_CS / GPIO39)
+4       RESET         Ribbon pin 10 (TFT_RST / GPIO41) + 10kΩ pull-up
+5       DC            Ribbon pin 9 (TFT_DC / GPIO40)
+6       SDI (MOSI)    Ribbon pin 5 (SPI_MOSI / GPIO35)
+7       SCK           Ribbon pin 7 (SPI_CLK / GPIO36) — 20 MHz max
+8       LED           3.3V via 47Ω on breakout (always-on backlight)
+9       SDO (MISO)    Ribbon pin 6 (SPI_MISO / GPIO37)
+10      T_CLK         Same net as pin 7 (SCK)
+11      T_CS          Ribbon pin 11 (TOUCH_CS / GPIO42)
+12      T_DIN         Same net as pin 6 (MOSI)
+13      T_DO          Same net as pin 9 (MISO)
+14      T_IRQ         Ribbon pin 12 (TOUCH_IRQ / GPIO21)
+
+On breakout: tie MOSI→pins 6+12, CLK→pins 7+10, MISO→pins 9+13
+
+----------------------------------------------------------------
+5. EC11 ROTARY ENCODER (BREAKOUT)
+----------------------------------------------------------------
+
+EC11 pin  Signal   Ribbon pin  GPIO   Breakout filter
+--------  -------  ----------  -----  --------------------
+A (CLK)   EC11_A   13          GPIO16  10kΩ pull-up + 100nF
+B (DT)    EC11_B   14          GPIO17  10kΩ pull-up + 100nF
+SW        EC11_SW  15          GPIO18  10kΩ pull-up + 100nF
+COM (×2)  GND      —           —      Tie to GND
+
+----------------------------------------------------------------
+6. PUSH BUTTONS (BREAKOUT)
+----------------------------------------------------------------
+
+Button  Signal  Ribbon pin  GPIO   Breakout filter
+------  ------  ----------  -----  --------------------
+BTN1    BTN1    16          GPIO11  10kΩ pull-up + 100nF
+BTN2    BTN2    17          GPIO12  10kΩ pull-up + 100nF
+
+One terminal to GND, one to signal + pull-up (+ GPIO internal pull-up backup)
+
+----------------------------------------------------------------
+7. TMC2209 MOTOR DRIVER ADDRESSING (U5 / U6)
+----------------------------------------------------------------
+
+Driver   Ref  MS1              MS2   UART Addr
+-------  ---  ---------------  ----  ---------
+Motor 1  U5   GND              GND   0
+Motor 2  U6   3.3V via 10kΩ   GND   1
+
+Shared half-duplex UART on GPIO4 via R_UART 1kΩ + R_PDN_UP 10kΩ to 3.3V.
+
+----------------------------------------------------------------
+8. POWER RAILS
+----------------------------------------------------------------
+
+Rail   Source          Voltage    Max current  Key consumers
+-----  --------------  ---------  -----------  ----------------------------
+24V    PSU direct      12–24V     6A peak      2× TMC2209 VM
+5V     LM2596 buck     5V ±2%     2A           LED panel, TMC2209 VCC_IO, buzzer
+3.3V   AMS1117-3.3     3.3V ±1%   800mA        ESP32, AD9833, op-amps, TFT logic
+
+================================================================
