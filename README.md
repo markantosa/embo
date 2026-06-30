@@ -1,4 +1,4 @@
-# EMBO — Embolization Particle Sizing System HEHE
+# EMBO — Embolization Particle Sizing System HAHA
 
 > SUTD 30.007 Engineering Design Innovation | Team EMBO | Week 5 of 13
 
