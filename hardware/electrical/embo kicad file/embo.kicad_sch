@@ -8585,7 +8585,7 @@
 	)
 	(text "ESP 32 S3 N8\n"
 		(exclude_from_sim no)
-		(at 65.532 169.672 0)
+		(at 67.056 177.546 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9003,7 +9003,7 @@
 	)
 	(text "Micro-controller"
 		(exclude_from_sim no)
-		(at 171.45 196.85 0)
+		(at 97.79 200.66 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -9188,7 +9188,7 @@
 		)
 		(uuid "b51a8a09-fa45-4fed-9219-96bbf60cd291")
 	)
-	(text "20 pin dupont"
+	(text "20 pin IDC Socket"
 		(exclude_from_sim no)
 		(at 221.996 145.542 0)
 		(effects
@@ -9917,7 +9917,7 @@
 	)
 	(polyline
 		(pts
-			(xy 182.88 198.12) (xy 160.02 198.12)
+			(xy 109.22 201.93) (xy 86.36 201.93)
 		)
 		(stroke
 			(width 0)
@@ -12949,7 +12949,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 261.62 157.48 0)
+		(at 166.37 179.07 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -12960,7 +12960,7 @@
 		(fields_autoplaced yes)
 		(uuid "04493724-8a67-4400-891f-a46de16a4f9c")
 		(property "Reference" "#PWR0103"
-			(at 261.62 163.83 0)
+			(at 166.37 185.42 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12971,7 +12971,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 261.62 162.56 0)
+			(at 166.37 184.15 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12981,7 +12981,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 261.62 157.48 0)
+			(at 166.37 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12992,7 +12992,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 261.62 157.48 0)
+			(at 166.37 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13003,7 +13003,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 261.62 157.48 0)
+			(at 166.37 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -18781,7 +18781,7 @@
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x02")
-		(at 266.7 154.94 0)
+		(at 171.45 176.53 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -18792,7 +18792,7 @@
 		(fields_autoplaced yes)
 		(uuid "5702a9dd-67e3-4e06-86c2-d85bce99f0dc")
 		(property "Reference" "J8"
-			(at 269.24 154.9399 0)
+			(at 173.99 176.5299 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -18803,7 +18803,7 @@
 			)
 		)
 		(property "Value" "LED Panel"
-			(at 269.24 157.48 0)
+			(at 173.99 179.07 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -18816,7 +18816,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 266.7 154.94 0)
+			(at 171.45 176.53 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -18827,7 +18827,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 266.7 154.94 0)
+			(at 171.45 176.53 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -18838,7 +18838,7 @@
 			)
 		)
 		(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 266.7 154.94 0)
+			(at 171.45 176.53 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -23318,7 +23318,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Inductor_SMD:L_Bourns_SRR1260"
 			(at 123.19 27.94 0)
 			(hide yes)
 			(show_name no)
@@ -30801,7 +30801,7 @@
 	)
 	(symbol
 		(lib_id "power:+5V")
-		(at 261.62 154.94 0)
+		(at 166.37 176.53 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -30811,7 +30811,7 @@
 		(dnp no)
 		(uuid "fdc23489-a0f6-4073-bf68-256a390fd295")
 		(property "Reference" "#PWR0102"
-			(at 261.62 158.75 0)
+			(at 166.37 180.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -30822,7 +30822,7 @@
 			)
 		)
 		(property "Value" "+5V"
-			(at 260.604 152.146 0)
+			(at 165.354 173.736 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -30832,7 +30832,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 261.62 154.94 0)
+			(at 166.37 176.53 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -30843,7 +30843,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 261.62 154.94 0)
+			(at 166.37 176.53 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -30854,7 +30854,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+5V\""
-			(at 261.62 154.94 0)
+			(at 166.37 176.53 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
