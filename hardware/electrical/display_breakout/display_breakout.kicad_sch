@@ -2511,6 +2511,16 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "Buzzer"
+		(exclude_from_sim no)
+		(at 122.428 80.01 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "29b6b56d-1c62-4e93-85ce-4b597003aeb6")
+	)
 	(text "From Main Control Board"
 		(exclude_from_sim no)
 		(at 50.038 33.528 0)
@@ -2583,6 +2593,16 @@
 	)
 	(wire
 		(pts
+			(xy 48.26 48.26) (xy 34.29 48.26)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "631c177a-4805-44bc-a964-274076802f71")
+	)
+	(wire
+		(pts
 			(xy 69.85 45.72) (xy 69.85 44.45)
 		)
 		(stroke
@@ -2600,6 +2620,16 @@
 			(type default)
 		)
 		(uuid "7b326aca-855a-499b-b2d9-91d1bdca83b1")
+	)
+	(wire
+		(pts
+			(xy 34.29 48.26) (xy 34.29 49.53)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7f5219a8-cec9-429e-833c-19499df2a28a")
 	)
 	(wire
 		(pts
@@ -2692,7 +2722,7 @@
 		(uuid "0cf6bd47-b273-4d3b-8f84-621e1485a69a")
 	)
 	(label "BTN2"
-		(at 48.26 68.58 180)
+		(at 48.26 66.04 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2702,7 +2732,7 @@
 		(uuid "1141ffbd-da3c-4332-a8e9-fe5e7cf435e1")
 	)
 	(label "BTN1"
-		(at 60.96 66.04 0)
+		(at 60.96 63.5 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2742,7 +2772,7 @@
 		(uuid "2369c3e6-9577-41a2-a241-6af04d5ecc78")
 	)
 	(label "EC11_B (DT)"
-		(at 60.96 63.5 0)
+		(at 60.96 60.96 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2752,7 +2782,7 @@
 		(uuid "2bdaff2a-70e3-4c81-b92e-beaa0b0c4e06")
 	)
 	(label "EC11_SW"
-		(at 48.26 66.04 180)
+		(at 48.26 63.5 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2770,16 +2800,6 @@
 			(justify left bottom)
 		)
 		(uuid "2e4792dc-655b-4139-a740-40ebb75f22e0")
-	)
-	(label "TOUCH_DIN"
-		(at 60.96 60.96 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "391bab66-cd77-414b-8f0d-819a2b2f52c6")
 	)
 	(label "BTN1"
 		(at 146.05 50.8 180)
@@ -2842,7 +2862,7 @@
 		(uuid "6939f5ec-f70f-45b9-9ea1-5e424359251f")
 	)
 	(label "SPI_CLK"
-		(at 48.26 50.8 180)
+		(at 48.26 53.34 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2850,26 +2870,6 @@
 			(justify right bottom)
 		)
 		(uuid "6e151cd6-a4a3-403c-8bc7-23f5c50e11a8")
-	)
-	(label "TOUCH_DO"
-		(at 48.26 60.96 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "7697848a-3f3d-4131-a0b6-43faeda490df")
-	)
-	(label "TOUCH_CLK"
-		(at 48.26 55.88 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "78bbe5be-1f96-4aca-8c68-9446232b30cb")
 	)
 	(label "SPI_CLK"
 		(at 54.61 107.95 180)
@@ -2952,7 +2952,7 @@
 		(uuid "d5308766-b91d-4631-9bf4-a0cb62ef71f7")
 	)
 	(label "EC11_A(CLK)"
-		(at 48.26 63.5 180)
+		(at 48.26 60.96 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2962,7 +2962,7 @@
 		(uuid "e49ef209-b8d7-4ab9-971c-df5ba0b0c250")
 	)
 	(label "BUZ_PWM"
-		(at 60.96 68.58 0)
+		(at 60.96 66.04 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2972,7 +2972,7 @@
 		(uuid "e9de0e72-c034-468d-94f4-3c154ada4a62")
 	)
 	(label "SPI_MOSI"
-		(at 48.26 48.26 180)
+		(at 48.26 50.8 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2982,7 +2982,7 @@
 		(uuid "ee1c2209-adc3-41bf-b95b-1cc585b2fde0")
 	)
 	(label "TFT_DC"
-		(at 48.26 53.34 180)
+		(at 48.26 55.88 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -3198,6 +3198,84 @@
 			(project "display_breakout"
 				(path "/45873867-1db2-46ee-bf15-a426afef4e1f"
 					(reference "J1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 34.29 49.53 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "315b4153-2e8e-4390-9332-56d822ecbfeb")
+		(property "Reference" "#PWR06"
+			(at 34.29 55.88 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 34.29 54.61 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 34.29 49.53 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 34.29 49.53 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 34.29 49.53 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "95761f49-ffde-4c21-a2bf-a4a607a48f66")
+		)
+		(instances
+			(project "display_breakout"
+				(path "/45873867-1db2-46ee-bf15-a426afef4e1f"
+					(reference "#PWR06")
 					(unit 1)
 				)
 			)
@@ -3552,7 +3630,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Buzzer_Beeper:Buzzer_12x9.5RM7.6"
 			(at 126.365 88.9 90)
 			(hide yes)
 			(show_name no)
@@ -3673,6 +3751,162 @@
 			(project "display_breakout"
 				(path "/45873867-1db2-46ee-bf15-a426afef4e1f"
 					(reference "#PWR08")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 124.46 93.98 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "567b4f06-c749-45ee-b24f-e89cbc2d79a4")
+		(property "Reference" "#PWR02"
+			(at 124.46 100.33 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 124.46 99.06 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 124.46 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 124.46 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 124.46 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "c23205b5-9454-4f7c-a843-d956eab72b11")
+		)
+		(instances
+			(project "display_breakout"
+				(path "/45873867-1db2-46ee-bf15-a426afef4e1f"
+					(reference "#PWR02")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 48.26 68.58 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "5ecd4f5f-dab8-41ab-ac7d-bfa92d661946")
+		(property "Reference" "#PWR014"
+			(at 48.26 74.93 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 48.26 73.66 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 48.26 68.58 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 48.26 68.58 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 48.26 68.58 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6ea3ca2a-10e7-407f-b8a3-fc18fae2ed6e")
+		)
+		(instances
+			(project "display_breakout"
+				(path "/45873867-1db2-46ee-bf15-a426afef4e1f"
+					(reference "#PWR014")
 					(unit 1)
 				)
 			)
@@ -3957,7 +4191,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Connector_PinSocket_2.54mm:PinSocket_1x14_P2.54mm_Vertical"
 			(at 59.69 105.41 0)
 			(hide yes)
 			(show_name no)
@@ -4193,6 +4427,84 @@
 			(project "display_breakout"
 				(path "/45873867-1db2-46ee-bf15-a426afef4e1f"
 					(reference "#PWR04")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 60.96 68.58 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "dec4e6ba-68db-465e-bbcb-b2a34b9758df")
+		(property "Reference" "#PWR015"
+			(at 60.96 74.93 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 60.96 73.66 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 60.96 68.58 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 60.96 68.58 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 60.96 68.58 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "49d7a20f-d4fa-4b23-a1ac-d5442269992a")
+		)
+		(instances
+			(project "display_breakout"
+				(path "/45873867-1db2-46ee-bf15-a426afef4e1f"
+					(reference "#PWR015")
 					(unit 1)
 				)
 			)
