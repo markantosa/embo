@@ -673,7 +673,11 @@
         "uuid": "45873867-1db2-46ee-bf15-a426afef4e1f"
       }
     ],
+<<<<<<< HEAD
     "used_designators": "",
+=======
+    "used_designators": "BZ1,SW1-3,#PWR1-13,J1-2",
+>>>>>>> 2d991d1540cde2a2496b195c0bea29cda677ed66
     "variants": []
   },
   "sheets": [

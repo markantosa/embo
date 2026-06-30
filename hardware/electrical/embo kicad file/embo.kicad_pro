@@ -738,7 +738,11 @@
         "uuid": "7ba7b830-b54e-44de-afe6-f7f489323a5a"
       }
     ],
+<<<<<<< HEAD
     "used_designators": "Rsnub1,D8,Csnub1",
+=======
+    "used_designators": "J15,C22,C28-29,C32,C40-41,LED_stat1,R_UART1,C_adc1,C_env1,Cbuck1,#PWR19,#PWR25,#PWR126-132,R10-11,R20,R34,R_PDN_UP1,Cbuckout1,100nF3,SW_reset1,R_in1,R_env1,SW_boot1",
+>>>>>>> 2d991d1540cde2a2496b195c0bea29cda677ed66
     "variants": []
   },
   "sheets": [
