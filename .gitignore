@@ -30,6 +30,7 @@ hardware/electrical/*.kicad_prl
 hardware/electrical/fp-info-cache
 hardware/electrical/gerber/
 hardware/electrical/__pycache__/
+**/*.lck
 
 # CAD
 hardware/mechanical/*.bak
