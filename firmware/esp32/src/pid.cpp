@@ -29,6 +29,7 @@ void pid_init() {
 
 void pid_start() {
     pid_init();
+    _last_ms = millis();  // seed time so first dt is ~0, not millis() since boot
     _running = true;
     motor_enable(1, true);
     motor_enable(2, true);
@@ -45,6 +46,7 @@ bool pid_target_reached() { return _done; }
 
 void pid_update() {
     if (!_running) return;
+    if (!motors_is_homed()) return;
 
     int16_t median = rpi_get_median_um();
     if (median < 0) return;   // no data yet

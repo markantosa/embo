@@ -15,6 +15,11 @@ void setup() {
     ui_init();
     rpi_uart_init();
     ble_debug_init();
+    pid_init();
+
+    // Homing must complete before the main loop. If it fails, the system
+    // stays idle — pid_update() guards against !motors_is_homed().
+    motors_home();
 }
 
 void loop() {

@@ -2,8 +2,9 @@
 #include "config.h"
 #include <Arduino.h>
 
-// UART1 routed to GPIO47 TX / GPIO48 RX via GPIO matrix
-static HardwareSerial _rpi(1);
+// UART2 routed to GPIO47 TX / GPIO48 RX via GPIO matrix.
+// UART1 is reserved for TMC2209 half-duplex on GPIO4 (motors.cpp).
+static HardwareSerial _rpi(2);
 
 static int16_t _median_um = -1;
 static int16_t _iqr_um    = -1;

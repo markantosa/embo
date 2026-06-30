@@ -81,6 +81,17 @@
 #define UAS_ADC_CHANNEL     ADC1_CHANNEL_0
 #define UAS_SETTLE_US       500
 
+// ── Homing ───────────────────────────────────────────────────────────────────
+// Slow approach speed — gentle enough to avoid impact damage on limit trip.
+#define HOMING_STEP_HZ       500
+// Steps to back off from the limit switch after trip (8 microsteps per full step).
+// 200 steps @ 8µstep = 25 full steps. Tune to suit the lead screw pitch.
+#define HOMING_BACKOFF_STEPS 200
+// Abort homing if limit not reached within this time.
+#define HOMING_TIMEOUT_MS    30000
+// Direction toward the limit switch. false = reverse. Verify on real hardware.
+#define HOMING_FORWARD       false
+
 // ── Particle size target ─────────────────────────────────────────────────────
 #define TARGET_SIZE_UM_MIN  300
 #define TARGET_SIZE_UM_MAX  500
