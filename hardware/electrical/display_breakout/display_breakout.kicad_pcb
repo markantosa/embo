@@ -941,13 +941,13 @@
 	(footprint "Connector_PinSocket_2.54mm:PinSocket_1x14_P2.54mm_Vertical"
 		(layer "F.Cu")
 		(uuid "97f118c1-72d3-4ba5-8d1d-5af30b39ad34")
-		(at 124.5 68.22)
+		(at 124.5 101.22 180)
 		(descr "Through hole straight socket strip, 1x14, 2.54mm pitch, single row (from Kicad 4.0.7), script generated")
 		(tags "Through hole socket strip THT 1x14 2.54mm single row")
 		(property "Reference" "J2"
 			(at 0 -2.77 0)
 			(layer "F.SilkS")
-			(uuid "fc104a04-3456-4b4e-8b2d-0280c2627afb")
+			(uuid "722175d0-c1a4-427e-8ba0-2422aa6f8527")
 			(effects
 				(font
 					(size 1 1)
@@ -958,7 +958,7 @@
 		(property "Value" "Conn_01x14_Socket"
 			(at 0 35.79 0)
 			(layer "F.Fab")
-			(uuid "6a184853-1220-4a46-8fda-0b587ebfe35b")
+			(uuid "499decf3-35b9-4254-9a56-9a0cf6a5e6f7")
 			(effects
 				(font
 					(size 1 1)
@@ -970,7 +970,7 @@
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "3f293517-c989-4d1b-8e0f-e59b1152f166")
+			(uuid "d28f20b3-d14b-488d-8f4a-748c4f8e8bcc")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -981,7 +981,7 @@
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "b235fa48-2925-4856-8593-f2e7525209de")
+			(uuid "6d117ab7-274c-40a7-8593-eb0495a2201c")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1013,44 +1013,14 @@
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
-			(start -1.33 1.27)
-			(end -1.33 34.35)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(uuid "2d4c6b1b-9e5a-4273-b094-0aee2567ed8e")
-		)
-		(fp_line
-			(start -1.33 1.27)
-			(end 1.33 1.27)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(uuid "36943768-ab7c-4291-919a-cb840c9bec8c")
-		)
-		(fp_line
-			(start -1.33 34.35)
+			(start 1.33 1.27)
 			(end 1.33 34.35)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(layer "F.SilkS")
-			(uuid "c8bf9d8c-634e-4999-96dd-64be3924a3d0")
-		)
-		(fp_line
-			(start 0 -1.33)
-			(end 1.33 -1.33)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(uuid "ae0eed82-cd34-4d05-a232-84e3405a2484")
+			(uuid "e14e8556-3d59-4da4-ad25-b3ee0b3550d0")
 		)
 		(fp_line
 			(start 1.33 -1.33)
@@ -1063,44 +1033,44 @@
 			(uuid "907960fc-5426-45dd-a5f5-f58c35849749")
 		)
 		(fp_line
-			(start 1.33 1.27)
+			(start 0 -1.33)
+			(end 1.33 -1.33)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+			(uuid "ae0eed82-cd34-4d05-a232-84e3405a2484")
+		)
+		(fp_line
+			(start -1.33 34.35)
 			(end 1.33 34.35)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(layer "F.SilkS")
-			(uuid "e14e8556-3d59-4da4-ad25-b3ee0b3550d0")
+			(uuid "c8bf9d8c-634e-4999-96dd-64be3924a3d0")
 		)
 		(fp_line
-			(start -1.77 -1.77)
-			(end 1.77 -1.77)
+			(start -1.33 1.27)
+			(end 1.33 1.27)
 			(stroke
-				(width 0.05)
+				(width 0.12)
 				(type solid)
 			)
-			(layer "F.CrtYd")
-			(uuid "044b45d9-fadd-40c0-ada6-1e4429111abc")
+			(layer "F.SilkS")
+			(uuid "36943768-ab7c-4291-919a-cb840c9bec8c")
 		)
 		(fp_line
-			(start -1.77 34.79)
-			(end -1.77 -1.77)
+			(start -1.33 1.27)
+			(end -1.33 34.35)
 			(stroke
-				(width 0.05)
+				(width 0.12)
 				(type solid)
 			)
-			(layer "F.CrtYd")
-			(uuid "82fd5bd4-df1b-4391-a3ad-731ae5acaee7")
-		)
-		(fp_line
-			(start 1.77 -1.77)
-			(end 1.77 34.79)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "F.CrtYd")
-			(uuid "572f531e-0ea4-4b30-a533-ded830e99e0e")
+			(layer "F.SilkS")
+			(uuid "2d4c6b1b-9e5a-4273-b094-0aee2567ed8e")
 		)
 		(fp_line
 			(start 1.77 34.79)
@@ -1113,34 +1083,44 @@
 			(uuid "444f04e9-4425-4d20-9abf-0632d910332d")
 		)
 		(fp_line
-			(start -1.27 -1.27)
-			(end 0.635 -1.27)
+			(start 1.77 -1.77)
+			(end 1.77 34.79)
 			(stroke
-				(width 0.1)
+				(width 0.05)
 				(type solid)
 			)
-			(layer "F.Fab")
-			(uuid "9d49ec43-bccf-438e-8e49-07e69299107e")
+			(layer "F.CrtYd")
+			(uuid "572f531e-0ea4-4b30-a533-ded830e99e0e")
 		)
 		(fp_line
-			(start -1.27 34.29)
-			(end -1.27 -1.27)
+			(start -1.77 34.79)
+			(end -1.77 -1.77)
 			(stroke
-				(width 0.1)
+				(width 0.05)
 				(type solid)
 			)
-			(layer "F.Fab")
-			(uuid "9a3a4d95-8a5f-41b0-8674-cc1bc001bb15")
+			(layer "F.CrtYd")
+			(uuid "82fd5bd4-df1b-4391-a3ad-731ae5acaee7")
 		)
 		(fp_line
-			(start 0.635 -1.27)
-			(end 1.27 -0.635)
+			(start -1.77 -1.77)
+			(end 1.77 -1.77)
+			(stroke
+				(width 0.05)
+				(type solid)
+			)
+			(layer "F.CrtYd")
+			(uuid "044b45d9-fadd-40c0-ada6-1e4429111abc")
+		)
+		(fp_line
+			(start 1.27 34.29)
+			(end -1.27 34.29)
 			(stroke
 				(width 0.1)
 				(type solid)
 			)
 			(layer "F.Fab")
-			(uuid "af44b651-8d9c-4cf8-81ae-897bcae4571b")
+			(uuid "147eb5ee-4d89-43f5-aee6-debca73746ea")
 		)
 		(fp_line
 			(start 1.27 -0.635)
@@ -1153,14 +1133,34 @@
 			(uuid "ef3d13f8-a2a8-45d5-8b08-49a4b43a2cf2")
 		)
 		(fp_line
-			(start 1.27 34.29)
-			(end -1.27 34.29)
+			(start 0.635 -1.27)
+			(end 1.27 -0.635)
 			(stroke
 				(width 0.1)
 				(type solid)
 			)
 			(layer "F.Fab")
-			(uuid "147eb5ee-4d89-43f5-aee6-debca73746ea")
+			(uuid "af44b651-8d9c-4cf8-81ae-897bcae4571b")
+		)
+		(fp_line
+			(start -1.27 34.29)
+			(end -1.27 -1.27)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+			(uuid "9a3a4d95-8a5f-41b0-8674-cc1bc001bb15")
+		)
+		(fp_line
+			(start -1.27 -1.27)
+			(end 0.635 -1.27)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "F.Fab")
+			(uuid "9d49ec43-bccf-438e-8e49-07e69299107e")
 		)
 		(fp_text user "${REFERENCE}"
 			(at 0 16.51 90)
@@ -1174,7 +1174,7 @@
 			)
 		)
 		(pad "1" thru_hole rect
-			(at 0 0)
+			(at 0 0 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1185,7 +1185,7 @@
 			(uuid "889e27c1-1dc5-41ae-bbfc-d2b4b2d50557")
 		)
 		(pad "2" thru_hole circle
-			(at 0 2.54)
+			(at 0 2.54 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1196,7 +1196,7 @@
 			(uuid "8be9c3e9-6877-4fb1-8384-85e2cc0539fd")
 		)
 		(pad "3" thru_hole circle
-			(at 0 5.08)
+			(at 0 5.08 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1207,7 +1207,7 @@
 			(uuid "7cd4b6a5-8888-46a7-ad3e-8521f7e09aab")
 		)
 		(pad "4" thru_hole circle
-			(at 0 7.62)
+			(at 0 7.62 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1218,7 +1218,7 @@
 			(uuid "4b1d7f7d-702b-46b3-9800-40b51534cafd")
 		)
 		(pad "5" thru_hole circle
-			(at 0 10.16)
+			(at 0 10.16 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1229,7 +1229,7 @@
 			(uuid "c162374d-3e88-42e8-b6e9-1e4c66621f36")
 		)
 		(pad "6" thru_hole circle
-			(at 0 12.7)
+			(at 0 12.7 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1240,7 +1240,7 @@
 			(uuid "100e650b-27f4-4f44-95d0-a771210bcfad")
 		)
 		(pad "7" thru_hole circle
-			(at 0 15.24)
+			(at 0 15.24 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1251,7 +1251,7 @@
 			(uuid "798c9a89-8923-477d-b792-05cbf3ee2886")
 		)
 		(pad "8" thru_hole circle
-			(at 0 17.78)
+			(at 0 17.78 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1262,7 +1262,7 @@
 			(uuid "14604b3c-25f2-4fa9-813f-f221c4e8db51")
 		)
 		(pad "9" thru_hole circle
-			(at 0 20.32)
+			(at 0 20.32 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1273,7 +1273,7 @@
 			(uuid "fb87fed8-fb3a-4d56-bd63-b33bfc77fdb7")
 		)
 		(pad "10" thru_hole circle
-			(at 0 22.86)
+			(at 0 22.86 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1284,7 +1284,7 @@
 			(uuid "ba9c2ae3-5a70-4b3f-899c-13d4dc7501c9")
 		)
 		(pad "11" thru_hole circle
-			(at 0 25.4)
+			(at 0 25.4 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1295,7 +1295,7 @@
 			(uuid "6b9b89a7-c1a9-4c62-9079-a835aa8a3bb6")
 		)
 		(pad "12" thru_hole circle
-			(at 0 27.94)
+			(at 0 27.94 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1306,7 +1306,7 @@
 			(uuid "2cefe967-3b4e-4d12-a5aa-70ae9d948d9a")
 		)
 		(pad "13" thru_hole circle
-			(at 0 30.48)
+			(at 0 30.48 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -1317,7 +1317,7 @@
 			(uuid "5c9c60ca-ab1b-4d72-8faa-866bfdbb3c59")
 		)
 		(pad "14" thru_hole circle
-			(at 0 33.02)
+			(at 0 33.02 180)
 			(size 1.7 1.7)
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
@@ -2154,7 +2154,7 @@
 	(footprint "Connector_IDC:IDC-Header_2x10_P2.54mm_Vertical"
 		(layer "B.Cu")
 		(uuid "eba46b78-5219-4931-af46-749aa41edc91")
-		(at 118.5 71.34 180)
+		(at 176.7525 73.3 180)
 		(descr "Through hole IDC box header, 2x10, 2.54mm pitch, DIN 41651 / IEC 60603-13, double rows, https://docs.google.com/spreadsheets/d/16SsEcesNF15N3Lb4niX7dcUr-NY5_MFPQhobNuNppn4/edit#gid=0")
 		(tags "Through hole vertical IDC box header THT 2x10 2.54mm double row")
 		(property "Reference" "J1"
