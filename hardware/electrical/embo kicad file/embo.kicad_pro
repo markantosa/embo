@@ -41,7 +41,7 @@
         "pads": {
           "drill": 0.8,
           "height": 1.27,
-          "width": 1.27
+          "width": 2.54
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -483,6 +483,7 @@
       "wire_dangling": "error"
     }
   },
+  "legacy": [],
   "libraries": {
     "pinned_footprint_libs": [],
     "pinned_symbol_libs": []
@@ -601,8 +602,26 @@
         },
         {
           "group_by": false,
+          "label": "Check_prices",
+          "name": "Check_prices",
+          "show": false
+        },
+        {
+          "group_by": false,
           "label": "DigiKey_Part_Number",
           "name": "DigiKey_Part_Number",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "MANUFACTURER",
+          "name": "MANUFACTURER",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "MAXIMUM_PACKAGE_HEIGHT",
+          "name": "MAXIMUM_PACKAGE_HEIGHT",
           "show": false
         },
         {
@@ -625,6 +644,18 @@
         },
         {
           "group_by": false,
+          "label": "PARTREV",
+          "name": "PARTREV",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Price",
+          "name": "Price",
+          "show": false
+        },
+        {
+          "group_by": false,
           "label": "Sim.Pins",
           "name": "Sim.Pins",
           "show": false
@@ -633,36 +664,6 @@
           "group_by": false,
           "label": "SnapEDA_Link",
           "name": "SnapEDA_Link",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "Check_prices",
-          "name": "Check_prices",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "Description",
-          "name": "Description",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "#",
-          "name": "${ITEM_NUMBER}",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "MAXIMUM_PACKAGE_HEIGHT",
-          "name": "MAXIMUM_PACKAGE_HEIGHT",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "MANUFACTURER",
-          "name": "MANUFACTURER",
           "show": false
         },
         {
@@ -679,14 +680,14 @@
         },
         {
           "group_by": false,
-          "label": "PARTREV",
-          "name": "PARTREV",
+          "label": "Description",
+          "name": "Description",
           "show": false
         },
         {
           "group_by": false,
-          "label": "Price",
-          "name": "Price",
+          "label": "#",
+          "name": "${ITEM_NUMBER}",
           "show": false
         }
       ],
@@ -712,14 +713,14 @@
       "intersheets_ref_show": false,
       "intersheets_ref_suffix": "",
       "junction_size_choice": 3,
-      "label_size_ratio": 0.375,
+      "label_size_ratio": 0.25,
       "operating_point_overlay_i_precision": 3,
       "operating_point_overlay_i_range": "~A",
       "operating_point_overlay_v_precision": 3,
       "operating_point_overlay_v_range": "~V",
       "overbar_offset_ratio": 1.23,
-      "pin_symbol_size": 25.0,
-      "text_offset_ratio": 0.15
+      "pin_symbol_size": 0.0,
+      "text_offset_ratio": 0.08
     },
     "legacy_lib_dir": "",
     "legacy_lib_list": [],
@@ -734,21 +735,17 @@
     "top_level_sheets": [
       {
         "filename": "embo.kicad_sch",
-        "name": "embo",
+        "name": "Root",
         "uuid": "7ba7b830-b54e-44de-afe6-f7f489323a5a"
       }
     ],
-<<<<<<< HEAD
-    "used_designators": "Rsnub1,D8,Csnub1",
-=======
-    "used_designators": "J15,C22,C28-29,C32,C40-41,LED_stat1,R_UART1,C_adc1,C_env1,Cbuck1,#PWR19,#PWR25,#PWR126-132,R10-11,R20,R34,R_PDN_UP1,Cbuckout1,100nF3,SW_reset1,R_in1,R_env1,SW_boot1",
->>>>>>> 2d991d1540cde2a2496b195c0bea29cda677ed66
+    "used_designators": "",
     "variants": []
   },
   "sheets": [
     [
       "7ba7b830-b54e-44de-afe6-f7f489323a5a",
-      "embo"
+      "Root"
     ]
   ],
   "text_variables": {},
