@@ -38,9 +38,11 @@ Generated from: PCB Design Brief v2.5, Pinout Cheatsheet, Project Overview, and 
 
 > Unblocks sensing and the RPi link.
 
-### 4. RPi UART protocol parser `src/rpi_uart.cpp`
-- [ ] Parse incoming `"SIZE <median_um> <iqr_um>\n"` packets
-- [ ] Update `_median_um` and `_iqr_um` static variables (PID reads these but they are never written)
+### 4. RPi UART protocol parser `src/rpi_uart.cpp` ✅
+- [x] Parse incoming `"SIZE <median_um> <iqr_um>\n"` packets via `sscanf`
+- [x] CR stripped for robustness against Windows-style line endings from RPi
+- [x] Unrecognised lines silently discarded — RPi can send status strings freely
+- [x] Each valid packet logged over BLE: `"RPi: median=X iqr=Y um"`
 
 ### 5. UAS attenuation baseline `src/uas.cpp` ✅
 - [x] Baseline sampled automatically at end of uas_init() after AD9833 settle

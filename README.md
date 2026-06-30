@@ -1,6 +1,6 @@
-# EMBO — Embolization Particle Sizing System
+# EMBO — Embolization Particle Sizing System 
 
-> SUTD 30.007 Engineering Design Innovation | Team EMBO | Week 5 of 13
+> SUTD 30.007 Engineering Design Innovation | Team EMBO | Week 7 of 13
 
 EMBO is a closed-loop medical device that automates and quality-controls the preparation of gelatin foam embolic agents for interventional radiology procedures. It is the first device of its kind to measure and control particle size during embolic agent preparation in real time.
 
@@ -43,7 +43,7 @@ EMBO replaces manual syringe pumping with a controlled, sensor-guided system tha
 │  │  - YOLOv8 CV     │          │  - PID control loop          │ │
 │  │  - Particle size │          │  - 2× TMC2209 motor drivers  │ │
 │  │    statistics    │          │  - UAS signal chain          │ │
-│  │  - Global        │          │  - ILI9341/ST7789V TFT UI    │ │
+│  │  - Global        │          │  - ILI9341 TFT UI            │ │
 │  │    Shutter Cam   │          │  - BLE debug (NimBLE)        │ │
 │  └──────────────────┘          └──────────────────────────────┘ │
 │           │                             │           │            │
@@ -61,7 +61,7 @@ Mixing follows first-order breakage kinetics:
 D(N) = D_min + (D₀ − D_min) × e^(−kN)
 ```
 
-Where `N` is stroke count, `k` is a shear constant, `D₀` is initial particle size, and `D_min` is the minimum achievable size. The PID loop uses live measurements of `D(N)` to schedule remaining strokes.
+Where `N` is stroke count, `k` is a shear constant (measured empirically), `D₀` is initial particle size, and `D_min` is the minimum achievable size. The PID loop uses live measurements of `D(N)` to schedule remaining strokes.
 
 ---
 
@@ -74,8 +74,9 @@ EMBO/
 │
 ├── docs/                              # Design documents and briefs
 │   ├── EMBO_Project_Overview.txt      # Full project context for new members
-│   ├── EMBO_PCB_Design_Brief_v2.1.txt # Complete electrical design spec
-│   └── EMBO_PCB_Design_Brief_v2.1.docx
+│   ├── EMBO_PCB_Design_Brief_v2.5.txt # Complete electrical design spec (current)
+│   ├── EMBO_PCB_Design_Brief_v2.5.docx
+│   └── EMBO_Pinout_Cheatsheet.txt     # Quick GPIO and connector reference
 │
 ├── hardware/
 │   ├── electrical/                    # KiCad schematic + PCB layout
@@ -84,14 +85,13 @@ EMBO/
 │       └── README.md
 │
 ├── firmware/
-│   └── esp32/                         # ESP32-S3 Arduino/C++ firmware
-│       └── README.md
+│   └── esp32/                         # ESP32-S3 Arduino/C++ firmware (PlatformIO)
+│       ├── README.md                  # Flash guide and peripheral notes
+│       └── ../FIRMWARE_TODO.md        # Build-up task list + hardware checklist
 │
 ├── software/
 │   ├── cv-pipeline/                   # Raspberry Pi YOLOv8 vision pipeline
-│   │   └── README.md
 │   └── ui/                            # TFT touchscreen UI assets/logic
-│       └── README.md
 │
 └── assets/                            # Images, diagrams, photos
 ```
@@ -100,30 +100,30 @@ EMBO/
 
 ## Hardware Overview
 
-### Custom MCU Board (ESP32-S3)
+### Custom MCU Board (ESP32-S3) — v2.5
 
 | Subsystem | Components |
 |---|---|
-| Microcontroller | ESP32-S3-WROOM-1-N8 (8MB flash, BLE 5.0, USB-C native) |
-| Motor control | 2× TMC2209 stepper drivers (SpreadCycle + StallGuard) |
-| Ultrasound signal chain | AD9833 DDS generator → OPA2354 Tx amp (G=4.9) → transducer → OPA2354 Rx (100×) → BAT54 envelope detector → GPIO1 ADC |
-| Display | SPI TFT (ILI9341/ST7789V) + XPT2046 resistive touch via SPI2 |
-| Power | 24V PSU → LM2596 buck (5V) → AMS1117 LDO (3.3V); AO3401 reverse polarity protection |
-| Comms | UART to Raspberry Pi (921600 baud); BLE UART debug stream (NimBLE) |
+| Microcontroller | ESP32-S3-WROOM-1-N8 (8MB flash, BLE 5.0, USB-C native programming) |
+| Motor drivers | 2× BigTreeTech TMC2209 V1.x plug-in modules in 2×8 sockets (field-replaceable) |
+| Ultrasound signal chain | AD9833 DDS → OPA2354 Tx (G=4.9, 2.96Vpp) → transducer → OPA2354 Rx (G=100) → BAT54 envelope → GPIO1 ADC |
+| Display | ILI9341 SPI TFT + XPT2046 resistive touch via 20-pin IDC ribbon to breakout board |
+| Power | 24V PSU → AO4407A reverse polarity protection → LM2596 buck (5V) → AMS1117 LDO (3.3V) |
+| Comms | UART2 to Raspberry Pi (921600 baud, GPIO47/48); BLE UART debug stream (NimBLE) |
 
 ### GPIO Assignments (key signals)
 
 | GPIO | Signal | Notes |
 |---|---|---|
 | 1 | UAS_ADC | ADC1_CH0 — envelope detector output |
-| 4 | TMC_UART | Half-duplex UART to both TMC2209 via 1kΩ |
-| 5/8 | STEP_M1/M2 | LEDC PWM for motor speed control |
+| 4 | TMC_UART | Half-duplex UART1 to both TMC2209 via 1kΩ |
+| 5/8 | STEP_M1/M2 | LEDC PWM — step pulse generation |
 | 6/9 | DIR_M1/M2 | Motor direction |
 | 7/10 | EN_M1/M2 | Motor enable (active LOW, 10kΩ pull-up at IC) |
 | 14/15 | LIMIT_M1/M2 | Limit switch inputs (internal pull-up) |
-| 19/20 | USB D−/D+ | Fixed USB PHY — no UART bridge needed |
-| 35/36/37 | SPI MOSI/CLK/MISO | Shared: AD9833 (Mode 2) + TFT + XPT2046 (Mode 0) |
-| 47/48 | RPi TX/RX | UART to Raspberry Pi at 3.3V, 921600 baud |
+| 19/20 | USB D−/D+ | Fixed USB PHY — no UART bridge chip needed |
+| 35/36/37 | SPI MOSI/CLK/MISO | Shared: AD9833 (Mode 2) + ILI9341 + XPT2046 (Mode 0) |
+| 47/48 | RPi TX/RX | UART2 to Raspberry Pi, 921600 baud |
 
 ### Sensing System
 
@@ -133,9 +133,26 @@ EMBO/
 - Firmware reads attenuation ratio vs saline baseline to track particle size change
 
 **Computer Vision:**
-- Raspberry Pi Global Shutter Camera frames transmitted to YOLOv8 model
-- Outputs: median particle diameter (µm) and IQR
-- Backlit LED panel (5V, J10) illuminates syringe from behind for particle contrast
+- Raspberry Pi Global Shutter Camera frames processed by YOLOv8 model
+- Outputs: median particle diameter (µm) and IQR, sent to ESP32 over UART
+- Diffused LED panel (5V, J8) backlit behind syringe for particle contrast
+
+---
+
+## Firmware Status
+
+| Module | File | Status |
+|---|---|---|
+| TMC2209 UART, SpreadCycle, StallGuard | `src/motors.cpp` | ✅ Done |
+| LEDC step generation, limit switch ISRs | `src/motors.cpp` | ✅ Done |
+| Homing routine + stroke counter | `src/motors.cpp` | ✅ Done |
+| AD9833 1MHz DDS, UAS ADC calibration | `src/uas.cpp` | ✅ Done |
+| NimBLE wireless debug UART | `src/ble_debug.cpp` | ✅ Done |
+| RPi UART receive + packet parser | `src/rpi_uart.cpp` | ⚠️ Parser stub |
+| PID → motor stroke mapping | `src/pid.cpp` | ⚠️ Mapping stub |
+| TFT display, encoder, buttons, touch | `src/ui.cpp` | ⚠️ Stub |
+
+See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task list and hardware bring-up checklist.
 
 ---
 
@@ -144,14 +161,15 @@ EMBO/
 | Layer | Platform | Language | Key Libraries |
 |---|---|---|---|
 | Computer vision | Raspberry Pi 5 | Python 3 | OpenCV, Ultralytics YOLOv8 |
-| Firmware / PID | ESP32-S3 | C++ (Arduino) | Arduino-ESP32, NimBLE, TFT_eSPI |
-| Touchscreen UI | ESP32-S3 | C++ | TFT_eSPI, LVGL (TBD) |
+| Firmware / PID | ESP32-S3 | C++ (Arduino) | TMCStepper, NimBLE, TFT_eSPI, AD9833 |
+| Touchscreen UI | ESP32-S3 | C++ | TFT_eSPI |
 | BLE debug | ESP32-S3 | C++ | NimBLE |
 
 **Critical firmware notes:**
-- SPI2 is shared between AD9833, ILI9341/ST7789V, and XPT2046. Firmware **must** switch SPI mode (Mode 0 ↔ Mode 2) and clock speed (40MHz ↔ 2MHz) before each device transaction.
-- UART1 TX and RX are both mapped to GPIO4 via the GPIO matrix in half-duplex mode for TMC2209 addressing.
-- ADC1 (GPIO1–10) is safe to use while BLE is active. ADC2 (GPIO11–20) is unavailable for analog during BLE.
+- SPI2 is shared between AD9833 (Mode 2, ~10MHz), ILI9341 (Mode 0, 20MHz max via ribbon), and XPT2046 (Mode 0, 2MHz). Each library switches mode per transaction via `SPI.beginTransaction()`.
+- TMC2209 uses UART1 (GPIO4, half-duplex). Raspberry Pi uses UART2 (GPIO47/48). These are separate peripherals — do not reassign.
+- ADC1 (GPIO1) is safe while BLE is active. ADC2 cannot be used for analog during BLE — no ADC2 pins are used for analog in this design.
+- SpreadCycle must be written via UART to both TMC2209 modules at every boot (no SPREAD pin on BTT modules). BLE log confirms success.
 
 ---
 
@@ -167,15 +185,15 @@ EMBO/
 
 ## Project Timeline
 
-| Milestone | Week | Date (approx.) |
+| Milestone | Week | Status |
 |---|---|---|
-| System Requirements Review | 5 | ✅ Current |
-| Recess week (build sprint) | 7 | Jul 2026 |
-| PCB schematic freeze | End of 7 | Jul 2026 |
-| System Design Review | 9 | Aug 2026 |
-| Final Exhibition | 13 | Sep 2026 |
+| System Requirements Review | 5 | ✅ Complete |
+| Recess week — build sprint | 7 | ✅ Current |
+| PCB schematic freeze | End of 7 | 🔲 Upcoming |
+| System Design Review | 9 | 🔲 |
+| Final Exhibition | 13 | 🔲 |
 
-The PCB schematic must be finalised by end of Week 7 to meet the JLCPCB/PCBWay fabrication lead time before the System Design Review.
+The PCB schematic must be finalised by end of Week 7 to meet the JLCPCB fabrication lead time before the System Design Review.
 
 ---
 
@@ -183,16 +201,16 @@ The PCB schematic must be finalised by end of Week 7 to meet the JLCPCB/PCBWay f
 
 ### Firmware (ESP32-S3)
 
-Requirements: Arduino IDE 2.x with arduino-esp32 board package, or PlatformIO.
+Requires VS Code + PlatformIO extension. See [`firmware/esp32/README.md`](firmware/esp32/README.md) for the full flash guide.
 
 ```bash
+# Quick start
 cd firmware/esp32
-# Open the .ino or platformio.ini in your IDE
-# Target board: ESP32-S3 Dev Module (or configure for WROOM-1-N8)
-# Flash via USB-C — no USB-UART bridge needed (native USB Serial/JTAG)
+pio run --target upload   # build and flash
+pio device monitor        # serial monitor at 115200
 ```
 
-Hold `BOOT` button and press `RESET` for manual bootloader entry if auto-reset fails.
+Hold `BOOT` + press `RESET` for manual bootloader entry if auto-reset fails.
 
 ### Computer Vision Pipeline (Raspberry Pi 5)
 
@@ -204,7 +222,7 @@ python main.py
 
 ### Electrical
 
-PCB files live in `hardware/electrical/`. Open with KiCad 8+. See [docs/EMBO_PCB_Design_Brief_v2.1.txt](docs/EMBO_PCB_Design_Brief_v2.1.txt) for the full schematic design spec including all component values, layout rules, and the pre-submission checklist.
+PCB files live in `hardware/electrical/`. Open with KiCad 8+. The full design spec including component values, GPIO assignments, layout rules, and the pre-submission checklist is in [`docs/EMBO_PCB_Design_Brief_v2.5.txt`](docs/EMBO_PCB_Design_Brief_v2.5.txt).
 
 ---
 
@@ -213,7 +231,7 @@ PCB files live in `hardware/electrical/`. Open with KiCad 8+. See [docs/EMBO_PCB
 - Yamagami et al., *The Size of Gelatin Sponge Particles*, CardioVascular and Interventional Radiology, 2006
 - Yamamoto et al., CVIR 1997 — liver necrosis vs particle size
 - PMC8670118 — hemorrhoidal embolization outcomes
-- TMC2209 Datasheet — StallGuard, SpreadCycle, UART addressing
+- TMC2209 Datasheet — StallGuard4, SpreadCycle, UART addressing
 - AD9833 Datasheet — DDS signal generator, SPI Mode 2
 - OPA2354 Datasheet — 250MHz GBW dual op-amp, single-supply operation
 
