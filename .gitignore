@@ -24,13 +24,13 @@ firmware/esp32/build/
 firmware/esp32/.vscode/
 
 # KiCad
+**/*.kicad_prl
+**/*.lck
+**/*-backups/
+**/fp-info-cache
 hardware/electrical/*.bak
-hardware/electrical/*-backups/
-hardware/electrical/*.kicad_prl
-hardware/electrical/fp-info-cache
 hardware/electrical/gerber/
 hardware/electrical/__pycache__/
-**/*.lck
 
 # CAD
 hardware/mechanical/*.bak
