@@ -6783,26 +6783,24 @@
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "U"
-				(at -10.16 6.35 0)
+			(property "Reference" "U2"
+				(at 0.254 2.794 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(justify left)
 				)
 			)
 			(property "Value" "LM2596S-5"
-				(at 0 6.35 0)
+				(at 3.048 8.89 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(justify left)
 				)
 			)
 			(property "Footprint" "Package_TO_SOT_SMD:TO-263-5_TabPin3"
@@ -6894,10 +6892,10 @@
 						)
 					)
 				)
-				(pin output line
-					(at 12.7 -2.54 180)
+				(pin input line
+					(at 12.7 2.54 180)
 					(length 2.54)
-					(name "OUT"
+					(name "FB"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -6930,10 +6928,10 @@
 						)
 					)
 				)
-				(pin input line
-					(at 12.7 2.54 180)
+				(pin output line
+					(at 12.7 -2.54 180)
 					(length 2.54)
-					(name "FB"
+					(name "OUT"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -7974,18 +7972,6 @@
 		(uuid "6f39c606-ccf8-47c4-8da2-d62919489c27")
 	)
 	(rectangle
-		(start 78.74 135.89)
-		(end 88.9 147.32)
-		(stroke
-			(width 0)
-			(type dash_dot_dot)
-		)
-		(fill
-			(type none)
-		)
-		(uuid "750b50b4-6dec-402c-abd3-ba192ac9a118")
-	)
-	(rectangle
 		(start 341.63 29.21)
 		(end 349.25 38.1)
 		(stroke
@@ -8008,18 +7994,6 @@
 			(type none)
 		)
 		(uuid "78f97838-89f0-4f6c-8ad3-40129494bf69")
-	)
-	(rectangle
-		(start 88.9 137.16)
-		(end 95.25 148.59)
-		(stroke
-			(width 0)
-			(type dash_dot_dot)
-		)
-		(fill
-			(type none)
-		)
-		(uuid "79d55db6-fe6f-4087-9b9b-df473bb9eb42")
 	)
 	(rectangle
 		(start 317.5 96.52)
@@ -8643,16 +8617,6 @@
 		)
 		(uuid "35d12c48-6ae4-4444-b373-828458ba6fac")
 	)
-	(text "VDD3P3 pin 2\n"
-		(exclude_from_sim no)
-		(at 85.852 134.874 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-		)
-		(uuid "3920fa1c-f4c9-4adc-8285-b711da5082bc")
-	)
 	(text "stage 1\nset gain\nto 10.1\n"
 		(exclude_from_sim no)
 		(at 288.544 125.73 0)
@@ -9267,12 +9231,6 @@
 		(uuid "4bc408a4-8227-446a-87e5-25069c3bbb1b")
 	)
 	(junction
-		(at 92.71 138.43)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "4d4a9a39-758e-45ca-8fa8-89c8913f89a6")
-	)
-	(junction
 		(at 327.66 110.49)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -9351,12 +9309,6 @@
 		(uuid "7e1499f9-c487-4eb0-84f4-327c08cce171")
 	)
 	(junction
-		(at 86.36 146.05)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "7f9d2b22-e3bc-46d9-8f9e-fa1e20169862")
-	)
-	(junction
 		(at 73.66 26.67)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -9367,12 +9319,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "96ef8c4b-9707-4a29-b06e-45f87ca143bd")
-	)
-	(junction
-		(at 81.28 146.05)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "97538848-38b3-4d6f-8c07-e09834286748")
 	)
 	(junction
 		(at 279.4 33.02)
@@ -9403,12 +9349,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "9ef25aeb-2234-49e4-bd7c-89e5d7efc338")
-	)
-	(junction
-		(at 86.36 138.43)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "a350a0a7-c1ac-4c07-aaa8-abdceb999445")
 	)
 	(junction
 		(at 251.46 90.17)
@@ -9471,12 +9411,6 @@
 		(uuid "ce06d17c-6a99-45f6-ac5f-2772b78c6c15")
 	)
 	(junction
-		(at 81.28 138.43)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "ceb0ad14-aa95-4278-ad3f-ab7106a88186")
-	)
-	(junction
 		(at 93.98 102.87)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -9499,12 +9433,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "e8c4476a-87a5-4915-9183-88d1c3273058")
-	)
-	(junction
-		(at 92.71 146.05)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "f2c26360-f608-46b3-9585-707366245221")
 	)
 	(junction
 		(at 328.93 85.09)
@@ -9632,7 +9560,7 @@
 	)
 	(wire
 		(pts
-			(xy 81.28 146.05) (xy 86.36 146.05)
+			(xy 76.2 146.05) (xy 96.52 146.05)
 		)
 		(stroke
 			(width 0)
@@ -9789,16 +9717,6 @@
 			(type default)
 		)
 		(uuid "18dce2bf-05f1-4df0-a7f3-52959f00051d")
-	)
-	(wire
-		(pts
-			(xy 81.28 138.43) (xy 76.2 138.43)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1c64a605-b91e-4544-b588-ed868cde3fd7")
 	)
 	(wire
 		(pts
@@ -10142,16 +10060,6 @@
 	)
 	(wire
 		(pts
-			(xy 86.36 138.43) (xy 81.28 138.43)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "5c61c703-e8ac-4ecd-962d-2cdae0758a3d")
-	)
-	(wire
-		(pts
 			(xy 38.1 139.7) (xy 38.1 138.43)
 		)
 		(stroke
@@ -10319,16 +10227,6 @@
 			(type default)
 		)
 		(uuid "6c514e26-87d7-433a-843f-61ff8cfbbcba")
-	)
-	(wire
-		(pts
-			(xy 92.71 146.05) (xy 96.52 146.05)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "6ebe17a2-e1f6-4c51-8616-9776d1182e02")
 	)
 	(wire
 		(pts
@@ -10559,16 +10457,6 @@
 			(type default)
 		)
 		(uuid "855c59a1-60e6-49b8-a8cf-58650d4c304e")
-	)
-	(wire
-		(pts
-			(xy 76.2 146.05) (xy 81.28 146.05)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "85751bb7-3ff6-4752-aa75-1ebe389f9b02")
 	)
 	(wire
 		(pts
@@ -10882,16 +10770,6 @@
 	)
 	(wire
 		(pts
-			(xy 86.36 146.05) (xy 92.71 146.05)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a0b8342b-aacc-4789-a87c-e2692d287d29")
-	)
-	(wire
-		(pts
 			(xy 78.74 26.67) (xy 87.63 26.67)
 		)
 		(stroke
@@ -10922,7 +10800,7 @@
 	)
 	(wire
 		(pts
-			(xy 92.71 138.43) (xy 86.36 138.43)
+			(xy 76.2 138.43) (xy 96.52 138.43)
 		)
 		(stroke
 			(width 0)
@@ -11309,16 +11187,6 @@
 			(type default)
 		)
 		(uuid "dc321394-19fc-44ae-9ab3-2b8ad7767428")
-	)
-	(wire
-		(pts
-			(xy 96.52 138.43) (xy 92.71 138.43)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "dca152d4-572f-417e-a2f9-8ee8fcdad4d7")
 	)
 	(wire
 		(pts
@@ -14778,7 +14646,7 @@
 			)
 		)
 		(property "Value" "LM2596S-5"
-			(at 100.584 28.448 0)
+			(at 103.378 20.32 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -22900,86 +22768,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:C")
-		(at 92.71 142.24 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "ac8c5123-fbb3-4e5f-9a7f-bb45746453b7")
-		(property "Reference" "C40"
-			(at 85.09 142.24 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "100nF X7R"
-			(at 89.662 141.986 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 0.9652 0.9652)
-				)
-			)
-		)
-		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric_Pad0.74x0.62mm_HandSolder"
-			(at 91.7448 138.43 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 92.71 142.24 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Unpolarized capacitor"
-			(at 92.71 142.24 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "ad0d7bc0-596f-40aa-8560-8be27cc14c9b")
-		)
-		(pin "2"
-			(uuid "837f5ac6-f051-4627-8670-0ff40346913b")
-		)
-		(instances
-			(project "embo"
-				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
-					(reference "C40")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:+3V3")
 		(at 227.33 85.09 0)
 		(unit 1)
@@ -27360,86 +27148,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:C")
-		(at 81.28 142.24 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "e704443e-6d84-43eb-96f0-133d09966bc5")
-		(property "Reference" "C29"
-			(at 73.66 142.24 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "100nF X7R"
-			(at 78.232 141.986 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 0.9652 0.9652)
-				)
-			)
-		)
-		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric_Pad0.74x0.62mm_HandSolder"
-			(at 80.3148 138.43 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 81.28 142.24 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Unpolarized capacitor"
-			(at 81.28 142.24 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "65098ea8-f37a-4dbd-b468-ce93d30b4acc")
-		)
-		(pin "2"
-			(uuid "72db2a04-0f18-4f80-832a-b28ba6146a67")
-		)
-		(instances
-			(project "embo"
-				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
-					(reference "C29")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:R")
 		(at 297.18 110.49 90)
 		(unit 1)
@@ -28224,86 +27932,6 @@
 			(project "embo"
 				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
 					(reference "J13")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:C")
-		(at 86.36 142.24 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "f0ce13ae-6b69-44c2-9163-c139904ac4a7")
-		(property "Reference" "C32"
-			(at 78.74 142.24 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "10µF X5R 0805"
-			(at 83.312 141.986 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 0.9652 0.9652)
-				)
-			)
-		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-			(at 85.3948 138.43 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 86.36 142.24 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Unpolarized capacitor"
-			(at 86.36 142.24 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "f148ea63-6f56-44c2-b3ab-2daaafaba19b")
-		)
-		(pin "2"
-			(uuid "5609d67e-0beb-4634-bfd4-b4788463dc87")
-		)
-		(instances
-			(project "embo"
-				(path "/7ba7b830-b54e-44de-afe6-f7f489323a5a"
-					(reference "C32")
 					(unit 1)
 				)
 			)
