@@ -8401,7 +8401,7 @@
 		)
 		(uuid "0df639eb-4db3-46b7-a7c3-c49cdb7fa45c")
 	)
-	(text "v2.2"
+	(text "v2.5"
 		(exclude_from_sim no)
 		(at 343.154 199.136 0)
 		(effects
@@ -8774,7 +8774,7 @@
 		)
 		(uuid "7488962e-7c6b-4d48-a62e-f85aad5b0d18")
 	)
-	(text "29/06/2026"
+	(text "01/07/2026"
 		(exclude_from_sim no)
 		(at 279.908 199.136 0)
 		(effects
@@ -26335,6 +26335,7 @@
 	(symbol
 		(lib_id "Device:R")
 		(at 270.51 29.21 0)
+		(mirror y)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -26344,7 +26345,7 @@
 		(dnp no)
 		(uuid "d742fe42-9056-4a5b-9831-dc83d4504b34")
 		(property "Reference" "R38"
-			(at 273.05 27.9399 0)
+			(at 267.97 27.9399 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -26367,7 +26368,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric_Pad0.72x0.64mm_HandSolder"
-			(at 268.732 29.21 90)
+			(at 272.288 29.21 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
