@@ -13,3 +13,6 @@ float uas_get_baseline_mv();
 // Re-sample baseline. Call once with saline-only in syringe, before mixing starts.
 // Also called automatically at end of uas_init().
 void uas_calibrate_baseline();
+
+// Immediate calibrated ADC read in mV — for debug streaming, bypasses settle delay.
+uint32_t uas_read_mv();

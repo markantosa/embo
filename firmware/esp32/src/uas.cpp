@@ -78,3 +78,7 @@ float uas_get_attenuation() {
 float uas_get_baseline_mv() {
     return _baseline_mv;
 }
+
+uint32_t uas_read_mv() {
+    return _adc_read_mv();
+}

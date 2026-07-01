@@ -11,7 +11,7 @@ Built and flashed with PlatformIO inside VS Code.
 | LEDC step generation, limit switch ISRs | `src/motors.cpp` | ✅ |
 | Homing routine + stroke counter | `src/motors.cpp` | ✅ |
 | AD9833 1MHz DDS init, UAS ADC calibration | `src/uas.cpp` | ✅ |
-| RPi UART receive (921600 baud) | `src/rpi_uart.cpp` | ⚠️ parser stub |
+| RPi UART receive + packet parser | `src/rpi_uart.cpp` | ✅ |
 | PID control loop | `src/pid.cpp` | ⚠️ motor mapping stub |
 | TFT display + encoder + buttons + touch | `src/ui.cpp` | ⚠️ stub |
 | NimBLE wireless debug UART | `src/ble_debug.cpp` | ✅ |
@@ -71,6 +71,39 @@ pio device monitor
 Or click the **plug Monitor** button. Baud rate is set to 115200 in `platformio.ini`.
 
 For wireless debug output during a run, connect a BLE terminal app (e.g. **nRF Toolbox** or **Serial Bluetooth Terminal**) to the device named `EMBO-Debug` and subscribe to the Nordic UART TX characteristic.
+
+---
+
+## BLE debug commands
+
+Connect to `EMBO-Debug` over BLE and write commands to the Nordic UART RX characteristic. Responses appear on the TX characteristic (the same stream as `ble_log()` output).
+
+**Recommended app:** Serial Bluetooth Terminal (Android) or nRF Toolbox (iOS/Android). Select the NUS service, subscribe to TX, and use the input bar to send commands.
+
+### Commands
+
+| Command | Example | Description |
+|---|---|---|
+| `HOME` | `HOME` | Drives both motors to their limit switches and backs off. Blocks until complete. Logs success or failure. |
+| `MOVE <motor> <steps>` | `MOVE 1 400` | Moves motor 1 forward 400 steps at 500 Hz. Use negative steps for reverse: `MOVE 2 -200`. Stops automatically on completion or limit trip. |
+| `UAS ON` | `UAS ON` | Starts streaming raw ADC readings from the envelope detector every 200ms. |
+| `UAS OFF` | `UAS OFF` | Stops UAS streaming. |
+
+Sending an unrecognised command prints the command list back.
+
+### Automatic streaming
+
+| Stream | Trigger | Format | Interval |
+|---|---|---|---|
+| UAS ADC | `UAS ON` active | `UAS: 1234 mV` | 200ms |
+| StallGuard | While a `MOVE` is running | `SG M1: 512` | 200ms |
+
+StallGuard (`SG_RESULT`) streams automatically whenever a `MOVE` command is in progress — no separate command needed. Higher value = less load on the motor. Valid only while SpreadCycle is active (confirmed at boot via BLE log).
+
+### Safety
+
+- If the BLE client disconnects mid-move, the active motor is stopped and disabled immediately.
+- `MOVE` commands respect the limit switch ISRs — the motor stops if a switch trips before the step count completes.
 
 ---
 
