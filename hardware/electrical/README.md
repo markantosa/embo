@@ -44,6 +44,22 @@ Quick GPIO and connector reference:
 
 Shared half-duplex bus on GPIO4 via R_UART (1kΩ) + R_PDN_UP (10kΩ pull-up to 3.3V).
 
+## Screenshots
+
+### Main MCU board
+
+| | |
+|:---:|:---:|
+| ![Main PCB layout](../../assets/main%20PCB%20layout.png) | ![Main PCB 3D view](../../assets/main%20PCB%203D%20view.png) |
+| *PCB layout* | *3D render* |
+
+### Display breakout board
+
+| | |
+|:---:|:---:|
+| ![Display breakout layout](../../assets/display%20breakout%20layout.png) | ![Display breakout 3D view](../../assets/display%20breakout%203D%20view.png) |
+| *PCB layout* | *3D render* |
+
 ## Firmware bring-up dependency
 
 SpreadCycle cannot be set by hardware (no SPREAD pin on BTT modules). Firmware **must** write `GCONF.en_spreadcycle=1` to both drivers at every boot and read back to confirm before trusting StallGuard data. See [`firmware/FIRMWARE_TODO.md`](../../firmware/FIRMWARE_TODO.md) for the full hardware bring-up checklist.

@@ -111,6 +111,11 @@ EMBO/
 | Power | 24V PSU → AO4407A reverse polarity protection → LM2596 buck (5V) → AMS1117 LDO (3.3V) |
 | Comms | UART2 to Raspberry Pi (921600 baud, GPIO47/48); BLE UART debug stream (NimBLE) |
 
+| | |
+|:---:|:---:|
+| ![Main PCB layout](assets/main%20PCB%20layout.png) | ![Main PCB 3D view](assets/main%20PCB%203D%20view.png) |
+| *PCB layout* | *3D render* |
+
 ### GPIO Assignments (key signals)
 
 | GPIO | Signal | Notes |
@@ -124,6 +129,15 @@ EMBO/
 | 19/20 | USB D−/D+ | Fixed USB PHY — no UART bridge chip needed |
 | 35/36/37 | SPI MOSI/CLK/MISO | Shared: AD9833 (Mode 2) + ILI9341 + XPT2046 (Mode 0) |
 | 47/48 | RPi TX/RX | UART2 to Raspberry Pi, 921600 baud |
+
+### Display Breakout Board
+
+ILI9341 TFT + XPT2046 touch controller on a separate board, connected to the main MCU board via a 20-pin IDC ribbon.
+
+| | |
+|:---:|:---:|
+| ![Display breakout layout](assets/display%20breakout%20layout.png) | ![Display breakout 3D view](assets/display%20breakout%203D%20view.png) |
+| *PCB layout* | *3D render* |
 
 ### Sensing System
 
