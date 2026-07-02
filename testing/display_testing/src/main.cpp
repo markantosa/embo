@@ -1,16 +1,21 @@
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
+#include <XPT2046_Touchscreen.h>
 
-// ---- Pin configuration ----
+// ---- Display pin configuration ----
 #define TFT_CS   18
 #define TFT_DC   19
 #define TFT_RST  20
 #define TFT_SCK  6
 #define TFT_MOSI 7
-#define TFT_MISO -1  // unused, display-only
+#define TFT_MISO 21  // now used — shared bus, needed for touch
+
+// ---- Touch pin configuration ----
+#define TOUCH_CS 22  // touch's own CS, shares SCK/MOSI/MISO with display
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(&SPI, TFT_DC, TFT_CS, TFT_RST);
+XPT2046_Touchscreen touch(TOUCH_CS);  // no IRQ pin — we'll poll
 
 void setup() {
   Serial.begin(115200);
@@ -18,28 +23,19 @@ void setup() {
 
   SPI.begin(TFT_SCK, TFT_MISO, TFT_MOSI, TFT_CS);
   tft.begin();
+  touch.begin();
 
-  Serial.println("Display initialized, starting color cycle...");
+  tft.fillScreen(ILI9341_BLACK);
+  Serial.println("Display + touch initialized.");
 }
 
 void loop() {
-  Serial.println("RED");
-  tft.fillScreen(ILI9341_RED);
-  delay(1000);
-
-  Serial.println("GREEN");
-  tft.fillScreen(ILI9341_GREEN);
-  delay(1000);
-
-  Serial.println("BLUE");
-  tft.fillScreen(ILI9341_BLUE);
-  delay(1000);
-
-  Serial.println("WHITE");
-  tft.fillScreen(ILI9341_WHITE);
-  delay(1000);
-
-  Serial.println("BLACK");
-  tft.fillScreen(ILI9341_BLACK);
-  delay(1000);
+  if (touch.touched()) {
+    TS_Point p = touch.getPoint();
+    Serial.print("Touch raw X: ");
+    Serial.print(p.x);
+    Serial.print("  Y: ");
+    Serial.println(p.y);
+  }
+  delay(50);
 }
