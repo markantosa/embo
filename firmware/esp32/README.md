@@ -20,6 +20,33 @@ See [FIRMWARE_TODO.md](../FIRMWARE_TODO.md) for the full build-up task list and 
 
 ---
 
+## Operational workflow
+
+How a doctor moves through a run, and which hardware/firmware drives each stage.
+
+| Stage | Trigger | What happens | Hardware involved |
+|---|---|---|---|
+| **1. Boot / self-test** | Power on | TMC2209 UART init + SpreadCycle write/readback, AD9833 + UAS baseline sample. Any `BLOCKING` check failing (see `FIRMWARE_TODO.md`) halts here — no silent bad-data path into PID. | Both TMC2209 modules, AD9833, status LED |
+| **2. Homing** | Automatic after boot | `motors_home()` drives both motors to their limit switches and backs off; stroke counter resets to 0. | M1/M2 steppers, limit switches (J6/J7) |
+| **3. Idle / ready** | — | TFT shows `READY`, current target setpoint, live PSD/IQR (`--` until first RPi packet). Doctor loads the syringe (interlock handled by mech team, not sensed by this firmware). | TFT |
+| **4. Setpoint adjust** | Turn EC11 encoder | Adjusts target particle size in 5µm steps, clamped to 50–1000µm (`config.h`). Locked out once a run starts — turning the knob mid-run is a no-op. | EC11 encoder |
+| **5. Start run** | **BTN1** | Only takes effect when idle *and* homed. Calls `pid_set_target_um()` + `pid_start()`, enables both motors. Short low chirp if pressed while not ready (not homed, or already running). | BTN1, both motors |
+| **6. Running** | — | Closed-loop mixing: UAS attenuation + StallGuard (`SG_RESULT`) feed the PID alongside RPi camera `SIZE` packets. TFT refreshes at ~5Hz with live PSD, IQR, and stroke count. | Both motors, UAS chain, TMC2209 UART, RPi UART, TFT |
+| **7. Stop / e-stop** | **BTN2** | Always live, independent of PID/run state — kills PWM and disables both motors directly, then stops the PID loop. Same button/behavior for a normal stop and for an emergency stop. | BTN2, both motors |
+| **8. Target reached** | Automatic | PID detects median within `TARGET_TOLERANCE_UM` of the setpoint, stops the run itself (same effect as BTN2 minus the direct motor kill). TFT shows final PSD/IQR/stroke count. | — |
+
+**Button/encoder summary** (current assignment, see `include/config.h` and `src/ui.cpp`):
+
+| Control | Function |
+|---|---|
+| EC11 rotary | Adjust target particle size (50–1000µm), idle only |
+| BTN1 | Start run (idle + homed only) |
+| BTN2 | Stop / e-stop — always active |
+
+Known gap: BTN2 currently has one behavior for both "stop after this stroke" and "true emergency stop." Worth revisiting before use on a real syringe.
+
+---
+
 ## Flashing via VS Code + PlatformIO
 
 ### 1. Install PlatformIO

@@ -4,12 +4,14 @@
 #include "motors.h"
 #include "ble_debug.h"
 #include <Arduino.h>
+#include <math.h>
 
 // Particle size follows first-order breakage: D(N) = D_min + (D0 - D_min)*exp(-k*N)
 // PID output → additional strokes to schedule before next measurement.
 
 static bool _running = false;
 static bool _done    = false;
+static uint16_t _target_um = TARGET_SIZE_UM_DEFAULT;
 
 // Tuning — placeholders, calibrate empirically
 static const float KP = 1.0f;
@@ -44,6 +46,15 @@ void pid_stop() {
 bool pid_is_running()     { return _running; }
 bool pid_target_reached() { return _done; }
 
+void pid_set_target_um(uint16_t target_um) {
+    if (_running) return;  // lock the setpoint for the duration of a run
+    if (target_um < TARGET_SIZE_UM_MIN) target_um = TARGET_SIZE_UM_MIN;
+    if (target_um > TARGET_SIZE_UM_MAX) target_um = TARGET_SIZE_UM_MAX;
+    _target_um = target_um;
+}
+
+uint16_t pid_get_target_um() { return _target_um; }
+
 void pid_update() {
     if (!_running) return;
     if (!motors_is_homed()) return;
@@ -51,13 +62,11 @@ void pid_update() {
     int16_t median = rpi_get_median_um();
     if (median < 0) return;   // no data yet
 
-    // Error: how far above the target window centre we are
-    float target = (TARGET_SIZE_UM_MIN + TARGET_SIZE_UM_MAX) / 2.0f;
-    float err    = (float)median - target;
+    float err = (float)median - (float)_target_um;
 
     // Check if we're in spec
-    if (median >= TARGET_SIZE_UM_MIN && median <= TARGET_SIZE_UM_MAX) {
-        ble_log("PID: target reached (median=%d um)\n", median);
+    if (fabsf(err) <= TARGET_TOLERANCE_UM) {
+        ble_log("PID: target reached (median=%d um, target=%u um)\n", median, _target_um);
         pid_stop();
         _done = true;
         return;

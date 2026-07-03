@@ -93,5 +93,11 @@
 #define HOMING_FORWARD       false
 
 // ── Particle size target ─────────────────────────────────────────────────────
-#define TARGET_SIZE_UM_MIN  300
-#define TARGET_SIZE_UM_MAX  500
+// Encoder-adjustable setpoint range (clinical range TBD beyond this bound).
+#define TARGET_SIZE_UM_MIN      50
+#define TARGET_SIZE_UM_MAX      1000
+#define TARGET_SIZE_UM_DEFAULT  300
+#define TARGET_SIZE_UM_STEP     5    // per encoder detent
+// "In spec" window half-width around the setpoint. Placeholder — calibrate
+// against real CV camera measurement noise before trusting for auto-stop.
+#define TARGET_TOLERANCE_UM     25
