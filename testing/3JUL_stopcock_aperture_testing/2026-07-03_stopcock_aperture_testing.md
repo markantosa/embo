@@ -4,6 +4,8 @@ Follow-up to [`../3JUL_preliminary_microscope_testing/2026-07-03_preliminary_mic
 
 ## Setup
 
+**Material: Lyostypt** (same material as the first Lyostypt test in the preliminary microscope testing doc — see the caution about using it as a validation material below).
+
 Camera repositioned to image directly at the stopcock aperture rather than through the syringe barrel. Two illumination sources tested, each with video and photo recorded:
 
 1. **Test 1 — smartphone backlight illumination** (continuous)
@@ -22,6 +24,10 @@ Both stills show the motion blur described below. Video for each test was also r
 
 - **Overlap avoided.** Imaging at the stopcock aperture successfully constrains particles to (approximately) a single layer as they transit — confirms the advisory's Problem B fix works as intended for the overlap/stacking issue.
 - **Significant motion blur.** Particle movement through the aperture is too fast for the camera to resolve cleanly under continuous lighting — both illumination sources produced blur. Flow velocity through the narrow stopcock bore is much higher than in the barrel, and the exposure time isn't short enough to freeze it.
+
+> **⚠️ Expert feedback (external review of the photos above):** these images are a further visual confirmation of the same conclusion from the preliminary test — Lyostypt isn't fragmenting into a population of particles under this process, it's staying as continuous fibrous material entirely, a qualitatively different failure mode from the gelatin-sponge case. ECD should not be computed on this data regardless of image quality. This is another data point against Lyostypt as a validation material, not a case for building fiber-specific metrics, unless the device is deliberately meant to also handle a fibrous-failure edge case (in which case an aspect-ratio gate, roughly >3:1, routing to separate "fiber mode" reporting would be the right approach instead of forcing ECD).
+>
+> **Implication for this test:** the blur observed above is a secondary problem — even with perfect strobe-frozen images at the stopcock aperture, Lyostypt would still not produce meaningful ECD/particle-size data, because it isn't fragmenting into discrete particles in the first place. Fixing the imaging setup does not make Lyostypt a valid test material.
 
 ## Assessment
 

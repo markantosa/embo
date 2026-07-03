@@ -24,6 +24,8 @@ Bovine collagen, **not gelatin** — not a valid Gelfoam-equivalent stand-in (se
 
 ![Lyostypt post-mixing, microscope view](../../assets/LYOSTYPT%20POST%20MIXING.jpg)
 
+> **⚠️ Expert feedback (external review of this image and the follow-up stopcock test, `testing/3JUL_stopcock_aperture_testing/`):** ECD should not be computed on Lyostypt data at all — the resulting numbers would look plausible but wouldn't reflect anything real for this material. The clumping visible above confirms Lyostypt isn't fragmenting into a population of particles the way gelatin sponge does; it stays as continuous fibrous material, a fundamentally different failure mode consistent with it being collagen fleece rather than gelatin foam. This is further evidence against using Lyostypt as a validation material at all, rather than a reason to build fiber-specific sizing support — unless the device is deliberately meant to also handle a fibrous-failure edge case, in which case length/width/aspect-ratio/curl would be the right metrics, with an aspect-ratio gate (roughly >3:1) routing fibrous material to separate "fiber mode" reporting instead of forcing an ECD calculation on it.
+
 ### 2. Dental hemostatic foam
 
 Not a gelatin equivalent.
