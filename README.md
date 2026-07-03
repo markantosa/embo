@@ -27,7 +27,7 @@ EMBO replaces manual syringe pumping with a controlled, sensor-guided system tha
 2. **Measures particle size in real time** using two parallel sensing modalities:
    - **Computer vision** — a Raspberry Pi 5 + Global Shutter Camera running a YOLOv8 model trained on gelatin foam particles, reporting median particle size and IQR
    - **Ultrasound attenuation** — a 1 MHz acoustic signal chain measures how much sound energy the slurry absorbs; larger particles attenuate more
-3. **Stops automatically** when the target particle size range (300–500 µm) is reached, using a PID control loop on the ESP32-S3 that adjusts stroke count based on live sensor feedback
+3. **Stops automatically** when the target particle size is reached, using a PID control loop on the ESP32-S3 that adjusts stroke count based on live sensor feedback. The target is adjustable per procedure (50–1000 µm, set via the touchscreen/encoder), since the ideal size depends on which vessels are being treated.
 
 ---
 
@@ -73,13 +73,14 @@ EMBO/
 ├── .gitignore
 │
 ├── docs/                              # Design documents and briefs
-│   ├── EMBO_Project_Overview.txt      # Full project context for new members
+│   ├── EMBO_Project_Overview.md       # Project context — public/general audience
 │   ├── EMBO_PCB_Design_Brief_v2.5.txt # Complete electrical design spec (current)
 │   ├── EMBO_PCB_Design_Brief_v2.5.docx
 │   └── EMBO_Pinout_Cheatsheet.txt     # Quick GPIO and connector reference
 │
 ├── hardware/
-│   ├── electrical/                    # KiCad schematic + PCB layout
+│   ├── electrical/                    # KiCad schematics + PCB layout — 2 boards:
+│   │   │                              #   main board (4-layer) + display breakout (2-layer)
 │   │   └── README.md
 │   └── mechanical/                    # CAD files (SolidWorks / Fusion 360)
 │       └── README.md
@@ -100,7 +101,7 @@ EMBO/
 
 ## Hardware Overview
 
-### Custom MCU Board (ESP32-S3) — v2.5
+### Main MCU Board (ESP32-S3) — v2.5, 4-layer PCB
 
 | Subsystem | Components |
 |---|---|
@@ -130,7 +131,7 @@ EMBO/
 | 35/36/37 | SPI MOSI/CLK/MISO | Shared: AD9833 (Mode 2) + ILI9341 + XPT2046 (Mode 0) |
 | 47/48 | RPi TX/RX | UART2 to Raspberry Pi, 921600 baud |
 
-### Display Breakout Board
+### Display Breakout Board — 2-layer PCB
 
 ILI9341 TFT + XPT2046 touch controller on a separate board, connected to the main MCU board via a 20-pin IDC ribbon.
 
@@ -162,11 +163,11 @@ ILI9341 TFT + XPT2046 touch controller on a separate board, connected to the mai
 | Homing routine + stroke counter | `src/motors.cpp` | ✅ Done |
 | AD9833 1MHz DDS, UAS ADC calibration | `src/uas.cpp` | ✅ Done |
 | NimBLE wireless debug UART | `src/ble_debug.cpp` | ✅ Done |
-| RPi UART receive + packet parser | `src/rpi_uart.cpp` | ⚠️ Parser stub |
-| PID → motor stroke mapping | `src/pid.cpp` | ⚠️ Mapping stub |
-| TFT display, encoder, buttons, touch | `src/ui.cpp` | ⚠️ Stub |
+| RPi UART receive + packet parser | `src/rpi_uart.cpp` | ✅ Done |
+| PID: adjustable setpoint (50–1000µm), in-spec detection | `src/pid.cpp` | ⚠️ Motor stroke mapping still stub |
+| TFT live PSD/IQR display, encoder setpoint, BTN1 start / BTN2 stop-estop | `src/ui.cpp` | ⚠️ Touch input still stub |
 
-See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task list and hardware bring-up checklist.
+See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task list and hardware bring-up checklist, and [`firmware/esp32/README.md`](firmware/esp32/README.md#operational-workflow) for the doctor-facing operational workflow (boot → home → set target → run → stop/e-stop).
 
 ---
 
@@ -189,11 +190,10 @@ See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task l
 
 ## Team Structure
 
-| Sub-team | Responsibilities |
-|---|---|
-| **Mechanical** | Frame, syringe holders, motor mounts, 3D printed enclosure (FDM + SLA resin) |
-| **Electrical** | KiCad schematic + PCB layout, component sourcing, board bring-up and testing |
-| **Software** | ESP32-S3 firmware (PID, motor control, UAS), RPi CV pipeline (YOLOv8), TFT UI |
+| Sub-team | Responsibilities | Members |
+|---|---|---|
+| **Mechanical** | Frame, syringe holders, motor mounts, 3D printed enclosure (FDM + SLA resin), DOE (Design of Experiments) | Alvin, Victoria, Tian Wen |
+| **Electrical & Software** | KiCad schematics + PCB layout (main board + display breakout), component sourcing, board bring-up/testing, ESP32-S3 firmware (PID, motor control, UAS), RPi CV pipeline (YOLOv8), TFT UI | Vincent, Ren Jie, Audrey, Aditi |
 
 ---
 
@@ -236,7 +236,7 @@ python main.py
 
 ### Electrical
 
-PCB files live in `hardware/electrical/`. Open with KiCad 8+. The full design spec including component values, GPIO assignments, layout rules, and the pre-submission checklist is in [`docs/EMBO_PCB_Design_Brief_v2.5.txt`](docs/EMBO_PCB_Design_Brief_v2.5.txt).
+PCB files live in `hardware/electrical/` — two boards: the 4-layer main board and the 2-layer display breakout. Open with KiCad 8+. The full design spec including component values, GPIO assignments, layout rules, and the pre-submission checklist is in [`docs/EMBO_PCB_Design_Brief_v2.5.txt`](docs/EMBO_PCB_Design_Brief_v2.5.txt).
 
 ---
 
