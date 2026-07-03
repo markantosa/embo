@@ -31,7 +31,7 @@ How a doctor moves through a run, and which hardware/firmware drives each stage.
 | **3. Idle / ready** | — | TFT shows `READY`, current target setpoint, live PSD/IQR (`--` until first RPi packet). Doctor loads the syringe (interlock handled by mech team, not sensed by this firmware). | TFT |
 | **4. Setpoint adjust** | Turn EC11 encoder | Adjusts target particle size in 5µm steps, clamped to 50–1000µm (`config.h`). Locked out once a run starts — turning the knob mid-run is a no-op. | EC11 encoder |
 | **5. Start run** | **BTN1** | Only takes effect when idle *and* homed. Calls `pid_set_target_um()` + `pid_start()`, enables both motors. Short low chirp if pressed while not ready (not homed, or already running). | BTN1, both motors |
-| **6. Running** | — | Closed-loop mixing: UAS attenuation + StallGuard (`SG_RESULT`) feed the PID alongside RPi camera `SIZE` packets. TFT refreshes at ~5Hz with live PSD, IQR, and stroke count. | Both motors, UAS chain, TMC2209 UART, RPi UART, TFT |
+| **6. Running** | — | Closed-loop mixing: UAS attenuation + StallGuard (`SG_RESULT`) feed the PID alongside RPi camera `SIZE` packets. TFT refreshes at ~5Hz with live PSD, IQR, and stroke count. *(Planned, not yet built: a live PSD trend graph on this same screen — see `FIRMWARE_TODO.md` task 7.)* | Both motors, UAS chain, TMC2209 UART, RPi UART, TFT |
 | **7. Stop / e-stop** | **BTN2** | Always live, independent of PID/run state — kills PWM and disables both motors directly, then stops the PID loop. Same button/behavior for a normal stop and for an emergency stop. | BTN2, both motors |
 | **8. Target reached** | Automatic | PID detects median within `TARGET_TOLERANCE_UM` of the setpoint, stops the run itself (same effect as BTN2 minus the direct motor kill). TFT shows final PSD/IQR/stroke count. | — |
 
@@ -166,6 +166,12 @@ All three SPI devices share GPIO35 (MOSI) / GPIO36 (CLK) / GPIO37 (MISO). CS and
 | ILI9341 TFT | GPIO39 | Mode 0 | 20 MHz | Via 20-pin IDC ribbon |
 | XPT2046 touch | GPIO42 | Mode 0 | 2 MHz | Via ribbon, shared with TFT |
 | AD9833 DDS | GPIO38 | **Mode 2** | ~10 MHz | Direct trace, no ribbon |
+
+## UAS multi-frequency sweep (July 2026)
+
+`uas_update()` no longer holds a single fixed 1MHz tone. Per the [technical advisory](../../docs/EMBO_UAS_CV_Technical_Advisory.txt), a single-frequency attenuation reading isn't reliably invertible to particle size for a polydisperse population, so the AD9833 now sweeps `UAS_NUM_FREQUENCIES` (3, `config.h`) discrete tones every update cycle: 900kHz / 1MHz / 1.1MHz by default. This is a firmware/timing-only change — no board respin.
+
+**UAS is a secondary signal, not a PID input.** The RPi CV pipeline (`median_um`/`iqr_um` over UART) is the sole authoritative size measurement in `pid.cpp`. Before UAS attenuation is trusted for anything beyond raw diagnostic logging, run the correlation check: connect over BLE, send `UAS ON`, and log the per-frequency attenuation + live CV median/IQR (both now printed on the same line) across a real mixing run. Only treat it as a usable trend signal if that relationship is clean and monotonic — see `FIRMWARE_TODO.md` for the full gate.
 
 Each library calls `SPI.beginTransaction()` with its own settings before every access — mode and clock switch automatically. Never hold one device's CS asserted while accessing another.
 

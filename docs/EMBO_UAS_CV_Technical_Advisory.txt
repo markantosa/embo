@@ -1,0 +1,152 @@
+EMBO TECHNICAL ADVISORY
+Ultrasound Sizing (UAS) and Computer Vision (CV) Subsystems — Necessary Changes
+Date: July 2026
+Status: Testing phase, pre-exhibition
+
+=====================================================================
+SUMMARY
+=====================================================================
+Testing has surfaced two independent problems: (1) single-frequency
+ultrasound attenuation cannot reliably resolve a heterogeneous/polydisperse
+particle population, and (2) the current CV imaging setup cannot see
+particles clearly and cannot separate overlapping ones. Neither issue
+invalidates the core device concept. Both are known, well-characterized
+problems in particle measurement with established fixes. This memo lists
+the changes needed, in priority order.
+
+=====================================================================
+1. ULTRASOUND (UAS) SIZING
+=====================================================================
+
+PROBLEM
+A single 1MHz attenuation reading is not uniquely invertible into a
+particle size when the population is heterogeneous. Different size
+distributions can produce the same attenuation number. Attenuation is
+also highly size-sensitive (Rayleigh-regime scattering scales roughly
+as d^6), so a small number of large/clumped particles can dominate the
+bulk signal even when the median particle is much smaller. This is a
+known limitation in the ultrasonic particle-sizing literature, which is
+why industry moved toward multi-frequency attenuation spectroscopy
+rather than single-frequency readings.
+
+REQUIRED CHANGES
+- Do not treat the current single-frequency attenuation signal as an
+  independent, trustworthy size measurement. Re-scope its role.
+- Empirically validate before trusting it: at several stroke counts,
+  simultaneously log (a) CV-measured true median + IQR and (b) raw
+  1MHz attenuation. Plot correlation. If it is a clean, monotonic
+  relationship across your real operating range, it may be usable as
+  a coarse/fast proxy. If it is weak or non-monotonic, do not use it
+  as a control input.
+- Leverage existing hardware: the AD9833 DDS chip is frequency-agile.
+  No board respin is needed to test 2-3 discrete frequencies instead
+  of one — this is a firmware/timing change only. A small multi-point
+  spectrum gives materially more information than a single point.
+- Do NOT attempt full attenuation-spectroscopy inversion (ECAH model
+  fitting, etc.) — this is a research-grade undertaking and out of
+  scope for the remaining timeline.
+- Demote ultrasound to a SECONDARY signal. The CV/camera pipeline
+  remains the authoritative source for the stop-mixing decision, since
+  it measures individual particles directly rather than inferring size
+  from a bulk proxy. Use ultrasound as a fast continuous trend signal
+  between camera reads, fused with StallGuard viscosity data, not as
+  the sole PID input.
+
+=====================================================================
+2. COMPUTER VISION (CV) SIZING
+=====================================================================
+
+PROBLEM A — Particles are nearly invisible under current lighting
+Hydrated gelatin/collagen particles are ~80-99% water by volume, so
+their refractive index is very close to the surrounding saline
+(near index-matched). Under plain backlighting this produces almost
+no contrast. What the current camera actually resolves clearly is air
+bubbles (large air-water refractive index mismatch = strong signal)
+and glare from the cylindrical syringe wall — not the particles
+themselves.
+
+REQUIRED CHANGES
+- Add a visible dye to the saline (methylene blue or similar) to give
+  particles bulk optical contrast against the fluid. Test this first —
+  cheapest, fastest fix, no hardware change.
+- Trial dark-field illumination (angle the LED panel obliquely instead
+  of straight backlight) so only light scattered by particle surfaces
+  reaches the camera, suppressing the near-invisible bulk-transmission
+  problem.
+- Trial cross-polarization: polarizing film on the LED panel, a second
+  crossed polarizer on the camera lens. This suppresses specular glare
+  and bubble highlights. Note: this will strongly benefit Lyostypt
+  (intact collagen, structurally birefringent) but is not expected to
+  reveal much extra structure in true denatured gelatin sponge, which
+  loses birefringence on denaturation — treat it as a glare-suppression
+  tool for gelatin, not a contrast-generation tool.
+- Address the cylindrical-barrel lensing/glare artifact separately —
+  consider a flat-walled imaging window rather than imaging straight
+  through the round syringe barrel.
+
+PROBLEM B — Overlapping/stacked particles cannot be segmented
+Particles overlapping or stacked in 3D within the syringe barrel are
+not reliably separable from a single 2D image, regardless of
+segmentation algorithm quality.
+
+REQUIRED CHANGES
+- Move the imaging site to the stopcock aperture to physically
+  constrain particles closer to a single layer as they transit the
+  narrow bore (same principle used in commercial flow-imaging particle
+  analyzers). This requires:
+    * A clear optical window at the stopcock (standard stopcocks are
+      opaque plastic) — custom clear insert or modified bore.
+    * Strobed, short-duration illumination synced to the camera
+      trigger. Flow velocity through the narrow bore will be
+      significantly higher than in the barrel; continuous lighting
+      will produce motion blur even with the global-shutter sensor.
+    * Early check for increased bubble/cavitation formation at the
+      constriction (pressure drop can nucleate bubbles) — this location
+      is also the point of maximum shear, so bubble noise may be worse
+      here, not better. Verify before committing the full optical build.
+- Switch the CV model from bounding-box detection to instance
+  segmentation (YOLOv8-seg, or evaluate Cellpose, which is purpose-built
+  for dense/touching irregular blobs). Bounding boxes cannot resolve
+  overlap; per-pixel instance masks can.
+
+PROBLEM C — Sizing metric assumes particles are spherical
+Fragmented gelatin/collagen particles are irregular ("snowflake"-like),
+not circular, so a simple diameter measurement is not well-defined.
+
+REQUIRED CHANGES
+- Adopt Equivalent Circular Diameter (ECD) as the primary size metric —
+  the diameter of a circle with the same projected area as the particle,
+  per ISO 13322 / ISO 9276-6. This is the standard used across
+  commercial particle-image-analysis instruments and does not require
+  particles to be round.
+- Report ECD alongside max/min Feret diameter (caliper-style measurement
+  across the particle at multiple angles) and solidity (particle area /
+  convex hull area). The Feret spread and solidity give a second,
+  independent signal for "how irregular/branching" the population still
+  is — useful beyond ECD alone for tracking mixing progress.
+
+=====================================================================
+3. MATERIALS / PROCESS NOTES
+=====================================================================
+- Lyostypt is bovine collagen, not gelatin — structurally different
+  material, explains its non-gelling stringy behavior in earlier tests.
+  Not a valid stand-in for Gelfoam-equivalent testing.
+- Source verified pharmaceutical-grade absorbable gelatin sponge
+  (e.g. Surgispon) or Chinese-pharmacopoeia-grade 吸收性明胶海绵 for
+  valid ground-truth testing material.
+- A DIY gelatin foam (foamed gelatin solution, freeze-dried, then
+  dehydrothermally cross-linked at 100-160C for 24-72h in a standard
+  oven, no chemical crosslinker needed) is a viable cheap substitute for
+  day-to-day iteration, but should be cross-validated against real
+  purchased gelatin sponge before trusting absolute size calibration —
+  cross-link density will affect fragmentation kinetics.
+
+=====================================================================
+4. SUGGESTED SEQUENCING (given limited time before exhibition)
+=====================================================================
+1. Dye test on current setup (quick, no hardware change)
+2. Empirical US-vs-CV correlation check (quick, no hardware change)
+3. Dark-field / cross-polarization lighting trial
+4. Switch CV model to instance segmentation
+5. Stopcock optical window + strobed illumination (highest effort —
+   scope this early if pursuing it, given custom part fabrication)

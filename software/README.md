@@ -2,9 +2,13 @@
 
 Python pipeline that captures images of the gelatin foam slurry through the syringe, runs YOLOv8 inference, and reports particle size statistics to the ESP32-S3 over UART.
 
+See [`../SOFTWARE_TODO.md`](../SOFTWARE_TODO.md) for the full build-up task list, including the optical/lighting and model changes required by the July 2026 technical advisory (`docs/EMBO_UAS_CV_Technical_Advisory.txt`).
+
+New to Raspberry Pi development? See [`RPI_SETUP_GUIDE.md`](RPI_SETUP_GUIDE.md) — flashing the OS, connecting via VS Code Remote-SSH, and hardware bring-up (camera, UART), all from Windows.
+
 ## Responsibilities
 
-- Capture frames from Raspberry Pi Global Shutter Camera (CSI ribbon)
+- Capture frames from an off-the-shelf USB 2.0 microscope camera
 - Run YOLOv8 model (trained on gelatin foam particle images) to detect and measure individual particles
 - Compute median particle diameter (µm) and IQR per frame
 - Transmit statistics to ESP32-S3 over UART (GPIO14/15 on RPi → GPIO47/48 on ESP32-S3, 921600 baud, 3.3V)
@@ -26,7 +30,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-**Camera:** Raspberry Pi Global Shutter Camera connected via CSI ribbon. LED backlight panel (powered from PCB J10 at 5V) illuminates the syringe from behind for particle contrast.
+**Camera:** Off-the-shelf USB 2.0 microscope camera (UVC), connected via a Pi USB port and read through OpenCV/`v4l2` rather than `picamera2`/`libcamera`. Note: unlike the previously planned Raspberry Pi Global Shutter Camera, this is very likely a **rolling shutter** sensor — this matters for the strobed-illumination stopcock imaging work in `SOFTWARE_TODO.md` task 12, where motion blur/smear risk is higher than originally assumed. USB 2.0 bandwidth (~35–40MB/s effective) also caps achievable resolution × frame rate — check the camera's actual supported modes (`v4l2-ctl --list-formats-ext`) before assuming a given resolution/fps combo is deliverable. LED backlight panel (powered from PCB J10 at 5V) illuminates the syringe from behind for particle contrast.
 
 **UART:** RPi GPIO14 (TX) → ESP32-S3 GPIO48 (RX), RPi GPIO15 (RX) → ESP32-S3 GPIO47 (TX). Both sides 3.3V — no level shifter required.
 

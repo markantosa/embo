@@ -31,6 +31,8 @@ Generated from: PCB Design Brief v2.5, Pinout Cheatsheet, Project Overview, and 
 - [x] Wait 10ms after output enable before sampling baseline (>> 5× RC envelope τ=100µs)
 - [x] ADC raw → mV via esp_adc_cal_characterize() + esp_adc_cal_raw_to_voltage()
 - [x] HARDWARE NOTE: AD9833 MCLK assumed 25MHz — verify on first bring-up
+- [x] **UPDATE (July 2026 technical advisory)** — single-tone 1MHz reading replaced with a 3-point sweep (900kHz/1MHz/1.1MHz, `config.h`) each `uas_update()` cycle. Firmware/timing-only change, no board respin. See `docs/EMBO_UAS_CV_Technical_Advisory.txt` §1.
+- [ ] HARDWARE GATE: the ±10% frequency spacing is a placeholder — verify it sits within the real transducer's -3dB bandwidth before trusting the off-center points. Widen/narrow `UAS_FREQ_HZ_0/2` in `config.h` if not.
 
 ---
 
@@ -45,9 +47,11 @@ Generated from: PCB Design Brief v2.5, Pinout Cheatsheet, Project Overview, and 
 - [x] Each valid packet logged over BLE: `"RPi: median=X iqr=Y um"`
 
 ### 5. UAS attenuation baseline `src/uas.cpp` ✅
-- [x] Baseline sampled automatically at end of uas_init() after AD9833 settle
-- [x] uas_get_baseline_mv() exposed for BLE debug sanity check on first bring-up
-- [ ] HARDWARE GATE: verify attenuation ratio shifts measurably between air and slurry-filled syringe before trusting in PID
+- [x] Baseline sampled automatically at end of uas_init() after AD9833 settle, now per-frequency
+- [x] uas_get_baseline_mv(freq_idx) exposed for BLE debug sanity check on first bring-up
+- [x] **UPDATE (July 2026 technical advisory)** — UAS is formally demoted to a secondary/trend signal. The RPi CV pipeline is the sole authoritative size input to `pid.cpp`; this is documented in code, not just here. See `docs/EMBO_UAS_CV_Technical_Advisory.txt` §1.
+- [ ] **BLOCKING before UAS is used for anything beyond raw logging** — empirical correlation check: at several stroke counts, connect via BLE, run `UAS ON`, and log the per-frequency attenuation + live CV median/IQR line together (already wired up in `ble_debug.cpp`). Plot correlation. Only treat attenuation as a usable coarse/fast proxy if the relationship is clean and monotonic across the real operating range — otherwise leave it as diagnostic-only.
+- [ ] HARDWARE GATE: verify attenuation ratio shifts measurably between air and slurry-filled syringe before trusting in anything downstream
 
 ---
 
@@ -68,18 +72,27 @@ Generated from: PCB Design Brief v2.5, Pinout Cheatsheet, Project Overview, and 
 
 > Can be developed in parallel with layers 2–3 once task 2 (LEDC) is done.
 
-### 7. TFT screen content `src/ui.cpp`
-- [ ] Draw splash / home screen
-- [ ] Real-time status display: particle size (median + IQR), run/stop state, stroke count, UAS attenuation value
+### 7. TFT screen content `src/ui.cpp` ✅ single-screen text, graph pending
+- [x] Draw splash screen at boot
+- [x] Real-time status display: status text (HOMING/READY/RUNNING), target setpoint, live PSD (median), live IQR, stroke count — redrawn at ~5Hz with a dirty-check so unchanged frames don't flicker
+- [x] **Design decision — one screen, not four.** Considered a Home/Settings/Run/Calibration multi-screen touch UI; rejected in favor of augmenting the single existing screen. Touch calibration risk (task 10 is still unimplemented) and extra UI states are not worth taking on this close to the exhibition when the current screen already covers the full operational workflow. See `README.md`'s Operational Workflow section.
+- [ ] **NEW — live PSD trend graph on the existing screen** (kept from the multi-screen idea as the one piece worth the effort):
+  - [ ] Ring buffer of recent `median_um` readings in RAM (e.g. last 50–100 samples — a few hundred bytes, trivial on the ESP32-S3)
+  - [ ] Append to the buffer only when a *new* RPi packet arrives (`rpi_get_median_um()` changes), not on every ~5Hz UI redraw — plotting the same value repeatedly would draw a flat, misleading line between real CV updates
+  - [ ] Draw as a simple sparkline (line segments between buffer points) under the existing text block — `TFT_eSPI` has no built-in charting, this is manual point-to-point drawing
+  - [ ] Draw a horizontal reference line at the current target setpoint so the graph visually shows convergence toward target, not just raw scatter
+  - [ ] **Open design question — Y-axis scaling.** The setpoint range is 50–1000µm, far wider than any single run's actual trend. A fixed axis across that whole range would make real convergence look flat. Auto-scale to the buffer's visible min/max (or a fixed window around the target ± some margin) instead — needs a decision before implementing, not just picking a number
+  - [ ] Switch the graph region to a partial redraw (clear just that rectangle) rather than the current full-screen `fillScreen()` on every change — adding a moving graph on top of a full-screen redraw will be visibly worse flicker than the current text-only screen
 
-### 8. Rotary encoder quadrature decode `src/ui.cpp`
-- [ ] Attach `CHANGE` interrupts to GPIO16 (EC11_A) and GPIO17 (EC11_B)
-- [ ] Implement Gray-code quadrature decode in ISR
-- [ ] Wire encoder to adjust target particle size setpoint or mixing speed
+### 8. Rotary encoder quadrature decode `src/ui.cpp` ✅
+- [x] `CHANGE` interrupts attached to GPIO16 (EC11_A) and GPIO17 (EC11_B), shared ISR reading both pins
+- [x] Gray-code quadrature decode in ISR (`isr_encoder()`), accumulates into a volatile delta consumed in `ui_update()`
+- [x] Encoder adjusts target particle size setpoint, 5µm/detent, clamped to 50–1000µm (`config.h`); locked out while a run is active
 
-### 9. Button handling + debounce `src/ui.cpp`
-- [ ] Debounce BTN1 (GPIO11), BTN2 (GPIO12), EC11_SW (GPIO18)
-- [ ] Assign actions: run/stop and confirm
+### 9. Button handling + debounce `src/ui.cpp` ✅ BTN1/BTN2 only
+- [x] Debounce BTN1 (GPIO11) and BTN2 (GPIO12) — 30ms, edge-detected in `handle_buttons()`
+- [x] BTN1 = start (idle + homed only, short low chirp if not ready); BTN2 = stop/e-stop, always live, kills motors directly before touching PID state
+- [ ] EC11_SW (GPIO18) is initialized (`INPUT_PULLUP`) but has no assigned action yet — currently dead input
 
 ### 10. XPT2046 touch input `src/ui.cpp`
 - [ ] Touch CS GPIO42, 2MHz, Mode 0 — different clock from ILI9341; handle carefully on shared SPI bus
@@ -138,7 +151,9 @@ Work through these in order. Items marked **BLOCKING** must be resolved before t
 
 ### Sensing validation
 - [ ] **BLOCKING** — SG_RESULT under load: manually resist a motor shaft while stepping. Confirm `motor_sg_result()` value drops (lower = more load). Required before PID viscosity tuning.
-- [ ] **BLOCKING** — UAS attenuation shift: fill syringe with saline, recalibrate baseline, then add gelatin slurry. Confirm `uas_get_attenuation()` drops below 0.95. If no change, check transducer coupling and envelope detector output on oscilloscope.
+- [ ] **BLOCKING** — UAS attenuation shift: fill syringe with saline, recalibrate baseline, then add gelatin slurry. Confirm `uas_get_attenuation(freq_idx)` drops below 0.95 at each swept frequency. If no change, check transducer coupling and envelope detector output on oscilloscope.
+- [ ] **BLOCKING** — UAS-vs-CV correlation (July 2026 advisory, see task 5 above): do not skip this even if the attenuation shift check above passes — a monotonic *shift* existing is not the same as attenuation being *invertible* to a size value. Only promote UAS beyond diagnostic-only status if the correlation is clean.
+- [ ] **Watch for RPi packet format changes.** The CV pipeline advisory recommends switching from bounding-box detection to instance segmentation and from a simple diameter to Equivalent Circular Diameter (+ Feret/solidity). If the RPi side adds fields beyond `median_um`/`iqr_um`, note that `rpi_uart.cpp`'s `sscanf(_buf, "SIZE %d %d", ...)` parser will silently ignore any extra trailing fields rather than erroring — new metrics (Feret, solidity) would arrive over UART but never reach firmware until the parser and `rpi_uart.h` getters are explicitly extended for them.
 
 ### PID calibration (after all BLOCKING items are cleared)
 - [ ] Set `KI = 0.0`, `KD = 0.0`, start with P-only. Tune `KP` until the device converges on the particle size target without oscillating.

@@ -2,17 +2,31 @@
 #include <stdint.h>
 
 void uas_init();
-void uas_update();  // call every loop()
+void uas_update();  // call every loop() — sweeps all configured frequencies
 
-// Attenuation ratio vs saline baseline. 1.0 = pure saline; <1.0 = particles present.
-float uas_get_attenuation();
+// Multi-frequency attenuation spectroscopy (see docs/EMBO_UAS_CV_Technical_Advisory.txt).
+// A single-frequency reading cannot reliably resolve a polydisperse particle
+// population, so the AD9833 sweeps UAS_NUM_FREQUENCIES discrete tones each
+// update cycle instead of holding one fixed 1MHz tone.
+uint8_t uas_get_num_frequencies();
+float   uas_get_frequency_hz(uint8_t freq_idx);
 
-// Raw baseline reading in mV — useful for BLE debug / sanity check on first bring-up.
-float uas_get_baseline_mv();
+// Attenuation ratio vs saline baseline at a given frequency index. 1.0 = pure
+// saline; <1.0 = particles present. NOT validated as a standalone size proxy —
+// per the technical advisory, treat as a secondary/trend signal only (fused
+// with StallGuard) until an empirical CV-vs-attenuation correlation check
+// confirms a clean, monotonic relationship over the real operating range.
+// The CV/camera pipeline remains the authoritative size measurement.
+float uas_get_attenuation(uint8_t freq_idx = 0);
 
-// Re-sample baseline. Call once with saline-only in syringe, before mixing starts.
-// Also called automatically at end of uas_init().
+// Raw baseline reading in mV at a given frequency index — useful for BLE
+// debug / sanity check on first bring-up.
+float uas_get_baseline_mv(uint8_t freq_idx = 0);
+
+// Re-sample baseline at all configured frequencies. Call once with saline-only
+// in syringe, before mixing starts. Also called automatically at end of uas_init().
 void uas_calibrate_baseline();
 
-// Immediate calibrated ADC read in mV — for debug streaming, bypasses settle delay.
+// Immediate calibrated ADC read in mV at whichever frequency is currently
+// tuned — for debug streaming, bypasses settle delay.
 uint32_t uas_read_mv();

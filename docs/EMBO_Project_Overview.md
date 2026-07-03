@@ -86,7 +86,7 @@ The device feeds the measurements into a control algorithm (PID loop) that decid
 ### Sensing
 
 - Raspberry Pi 5 — a small single-board computer that runs the camera and AI software
-- Raspberry Pi Global Shutter Camera — a high-quality industrial-grade camera module
+- An off-the-shelf USB 2.0 microscope camera plugged into the Raspberry Pi
 - Diffused LED panel for backlighting the syringe so particles show up clearly in camera images
 - Two 1MHz ultrasound transducers (like miniature speakers/microphones for sound waves) that clamp onto the syringe
 
@@ -138,8 +138,8 @@ A statistical measure of spread. Instead of just knowing the average particle si
 **Micrometres (µm)**
 One micrometre is one millionth of a metre — about 1/70th the width of a human hair. Our adjustable target range of 50–1000µm spans from barely visible dust to specks clearly visible to the naked eye.
 
-**CSI ribbon**
-The flat flexible cable connecting the camera to the Raspberry Pi. It is a standard connector used in phones and industrial cameras.
+**UVC (USB Video Class)**
+The standard protocol most USB webcams and microscope cameras use, letting the Raspberry Pi read frames without a manufacturer-specific driver. Our camera connects this way over USB 2.0, rather than the ribbon-cable CSI connection used by dedicated Raspberry Pi camera modules.
 
 **GPIO**
 General Purpose Input/Output. These are the programmable pins on a microcontroller that connect to external components. Our ESP32-S3 module breaks out 36 GPIOs; 28 are assigned in this design, leaving 8 spare.

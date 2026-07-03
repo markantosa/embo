@@ -1,6 +1,7 @@
 #include "ble_debug.h"
 #include "motors.h"
 #include "uas.h"
+#include "rpi_uart.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <stdio.h>
@@ -159,7 +160,22 @@ void ble_debug_update() {
     _stream_last_ms = now;
 
     if (_uas_streaming) {
-        ble_log("UAS: %lu mV", uas_read_mv());
+        // Per-frequency attenuation alongside live CV size — lets a BLE
+        // terminal log capture the correlation data the technical advisory
+        // requires before UAS can be trusted as anything beyond a raw signal
+        // (see docs/EMBO_UAS_CV_Technical_Advisory.txt, section 1).
+        char line[128];
+        int n = snprintf(line, sizeof(line), "UAS:");
+        for (uint8_t i = 0; i < uas_get_num_frequencies() && n < (int)sizeof(line); i++) {
+            n += snprintf(line + n, sizeof(line) - n, " f%u=%.0fkHz(att=%.3f)",
+                          i, uas_get_frequency_hz(i) / 1000.0f, uas_get_attenuation(i));
+        }
+        if (n >= (int)sizeof(line)) n = sizeof(line) - 1;  // snprintf can report more than it wrote
+        int16_t median = rpi_get_median_um();
+        int16_t iqr     = rpi_get_iqr_um();
+        snprintf(line + n, sizeof(line) - n, " | CV: median=%d iqr=%d",
+                 median, iqr);
+        ble_log("%s", line);
     }
 
     if (_move_active) {

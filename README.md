@@ -25,7 +25,7 @@ EMBO replaces manual syringe pumping with a controlled, sensor-guided system tha
 
 1. **Automates mixing** — two stepper motors drive syringe plungers back and forth with precise speed, stroke, and cycle control
 2. **Measures particle size in real time** using two parallel sensing modalities:
-   - **Computer vision** — a Raspberry Pi 5 + Global Shutter Camera running a YOLOv8 model trained on gelatin foam particles, reporting median particle size and IQR
+   - **Computer vision** — a Raspberry Pi 5 + USB 2.0 microscope camera running a YOLOv8 model trained on gelatin foam particles, reporting median particle size and IQR
    - **Ultrasound attenuation** — a 1 MHz acoustic signal chain measures how much sound energy the slurry absorbs; larger particles attenuate more
 3. **Stops automatically** when the target particle size is reached, using a PID control loop on the ESP32-S3 that adjusts stroke count based on live sensor feedback. The target is adjustable per procedure (50–1000 µm, set via the touchscreen/encoder), since the ideal size depends on which vessels are being treated.
 
@@ -43,8 +43,8 @@ EMBO replaces manual syringe pumping with a controlled, sensor-guided system tha
 │  │  - YOLOv8 CV     │          │  - PID control loop          │ │
 │  │  - Particle size │          │  - 2× TMC2209 motor drivers  │ │
 │  │    statistics    │          │  - UAS signal chain          │ │
-│  │  - Global        │          │  - ILI9341 TFT UI            │ │
-│  │    Shutter Cam   │          │  - BLE debug (NimBLE)        │ │
+│  │  - USB           │          │  - ILI9341 TFT UI            │ │
+│  │    Microscope Cam│          │  - BLE debug (NimBLE)        │ │
 │  └──────────────────┘          └──────────────────────────────┘ │
 │           │                             │           │            │
 │           ▼                             ▼           ▼            │
@@ -91,11 +91,15 @@ EMBO/
 │       └── ../FIRMWARE_TODO.md        # Build-up task list + hardware checklist
 │
 ├── software/
-│   ├── cv-pipeline/                   # Raspberry Pi YOLOv8 vision pipeline
-│   └── ui/                            # TFT touchscreen UI assets/logic
+│   ├── SOFTWARE_TODO.md               # CV pipeline build-up task list
+│   └── cv-pipeline/                   # Raspberry Pi YOLOv8 vision pipeline
+│       ├── README.md
+│       └── RPI_SETUP_GUIDE.md         # RPi flash/SSH/VS Code dev setup
 │
 └── assets/                            # Images, diagrams, photos
 ```
+
+Note: TFT touchscreen UI code lives in `firmware/esp32/src/ui.cpp` and is tracked in `firmware/FIRMWARE_TODO.md` — there's no separate `software/ui/` folder, since that code only runs on the ESP32, not the Pi.
 
 ---
 
@@ -148,7 +152,7 @@ ILI9341 TFT + XPT2046 touch controller on a separate board, connected to the mai
 - Firmware reads attenuation ratio vs saline baseline to track particle size change
 
 **Computer Vision:**
-- Raspberry Pi Global Shutter Camera frames processed by YOLOv8 model
+- USB 2.0 microscope camera frames processed by YOLOv8 model (likely rolling shutter — see `software/cv-pipeline/README.md`)
 - Outputs: median particle diameter (µm) and IQR, sent to ESP32 over UART
 - Diffused LED panel (5V, J8) backlit behind syringe for particle contrast
 

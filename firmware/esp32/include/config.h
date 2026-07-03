@@ -81,6 +81,22 @@
 #define UAS_ADC_CHANNEL     ADC1_CHANNEL_0
 #define UAS_SETTLE_US       500
 
+// ── UAS multi-frequency sweep ───────────────────────────────────────────────
+// Per docs/EMBO_UAS_CV_Technical_Advisory.txt (July 2026): a single 1MHz
+// attenuation reading is not reliably invertible to particle size for a
+// polydisperse population. The AD9833 is frequency-agile, so instead of one
+// fixed tone, uas_update() now sweeps this small set of discrete frequencies
+// each cycle — a firmware/timing-only change, no board respin required.
+//
+// PLACEHOLDER SPACING: +/-10% around the nominal 1MHz transducer frequency.
+// The transducers are narrowband piezo elements — verify this spacing sits
+// within their actual -3dB bandwidth before trusting the off-center points.
+// Widen/narrow as needed once that's characterized on real hardware.
+#define UAS_NUM_FREQUENCIES  3
+#define UAS_FREQ_HZ_0        900000.0f
+#define UAS_FREQ_HZ_1        1000000.0f   // matches original single-tone design
+#define UAS_FREQ_HZ_2        1100000.0f
+
 // ── Homing ───────────────────────────────────────────────────────────────────
 // Slow approach speed — gentle enough to avoid impact damage on limit trip.
 #define HOMING_STEP_HZ       500

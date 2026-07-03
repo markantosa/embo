@@ -8,6 +8,14 @@
 
 // Particle size follows first-order breakage: D(N) = D_min + (D0 - D_min)*exp(-k*N)
 // PID output → additional strokes to schedule before next measurement.
+//
+// Per docs/EMBO_UAS_CV_Technical_Advisory.txt: the RPi CV pipeline (median_um)
+// is the sole authoritative size input below — this is intentional, not a
+// placeholder. UAS attenuation (uas.cpp) and StallGuard (motor_sg_result())
+// are NOT wired into this control loop and must not be added as PID inputs
+// until an empirical CV-vs-attenuation correlation check (BLE "UAS ON" log,
+// see ble_debug.cpp) confirms a clean, monotonic relationship. Until then they
+// are diagnostic/trend signals only.
 
 static bool _running = false;
 static bool _done    = false;
