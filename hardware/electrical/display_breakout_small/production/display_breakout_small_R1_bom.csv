@@ -1,0 +1,9 @@
+﻿Designator,Footprint,Quantity,Value,LCSC Part #
+BZ1,Buzzer_12x9.5RM7.6,1,Buzzer,
+"C1, C2, C3, C4, C5",0402,5,100nF,
+J1,IDC-Header_2x10_P2.54mm_Vertical,1,Conn_02x10_Odd_Even,
+J2,PinSocket_1x14_P2.54mm_Vertical,1,Conn_01x14_Socket,
+Q1,SOT-23,1,2N7002,
+"R2, R3, R4, R5, R6, R7",0402,6,10k,
+SW1,RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm,1,RotaryEncoder_Switch,
+"SW2, SW3",SW_TH_Tactile_Omron_B3F-100x,2,SW_Push,
