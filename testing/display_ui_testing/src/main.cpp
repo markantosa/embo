@@ -1,75 +1,64 @@
 #include <config.h>
-#include <SPI.h>
-#include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
-#include <XPT2046_Touchscreen.h>
+#include "hal/button_driver.h"
+#include "hal/encoder_driver.h"
+#include "backend/menu_logic.h"
+#include "backend/percentage_logic.h"
+#include "ui/screen_menu.cpp"
+#include "ui/screen_percentage.cpp"
 
 
-Adafruit_ILI9341 tft = Adafruit_ILI9341(&SPI, TFT_DC, TFT_CS, TFT_RST);
-XPT2046_Touchscreen touch(TOUCH_CS);  // no IRQ pin — we'll poll
-volatile int encoderPos = 0;
-volatile bool lastCLK = HIGH;
+ButtonDriver btnNext;
+ButtonDriver btnSelect;
+EncoderDriver encoder;
+PercentageLogic percentage;
+ScreenPercentage percentScreen;
+MenuLogic menu;
+ScreenMenu menuScreen;
+Adafruit_ILI9341 tft(TFT_CS,TFT_DC,TFT_MOSI,TFT_SCK,TFT_RST,TFT_MISO);
 
-void IRAM_ATTR handleEncoder() {
-  bool clkState = digitalRead(ENC_CLK);
-  if (clkState != lastCLK) {
-    if (digitalRead(ENC_DT) != clkState) {
-      encoderPos++;
-    } else {
-      encoderPos--;
-    }
-  }
-  lastCLK = clkState;
-}
+bool needsRedraw = true;
 
 void setup() {
-  Serial.begin(115200);
-  delay(1000);
+    btnNext.begin(BTN_NEXT_PIN);
+    btnSelect.begin(BTN_SELECT_PIN);
+    //encoder.begin(ENC_CLK, ENC_DT);
+    //percentage.begin(0); //start percentage at 0
 
-  SPI.begin(TFT_SCK, TFT_MISO, TFT_MOSI, TFT_CS);
-  tft.begin();
-  touch.begin();
+    menu.begin({
+        {"Start Weighing", 1},
+        {"Calibrate",      2},
+        {"Settings",       3}
+    });
 
-  tft.fillScreen(ILI9341_BLACK);
-  Serial.println("Display + touch initialized.");
-  pinMode(ENC_CLK, INPUT_PULLUP);
-  pinMode(ENC_DT, INPUT_PULLUP);
-  pinMode(ENC_SW, INPUT_PULLUP);
-  pinMode(BTN1, INPUT_PULLUP);
-  pinMode(BTN2, INPUT_PULLUP);
-
-  attachInterrupt(digitalPinToInterrupt(ENC_CLK), handleEncoder, CHANGE);
+    tft.begin();
 }
 
 void loop() {
-  if (touch.touched()) {
-    TS_Point p = touch.getPoint();
-    Serial.print("Touch raw X: ");
-    Serial.print(p.x);
-    Serial.print("  Y: ");
-    Serial.println(p.y);
-  }
-  delay(50);
+    if (btnNext.wasPressed()) {
+        menu.next();
+        needsRedraw = true;
+    }
 
-  static int lastPos = 0;
-  if (encoderPos != lastPos) {
-    Serial.print("Encoder position: ");
-    Serial.println(encoderPos);
-    lastPos = encoderPos;
-  }
+    if (btnSelect.wasPressed()) {
+        int action = menu.select();
+        // handle action, e.g. switch app state / screen
+        needsRedraw = true;
+    }
 
-  if (digitalRead(ENC_SW) == LOW) {
-    Serial.println("Encoder pressed");
-    delay(200);
-  }
+    if (needsRedraw) {
+        menuScreen.render(tft, menu);
+        needsRedraw = false;
+    }
 
-  if (digitalRead(BTN1) == LOW) {
-    Serial.println("Button 1 pressed");
-    delay(200);
-  }
+    //int step = encoder.readStep();
+    //if (step != 0) {
+    //  percentage.applyStep(step);
+    //  needsRedraw = true;
+    //}
 
-  if (digitalRead(BTN2) == LOW) {
-    Serial.println("Button 2 pressed");
-    delay(200);
-  }
+    // if (needsRedraw) {
+    //   percentScreen.render(tft,percentage);
+    //   needsRedraw = false;
+    // }
 }

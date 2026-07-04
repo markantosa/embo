@@ -14,5 +14,10 @@
 #define ENC_CLK 1
 #define ENC_DT  2
 #define ENC_SW  3
-#define BTN1    0
-#define BTN2    14
+#define BTN_NEXT_PIN    0
+#define BTN_SELECT_PIN    14
+
+#define BUTTON_DEBOUNCE_MS 30
+#define PERCENT_MIN 0
+#define PERCENT_MAX 100
+#define PERCENT_STEP 1 //step change per detent
