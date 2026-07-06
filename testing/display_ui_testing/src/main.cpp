@@ -20,10 +20,16 @@ Adafruit_ILI9341 tft(TFT_CS,TFT_DC,TFT_MOSI,TFT_SCK,TFT_RST,TFT_MISO);
 bool needsRedraw = true;
 
 void setup() {
+    SPI.begin(TFT_SCK,TFT_MISO,TFT_MOSI,TFT_CS);
+    tft.begin(40000000);
+    tft.setRotation(1);
+
+    tft.fillScreen(ILI9341_BLACK);
+
     btnNext.begin(BTN_NEXT_PIN);
     btnSelect.begin(BTN_SELECT_PIN);
-    //encoder.begin(ENC_CLK, ENC_DT);
-    //percentage.begin(0); //start percentage at 0
+    encoder.begin(ENC_CLK, ENC_DT);
+    percentage.begin(0); //start percentage at 0
 
     menu.begin({
         {"Start Weighing", 1},
@@ -31,8 +37,8 @@ void setup() {
         {"Settings",       3}
     });
 
-    tft.begin();
-}
+    menuScreen.render(tft,menu);
+}    
 
 void loop() {
     if (btnNext.wasPressed()) {
@@ -51,14 +57,14 @@ void loop() {
         needsRedraw = false;
     }
 
-    //int step = encoder.readStep();
-    //if (step != 0) {
-    //  percentage.applyStep(step);
-    //  needsRedraw = true;
-    //}
+    int step = encoder.readStep();
+    if (step != 0) {
+     percentage.applyStep(step);
+     needsRedraw = true;
+    }
 
-    // if (needsRedraw) {
-    //   percentScreen.render(tft,percentage);
-    //   needsRedraw = false;
-    // }
+    if (needsRedraw) {
+      percentScreen.render(tft,percentage);
+      needsRedraw = false;
+    }
 }

@@ -7,22 +7,44 @@ public:
     void render(Adafruit_ILI9341& tft, const PercentageLogic& percent) {
         int value = percent.getValue();
 
-        const int barX = 20, barY = 100, barW = 200, barH = 30;
+        const int barX = 20, barY = 150, barW = 200, barH = 30;
+        const int innerX = barX + 1, innerY = barY + 1, innerW = barW - 2, innerH = barH - 2;
 
-        // Outline (draw once conceptually, but fine to redraw here for simplicity)
-        tft.drawRect(barX, barY, barW, barH, ILI9341_WHITE);
+        int newFillWidth = (innerW * value) / 100;
 
-        // Clear inside, then fill according to percentage
-        tft.fillRect(barX + 1, barY + 1, barW - 2, barH - 2, ILI9341_BLACK);
-        int fillWidth = ((barW - 2) * value) / 100;
-        tft.fillRect(barX + 1, barY + 1, fillWidth, barH - 2, ILI9341_GREEN);
+        if (!_initialized) {
+            // Draw static parts once
+            tft.drawRect(barX, barY, barW, barH, ILI9341_WHITE);
+            tft.fillRect(innerX, innerY, innerW, innerH, ILI9341_BLACK);
+            _prevFillWidth = 0;
+            _initialized = true;
+        }
 
-        // Text readout above the bar
-        tft.fillRect(barX, barY - 25, 100, 20, ILI9341_BLACK); // clear old text
-        tft.setCursor(barX, barY - 25);
-        tft.setTextColor(ILI9341_WHITE);
-        tft.setTextSize(2);
-        tft.print(value);
-        tft.print("%");
+        if (newFillWidth > _prevFillWidth) {
+            // Growing — only draw the new strip
+            tft.fillRect(innerX + _prevFillWidth, innerY,
+                         newFillWidth - _prevFillWidth, innerH, ILI9341_GREEN);
+        } else if (newFillWidth < _prevFillWidth) {
+            // Shrinking — only erase the removed strip
+            tft.fillRect(innerX + newFillWidth, innerY,
+                         _prevFillWidth - newFillWidth, innerH, ILI9341_BLACK);
+        }
+        _prevFillWidth = newFillWidth;
+
+        // Only redraw text if the displayed number actually changed
+        if (value != _prevValue) {
+            tft.fillRect(barX, barY - 25, 100, 20, ILI9341_BLACK);
+            tft.setCursor(barX, barY - 25);
+            tft.setTextColor(ILI9341_WHITE);
+            tft.setTextSize(2);
+            tft.print(value);
+            tft.print("%");
+            _prevValue = value;
+        }
     }
+
+private:
+    bool _initialized = false;
+    int _prevFillWidth = 0;
+    int _prevValue = -1;   // force first draw
 };

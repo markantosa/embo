@@ -11,7 +11,7 @@ public:
         _lastClkState = digitalRead(_clkPin);
     
         _instance = this;
-        attachInterrupt(digitalPinToInterrupt(_clkPin), isrHandler, CHANGE);
+        attachInterrupt(digitalPinToInterrupt(_clkPin), isrHandler, FALLING);
         
     }
     //Call every loop(). Returns -1,0 or +1 for direction, consuming the pending step.
@@ -22,6 +22,7 @@ public:
         interrupts();
         return step;
     }
+    
 private:
     static void  IRAM_ATTR isrHandler() {
         if (_instance) _instance->handleInterrupt();
@@ -31,7 +32,7 @@ private:
         bool clkState = digitalRead(_clkPin);
         if (clkState != _lastClkState) {
             bool dtState = digitalRead(_dtPin);
-            _pendingStep += (dtState != clkState) ? 1 : -1;
+            _pendingStep += (dtState != clkState) ? -1 : 1;
             _lastClkState = clkState;
         }
     }

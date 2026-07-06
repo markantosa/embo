@@ -17,7 +17,7 @@
 #define BTN_NEXT_PIN    0
 #define BTN_SELECT_PIN    14
 
-#define BUTTON_DEBOUNCE_MS 30
+#define BUTTON_DEBOUNCE_MS 40
 #define PERCENT_MIN 0
 #define PERCENT_MAX 100
 #define PERCENT_STEP 1 //step change per detent
