@@ -4,7 +4,7 @@
 #include "hal/encoder_driver.h"
 #include "backend/menu_logic.h"
 #include "backend/percentage_logic.h"
-#include "ui/screen_menu.cpp"
+#include "ui/screen_main_menu.cpp"
 #include "ui/screen_percentage.cpp"
 
 
@@ -24,7 +24,6 @@ void setup() {
     tft.begin(40000000);
     tft.setRotation(1);
 
-    tft.fillScreen(ILI9341_BLACK);
 
     btnNext.begin(BTN_NEXT_PIN);
     btnSelect.begin(BTN_SELECT_PIN);
@@ -32,7 +31,7 @@ void setup() {
     percentage.begin(0); //start percentage at 0
 
     menu.begin({
-        {"Start Weighing", 1},
+        {"Start Mixing", 1},
         {"Calibrate",      2},
         {"Settings",       3}
     });
