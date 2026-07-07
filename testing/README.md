@@ -9,3 +9,6 @@ Write-up of the first hands-on microscope + backlighting test on Lyostypt and de
 
 # 3JUL_stopcock_aperture_testing
 Follow-up test moving the camera to the stopcock aperture (per the advisory's Problem B fix). Confirms overlap is avoided, but continuous lighting (smartphone backlight and the camera's built-in LED, both tested) causes significant motion blur — see [`3JUL_stopcock_aperture_testing/2026-07-03_stopcock_aperture_testing.md`](3JUL_stopcock_aperture_testing/2026-07-03_stopcock_aperture_testing.md). Confirms strobed illumination is now required, not optional, for `software/SOFTWARE_TODO.md` task 12.
+
+# 7JUL_stabilised_mixing_video_testing
+3D-printed camera mount (replacing handheld positioning) + red-filtered LED backlight, stabilised mixing video recorded for hemostatic sponge and Lyostypt (linked via Google Drive). See [`7JUL_stabilised_mixing_video_testing/2026-07-07_stabilised_mixing_video_testing.md`](7JUL_stabilised_mixing_video_testing/2026-07-07_stabilised_mixing_video_testing.md) — observations pending video review.

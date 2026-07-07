@@ -36,6 +36,12 @@ Code scaffolding exists (`config.py`, `capture.py`, `uart_link.py`, `detection.p
 - [ ] Add visible dye (methylene blue or similar) to the saline; re-run capture; confirm particle contrast visibly improves over plain backlight
 - [ ] Save before/after image pairs as the baseline evidence
 - [ ] Note dye concentration used, and flag if the dye visibly affects particle buoyancy/behavior during mixing
+- [ ] **Test combined with the red-filtered LED backlight** (see below) rather than treating them as alternatives — 7 July test found red filtering helps bubble/particle separation, which is a different effect from dye's particle/saline contrast boost; the two may be complementary
+
+### 3b. Red-filtered LED backlight — confirmed by test (7 July 2026), not yet in the advisory
+- [x] **CONFIRMED BY TEST** — red filter on the LED backlight makes bubble outlines less sharp/prominent relative to plain white light, improving particle-vs-bubble discrimination. See `testing/7JUL_stabilised_mixing_video_testing/2026-07-07_stabilised_mixing_video_testing.md`.
+- [ ] **Not yet confirmed:** whether the red filter also helps the core particle-vs-saline contrast problem (advisory §2 Problem A), or only bubble suppression — these are two different effects and shouldn't be conflated. Needs a direct side-by-side comparison against plain light and against the dye test.
+- [ ] If confirmed as genuinely complementary to dye, add to the standard test lighting configuration rather than treating as a one-off
 
 ### 4. Dark-field illumination trial
 - [ ] Angle the LED panel obliquely instead of straight backlight (mechanical adjustment — coordinate with the mechanical team on panel mounting)
