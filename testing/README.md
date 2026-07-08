@@ -12,3 +12,6 @@ Follow-up test moving the camera to the stopcock aperture (per the advisory's Pr
 
 # 7JUL_stabilised_mixing_video_testing
 3D-printed camera mount (replacing handheld positioning) + red-filtered LED backlight, stabilised mixing video recorded for hemostatic sponge and Lyostypt (linked via Google Drive). See [`7JUL_stabilised_mixing_video_testing/2026-07-07_stabilised_mixing_video_testing.md`](7JUL_stabilised_mixing_video_testing/2026-07-07_stabilised_mixing_video_testing.md) — observations pending video review.
+
+# 8JUL_piezo_transducer_oscilloscope_testing
+Preliminary test of signal transmission and attenuation between two piezoelectric transducers sandwiching a finger, using a signal generator and oscilloscope. A clear 1MHz signal (4.76V Pk-Pk in, 211mV Pk-Pk out) is received through the finger with readable attenuation. See [`8JUL_piezo_transducer_oscilloscope_testing/2026-07-08_piezo_transducer_oscilloscope_testing.md`](8JUL_piezo_transducer_oscilloscope_testing/2026-07-08_piezo_transducer_oscilloscope_testing.md).
