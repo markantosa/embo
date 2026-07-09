@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-df= pd.read_csv("test_20260707_163140.csv")
+df= pd.read_csv("test_20260709_123600.csv")
 
 plt.figure(figsize=(10, 5))
 plt.plot(df["ms"], df["grams"], linewidth=2)
@@ -17,4 +17,4 @@ plt.grid(True)
 # Show
 plt.show()
 
-plt.savefig("graph.png", dpi=300)
+plt.savefig("baseline graph.png", dpi=300)
