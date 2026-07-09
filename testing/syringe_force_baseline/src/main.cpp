@@ -35,7 +35,7 @@
 #define BOOT_BTN    9
 
 // ── Calibration ───────────────────────────────────────────────
-const float CALIBRATION_FACTOR = -7050;
+const float CALIBRATION_FACTOR = -402;
 const int   SAMPLES            = 5;
 
 // ── Graph config ──────────────────────────────────────────────
