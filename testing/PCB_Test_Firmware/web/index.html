@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EMBO PCB Test Dashboard</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1c20; --muted: #6b7280;
+    --accent: #2563eb; --accent-active: #1d4ed8; --danger: #dc2626; --ok: #16a34a; --border: #e2e4e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15171a; --card:#1e2126; --text:#e8e9eb; --muted:#9aa1ab; --border:#2c3036; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 20px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; }
+  .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  button.connect {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 0.95rem; cursor: pointer;
+  }
+  button.connect:active { background: var(--accent-active); }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); display: inline-block; }
+  .status-dot.connected { background: var(--ok); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 12px; }
+  .reading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .reading .label { color: var(--muted); font-size: 0.85rem; }
+  .reading .value { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  .bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s linear; }
+  .motor-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .jog-btn {
+    flex: 1; padding: 18px 0; font-size: 1.4rem; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; user-select: none; touch-action: manipulation;
+  }
+  .jog-btn:active, .jog-btn.pressed { background: var(--accent); color: white; }
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .slider-row input[type=range] { flex: 1; }
+  .slider-row .pct { width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
+  .home-btn {
+    margin-top: 12px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; font-size: 0.9rem;
+  }
+  .home-btn.homing { background: #f59e0b; color: white; }
+  .step-count { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
+  .step-count b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .footer-note { color: var(--muted); font-size: 0.75rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<h1>EMBO PCB Test Dashboard</h1>
+<div class="sub">Bench-test interface for the main board firmware — UAS/SG_RESULT telemetry and manual motor jog/home.</div>
+
+<div class="top-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusText">Disconnected</span>
+  <button class="connect" id="connectBtn">Connect BLE</button>
+</div>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>Sensors</h2>
+    <div class="reading">
+      <span class="label">UAS envelope (V)</span>
+      <span class="value" id="uasValue">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="uasBar"></div></div>
+
+    <div class="reading" style="margin-top:14px">
+      <span class="label">SG_RESULT — Motor 1</span>
+      <span class="value" id="sg1Value">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="sg1Bar"></div></div>
+
+    <div class="reading" style="margin-top:14px">
+      <span class="label">SG_RESULT — Motor 2</span>
+      <span class="value" id="sg2Value">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="sg2Bar"></div></div>
+  </div>
+
+  <div class="card" data-motor="0">
+    <h2>Motor 1</h2>
+    <div class="motor-controls">
+      <button class="jog-btn" data-dir="-1">&#9664;</button>
+      <button class="jog-btn" data-dir="1">&#9654;</button>
+    </div>
+    <div class="slider-row">
+      <span class="label">Speed</span>
+      <input type="range" min="0" max="100" value="40" class="speed-slider">
+      <span class="pct">40%</span>
+    </div>
+    <button class="home-btn" data-home="0">Home Motor 1</button>
+    <div class="step-count">Position: <b class="pos-readout">0</b> steps <span class="homed-tag" style="display:none"> — homed ✓</span></div>
+  </div>
+
+  <div class="card" data-motor="1">
+    <h2>Motor 2</h2>
+    <div class="motor-controls">
+      <button class="jog-btn" data-dir="-1">&#9664;</button>
+      <button class="jog-btn" data-dir="1">&#9654;</button>
+    </div>
+    <div class="slider-row">
+      <span class="label">Speed</span>
+      <input type="range" min="0" max="100" value="40" class="speed-slider">
+      <span class="pct">40%</span>
+    </div>
+    <button class="home-btn" data-home="1">Home Motor 2</button>
+    <div class="step-count">Position: <b class="pos-readout">0</b> steps <span class="homed-tag" style="display:none"> — homed ✓</span></div>
+  </div>
+
+</div>
+
+<button class="home-btn" id="homeBothBtn" style="max-width:320px">Home Both</button>
+
+<div class="footer-note">
+  Requires Chrome or Edge with Web Bluetooth enabled. Jog buttons are press-and-hold —
+  releasing (mouse up / touch end / pointer leaving the button) immediately sends a stop command.
+  The firmware also auto-stops a jogging motor if no command is received for 300ms, in case the
+  BLE link drops mid-press.
+</div>
+
+<script>
+const SERVICE_UUID     = '8f6a0001-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const TELEMETRY_UUID   = '8f6a0002-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const MOTOR_CMD_UUID   = '8f6a0003-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const HOME_CMD_UUID    = '8f6a0004-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+
+let device, motorCmdChar, homeCmdChar;
+let connected = false;
+
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const connectBtn = document.getElementById('connectBtn');
+
+function setConnected(isConnected) {
+  connected = isConnected;
+  statusDot.classList.toggle('connected', isConnected);
+  statusText.textContent = isConnected ? 'Connected' : 'Disconnected';
+  connectBtn.textContent = isConnected ? 'Disconnect' : 'Connect BLE';
+}
+
+async function connect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }]
+    });
+    device.addEventListener('gattserverdisconnected', () => setConnected(false));
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const telemetryChar = await service.getCharacteristic(TELEMETRY_UUID);
+    motorCmdChar = await service.getCharacteristic(MOTOR_CMD_UUID);
+    homeCmdChar = await service.getCharacteristic(HOME_CMD_UUID);
+
+    await telemetryChar.startNotifications();
+    telemetryChar.addEventListener('characteristicvaluechanged', onTelemetry);
+
+    setConnected(true);
+  } catch (err) {
+    console.error('BLE connect failed:', err);
+    setConnected(false);
+  }
+}
+
+function disconnect() {
+  if (device && device.gatt.connected) device.gatt.disconnect();
+  setConnected(false);
+}
+
+connectBtn.addEventListener('click', () => {
+  if (connected) disconnect(); else connect();
+});
+
+// TelemetryPacket layout (little-endian, matches ble_service.h):
+// float uasVolts; uint16 sgResultM1; uint16 sgResultM2;
+// int32 positionM1; int32 positionM2; uint8 homingFlags;
+function onTelemetry(event) {
+  const dv = event.target.value;
+  const uas = dv.getFloat32(0, true);
+  const sg1 = dv.getUint16(4, true);
+  const sg2 = dv.getUint16(6, true);
+  const pos1 = dv.getInt32(8, true);
+  const pos2 = dv.getInt32(12, true);
+  const flags = dv.getUint8(16);
+
+  document.getElementById('uasValue').textContent = uas.toFixed(3);
+  document.getElementById('uasBar').style.width = Math.min(100, (uas / 3.3) * 100) + '%';
+
+  document.getElementById('sg1Value').textContent = sg1;
+  document.getElementById('sg1Bar').style.width = Math.min(100, (sg1 / 1023) * 100) + '%';
+  document.getElementById('sg2Value').textContent = sg2;
+  document.getElementById('sg2Bar').style.width = Math.min(100, (sg2 / 1023) * 100) + '%';
+
+  const cards = document.querySelectorAll('.card[data-motor]');
+  cards[0].querySelector('.pos-readout').textContent = pos1;
+  cards[1].querySelector('.pos-readout').textContent = pos2;
+
+  const homingM1 = !!(flags & 0x01), homingM2 = !!(flags & 0x02);
+  cards[0].querySelector('.home-btn').classList.toggle('homing', homingM1);
+  cards[1].querySelector('.home-btn').classList.toggle('homing', homingM2);
+  if (flags & 0x04) cards[0].querySelector('.homed-tag').style.display = 'inline';
+  if (flags & 0x08) cards[1].querySelector('.homed-tag').style.display = 'inline';
+}
+
+async function sendMotorCmd(motorId, dir, speedPct) {
+  if (!motorCmdChar) return;
+  const buf = new ArrayBuffer(3);
+  const dv = new DataView(buf);
+  dv.setUint8(0, motorId);
+  dv.setInt8(1, dir);
+  dv.setUint8(2, speedPct);
+  try { await motorCmdChar.writeValueWithoutResponse(buf); } catch (e) { console.warn(e); }
+}
+
+async function sendHomeCmd(motorId) {
+  if (!homeCmdChar) return;
+  const buf = new Uint8Array([motorId]);
+  try { await homeCmdChar.writeValueWithResponse(buf); } catch (e) { console.warn(e); }
+}
+
+// Press-and-hold jog: send the dir+speed command on press, repeat it
+// periodically (matches the firmware's 300ms watchdog window) while held,
+// and send a stop (dir=0) on release / pointer leaving the button.
+document.querySelectorAll('.card[data-motor]').forEach(card => {
+  const motorId = parseInt(card.dataset.motor, 10);
+  const slider = card.querySelector('.speed-slider');
+  const pctLabel = card.querySelector('.pct');
+  slider.addEventListener('input', () => { pctLabel.textContent = slider.value + '%'; });
+
+  card.querySelectorAll('.jog-btn').forEach(btn => {
+    const dir = parseInt(btn.dataset.dir, 10);
+    let holdInterval = null;
+
+    const press = () => {
+      if (!connected) return;
+      btn.classList.add('pressed');
+      const speed = parseInt(slider.value, 10);
+      sendMotorCmd(motorId, dir, speed);
+      holdInterval = setInterval(() => sendMotorCmd(motorId, dir, parseInt(slider.value, 10)), 150);
+    };
+    const release = () => {
+      btn.classList.remove('pressed');
+      if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
+      if (connected) sendMotorCmd(motorId, 0, 0);
+    };
+
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointerleave', release);
+    btn.addEventListener('pointercancel', release);
+  });
+
+  card.querySelector('.home-btn').addEventListener('click', () => sendHomeCmd(motorId));
+});
+
+document.getElementById('homeBothBtn').addEventListener('click', () => sendHomeCmd(2));
+</script>
+</body>
+</html>
