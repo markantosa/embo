@@ -1,4 +1,4 @@
-# Day 1 Test Log — RPi Camera Setup + Initial CV Pipeline Test
+# Test Log — RPi Camera Setup + Initial CV Pipeline Test
 
 ## Goal
 Validate the microscopy-computer-vision capture chain end-to-end on the
