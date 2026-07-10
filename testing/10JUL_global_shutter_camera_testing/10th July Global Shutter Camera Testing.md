@@ -2,7 +2,7 @@
 
 ## Goal
 Validate the microscopy-computer-vision capture chain end-to-end on the
-RPi (per SRR Experiment 1: microscopy-CV particle sizing validation) and
+RPi and
 get a first baseline classical-CV pipeline written and tested.
 
 ## What was done today
@@ -110,5 +110,4 @@ slurry loaded, using backlighting.
    median ECD / IQR against manual measurement (SRR Experiment 1
    criterion: ±50µm).
 4. Begin building a labeled image dataset across all 3 materials
-   (Gelfoam / Lyostypt / EG Gel) for the planned instance-segmentation
-   model referenced in the SRR deck.
+   (Gelfoam / Lyostypt ). 
