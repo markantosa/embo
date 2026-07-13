@@ -18,8 +18,16 @@ public:
         _selectedIndex = (_selectedIndex + 1) % _items.size();  // wraps around
     }
 
+    void previous() {
+        _selectedIndex = (_selectedIndex == 0) ? _items.size() - 1 : _selectedIndex - 1; // wraps around
+    }
+
     int select() {
         return _items[_selectedIndex].actionId;   // caller decides what to do with it
+    }
+
+    void reset() {
+        _selectedIndex = 0;
     }
 
     int getSelectedIndex() const { return _selectedIndex; }

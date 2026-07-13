@@ -16,13 +16,14 @@ enum AppState {
 
 class AppStateMachine {
 public:
-    void begin(Adafruit_ILI9341& tftRef, ButtonDriver& next, ButtonDriver& select,
-               EncoderDriver& enc, PercentageLogic& percent,
+    void begin(Adafruit_ILI9341& tftRef, ButtonDriver& btn1, ButtonDriver& btn2Reset,
+               EncoderDriver& enc, ButtonDriver& encBtn, PercentageLogic& percent,
                MenuLogic& menuRef, ScreenMenu& menuScreenRef, ScreenPercentage& percentScreenRef) {
         tft = &tftRef;
-        btnNext = &next;
-        btnSelect = &select;
+        button1 = &btn1;
+        btnReset = &btn2Reset;
         encoder = &enc;
+        encoderButton = &encBtn;
         percentage = &percent;
         menu = &menuRef;
         menuScreen = &menuScreenRef;
@@ -32,19 +33,25 @@ public:
     }
 
     void update() {
+        if (btnReset->wasPressed()) {
+            resetAll();
+            return;
+        }
+
         switch (currentState) {
-            case STATE_MENU:      updateMenu();       break;
+            case STATE_MENU:       updateMenu();       break;
             case STATE_PERCENTAGE: updatePercentage(); break;
-            case STATE_MIXING:    updateMixing();     break;
-            case STATE_DONE:      updateDone();       break;
+            case STATE_MIXING:     updateMixing();     break;
+            case STATE_DONE:       updateDone();       break;
         }
     }
 
 private:
     Adafruit_ILI9341* tft;
-    ButtonDriver* btnNext;
-    ButtonDriver* btnSelect;
+    ButtonDriver* button1;   // currently unused
+    ButtonDriver* btnReset;  // button 2 — global reset
     EncoderDriver* encoder;
+    ButtonDriver* encoderButton; // encoder's push-button (confirm action)
     PercentageLogic* percentage;
     MenuLogic* menu;
     ScreenMenu* menuScreen;
@@ -60,13 +67,21 @@ private:
         needsRedraw = true;
     }
 
+    void resetAll() {
+        percentage->begin(0);
+        menu->reset();
+        enterState(STATE_MENU);
+    }
+
     void updateMenu() {
-        if (btnNext->wasPressed()) {
-            menu->next();
+        int step = encoder->readStep();
+        if (step != 0) {
+            if (step > 0) menu->next();
+            else          menu->previous();
             needsRedraw = true;
         }
 
-        if (btnSelect->wasPressed()) {
+        if (encoderButton->wasPressed()) {
             int action = menu->select();
             if (action == 1) { // "Start Mixing"
                 enterState(STATE_PERCENTAGE);
@@ -93,7 +108,7 @@ private:
             needsRedraw = false;
         }
 
-        if (btnSelect->wasPressed()) {
+        if (encoderButton->wasPressed()) {
             enterState(STATE_MIXING);
         }
     }
@@ -123,7 +138,7 @@ private:
             needsRedraw = false;
         }
 
-        if (btnSelect->wasPressed() || btnNext->wasPressed()) {
+        if (encoderButton->wasPressed()) {
             enterState(STATE_MENU);
         }
     }
