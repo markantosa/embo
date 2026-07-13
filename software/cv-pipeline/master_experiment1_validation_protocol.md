@@ -376,15 +376,6 @@ Run it:
 python compare_manual_vs_cv.py
 ```
 
----
-
-## PART D — What to record for your SRR/SDR slide
-
-For **Track 1**: sphere size band used, number of images and particles, median/IQR, error vs. known size, one overlay image, pass/fail.
-
-For **Track 2** (your actual Experiment 1 evidence): number of pump strokes used, number of images and particles per side (manual and CV), manual median vs. CV median, the error number, one annotated overlay image, and a short note that this used a gelatin/agar surrogate rather than clinical Gelfoam, with your reasoning (material sourcing) documented honestly.
-
----
 
 ## Troubleshooting
 
