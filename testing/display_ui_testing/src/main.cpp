@@ -7,6 +7,7 @@
 #include "ui/screen_main_menu.cpp"
 #include "ui/screen_percentage.cpp"
 #include "ui/boot_logo.h"
+#include "ui/app_state_machine.h"
 
 ButtonDriver btnNext;
 ButtonDriver btnSelect;
@@ -15,32 +16,28 @@ PercentageLogic percentage;
 ScreenPercentage percentScreen;
 MenuLogic menu;
 ScreenMenu menuScreen;
-Adafruit_ILI9341 tft(TFT_CS,TFT_DC,TFT_MOSI,TFT_SCK,TFT_RST,TFT_MISO);
-
-bool needsRedraw = true;
+Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCK, TFT_RST, TFT_MISO);
+AppStateMachine appState;
 
 void showBootLogo() {
-  tft.fillScreen(ILI9341_BLACK);
-  int16_t x = (tft.width()  - LOGO_WIDTH)  / 2;
-  int16_t y = (tft.height() - LOGO_HEIGHT) / 2;
-  tft.drawRGBBitmap(x, y, epd_bitmap_embo_logo, LOGO_WIDTH, LOGO_HEIGHT);
-  delay(2000);
+    tft.fillScreen(ILI9341_BLACK);
+    int16_t x = (tft.width()  - LOGO_WIDTH)  / 2; //to put logo in middle of x axis
+    int16_t y = (tft.height() - LOGO_HEIGHT) / 2; //to put logo in middle of y axis
+    tft.drawRGBBitmap(x, y, epd_bitmap_embo_logo, LOGO_WIDTH, LOGO_HEIGHT);
+    delay(2000);
 }
 
-
 void setup() {
-    SPI.begin(TFT_SCK,TFT_MISO,TFT_MOSI,TFT_CS);
-    tft.begin(40000000);
+    SPI.begin(TFT_SCK, TFT_MISO, TFT_MOSI, TFT_CS);
+    tft.begin(20000000);
     tft.setRotation(1);
-
 
     btnNext.begin(BTN_NEXT_PIN);
     btnSelect.begin(BTN_SELECT_PIN);
     encoder.begin(ENC_CLK, ENC_DT);
-    percentage.begin(0); //start percentage at 0
+    percentage.begin(0);
 
-    showBootLogo();   // <-- shown once at boot, before UI init
-
+    showBootLogo();
 
     menu.begin({
         {"Start Mixing", 1},
@@ -48,34 +45,9 @@ void setup() {
         {"Settings",       3}
     });
 
-    menuScreen.render(tft,menu);
-}    
+    appState.begin(tft, btnNext, btnSelect, encoder, percentage, menu, menuScreen, percentScreen);
+}
 
 void loop() {
-    if (btnNext.wasPressed()) {
-        menu.next();
-        needsRedraw = true;
-    }
-
-    if (btnSelect.wasPressed()) {
-        int action = menu.select();
-        // handle action, e.g. switch app state / screen
-        needsRedraw = true;
-    }
-
-    if (needsRedraw) {
-        menuScreen.render(tft, menu);
-        needsRedraw = false;
-    }
-
-    int step = encoder.readStep();
-    if (step != 0) {
-     percentage.applyStep(step);
-     needsRedraw = true;
-    }
-
-    if (needsRedraw) {
-      percentScreen.render(tft,percentage);
-      needsRedraw = false;
-    }
+    appState.update();
 }
