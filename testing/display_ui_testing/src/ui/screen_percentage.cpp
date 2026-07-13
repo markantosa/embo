@@ -35,7 +35,7 @@ public:
         if (value != _prevValue) {
             tft.fillRect(barX, barY - 25, 100, 20, ILI9341_WHITE);
             tft.setCursor(barX, barY - 25);
-            tft.setTextColor(ILI9341_BLACK);
+            tft.setTextColor(ILI9341_WHITE);
             tft.setTextSize(2);
             tft.print(value);
             tft.print("%");

@@ -30,7 +30,7 @@ void showBootLogo() {
 
 void setup() {
     SPI.begin(TFT_SCK, TFT_MISO, TFT_MOSI, TFT_CS);
-    tft.begin(24000000);
+    tft.begin(20000000);
     tft.setRotation(1);
 
     btnNext.begin(BTN_NEXT_PIN);
@@ -50,6 +50,25 @@ void setup() {
     appState.begin(tft, btnNext, btnSelect, encoder, encoderBtn, percentage, menu, menuScreen, percentScreen);
 }
 
+// void loop() {
+//     appState.update();
+// }
+// Target Framework: 30 FPS -> (1000ms / 30) ≈ 33ms per frame
+// Target Framework: 60 FPS -> (1000ms / 60) ≈ 16ms per frame
+const unsigned long FRAME_DELAY = 33; 
+unsigned long lastFrameTime = 0;
+
 void loop() {
+  unsigned long currentMillis = millis();
+
+  // 1. Handle background logic here (sensors, math, Wi-Fi)
+  // ...
+
+  // 2. Check if it's time to render the next frame
+  if (currentMillis - lastFrameTime >= FRAME_DELAY) {
+    lastFrameTime = currentMillis;
+
+    // Execute your display update code here
     appState.update();
+  }
 }
