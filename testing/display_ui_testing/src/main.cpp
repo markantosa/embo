@@ -1,5 +1,5 @@
 #include <config.h>
-#include <Adafruit_ILI9341.h>
+#include "hal/LGFX_Config.h"          // was: #include <Adafruit_ILI9341.h>
 #include "hal/button_driver.h"
 #include "hal/encoder_driver.h"
 #include "backend/menu_logic.h"
@@ -9,29 +9,28 @@
 #include "ui/boot_logo.h"
 #include "ui/app_state_machine.h"
 
-ButtonDriver btnNext;      // button 1 — currently unused
-ButtonDriver btnSelect;    // button 2 — global reset
-ButtonDriver encoderBtn;   // encoder push — confirm action
+ButtonDriver btnNext;
+ButtonDriver btnSelect;
+ButtonDriver encoderBtn;
 EncoderDriver encoder;
 PercentageLogic percentage;
 ScreenPercentage percentScreen;
 MenuLogic menu;
 ScreenMenu menuScreen;
-Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCK, TFT_RST, TFT_MISO);
+LGFX tft;                              // was: Adafruit_ILI9341 tft(TFT_CS, ...)
 AppStateMachine appState;
 
 void showBootLogo() {
-    tft.fillScreen(ILI9341_BLACK);
     int16_t x = (tft.width()  - LOGO_WIDTH)  / 2;
     int16_t y = (tft.height() - LOGO_HEIGHT) / 2;
-    tft.drawRGBBitmap(x, y, epd_bitmap_embo_logo, LOGO_WIDTH, LOGO_HEIGHT);
+    tft.pushImage(x, y, LOGO_WIDTH, LOGO_HEIGHT, epd_bitmap_embo_logo); // was: drawRGBBitmap
     delay(2000);
 }
 
 void setup() {
-    SPI.begin(TFT_SCK, TFT_MISO, TFT_MOSI, TFT_CS);
-    tft.begin(20000000);
-    tft.setRotation(1);
+    // SPI.begin(...) line is GONE — LGFX owns the bus internally
+    tft.init();              // was: tft.begin(20000000)
+    tft.setRotation(1);      // same API, no change
 
     btnNext.begin(BTN_NEXT_PIN);
     btnSelect.begin(BTN_SELECT_PIN);
@@ -43,18 +42,13 @@ void setup() {
 
     menu.begin({
         {"Start Mixing", 1},
-        {"Calibrate",      2},
-        {"Settings",       3}
+        {"Calibrate",    2},
+        {"Settings",     3}
     });
 
     appState.begin(tft, btnNext, btnSelect, encoder, encoderBtn, percentage, menu, menuScreen, percentScreen);
 }
 
-// void loop() {
-//     appState.update();
-// }
-// Target Framework: 30 FPS -> (1000ms / 30) ≈ 33ms per frame
-// Target Framework: 60 FPS -> (1000ms / 60) ≈ 16ms per frame
 const unsigned long FRAME_DELAY = 33; 
 unsigned long lastFrameTime = 0;
 

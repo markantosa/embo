@@ -1,5 +1,5 @@
 #pragma once
-#include <Adafruit_ILI9341.h>
+#include "hal/LGFX_Config.h"    // was: #include <Adafruit_ILI9341.h>
 #include "hal/button_driver.h"
 #include "hal/encoder_driver.h"
 #include "backend/menu_logic.h"
@@ -16,7 +16,7 @@ enum AppState {
 
 class AppStateMachine {
 public:
-    void begin(Adafruit_ILI9341& tftRef, ButtonDriver& btn1, ButtonDriver& btn2Reset,
+    void begin(LGFX& tftRef, ButtonDriver& btn1, ButtonDriver& btn2Reset,     // was: Adafruit_ILI9341&
                EncoderDriver& enc, ButtonDriver& encBtn, PercentageLogic& percent,
                MenuLogic& menuRef, ScreenMenu& menuScreenRef, ScreenPercentage& percentScreenRef) {
         tft = &tftRef;
@@ -47,11 +47,11 @@ public:
     }
 
 private:
-    Adafruit_ILI9341* tft;
-    ButtonDriver* button1;   // currently unused
-    ButtonDriver* btnReset;  // button 2 — global reset
+    LGFX* tft;    // was: Adafruit_ILI9341*
+    ButtonDriver* button1;
+    ButtonDriver* btnReset;
     EncoderDriver* encoder;
-    ButtonDriver* encoderButton; // encoder's push-button (confirm action)
+    ButtonDriver* encoderButton;
     PercentageLogic* percentage;
     MenuLogic* menu;
     ScreenMenu* menuScreen;
@@ -83,11 +83,10 @@ private:
 
         if (encoderButton->wasPressed()) {
             int action = menu->select();
-            if (action == 1) { // "Start Mixing"
+            if (action == 1) {
                 enterState(STATE_PERCENTAGE);
                 return;
             }
-            // handle action 2/3 (Calibrate/Settings) later
         }
 
         if (needsRedraw) {
@@ -115,8 +114,8 @@ private:
 
     void updateMixing() {
         if (needsRedraw) {
-            tft->fillScreen(ILI9341_BLACK);
-            tft->setTextColor(ILI9341_WHITE);
+            tft->fillScreen(TFT_BLACK);      // was: ILI9341_BLACK
+            tft->setTextColor(TFT_WHITE);
             tft->setTextSize(3);
             tft->setCursor(40, 130);
             tft->print("Mixing...");
@@ -130,8 +129,8 @@ private:
 
     void updateDone() {
         if (needsRedraw) {
-            tft->fillScreen(ILI9341_BLACK);
-            tft->setTextColor(ILI9341_GREEN);
+            tft->fillScreen(TFT_BLACK);
+            tft->setTextColor(TFT_GREEN);    // was: ILI9341_GREEN
             tft->setTextSize(3);
             tft->setCursor(20, 130);
             tft->print("Mixing Complete");

@@ -1,10 +1,10 @@
 #pragma once
 #include "backend/percentage_logic.h"
-#include <Adafruit_ILI9341.h>
+#include "hal/LGFX_Config.h"    // was: #include <Adafruit_ILI9341.h>
 
 class ScreenPercentage {
 public:
-    void render(Adafruit_ILI9341& tft, const PercentageLogic& percent) {
+    void render(LGFX& tft, const PercentageLogic& percent) {   // was: Adafruit_ILI9341&
         int value = percent.getValue();
 
         const int barX = 20, barY = 150, barW = 270, barH = 30;
@@ -13,29 +13,25 @@ public:
         int newFillWidth = (innerW * value) / 100;
 
         if (!_initialized) {
-            // Draw static parts once
-            tft.drawRect(barX, barY, barW, barH, ILI9341_WHITE);
-            tft.fillRect(innerX, innerY, innerW, innerH, ILI9341_WHITE);
+            tft.drawRect(barX, barY, barW, barH, TFT_WHITE);       // was: ILI9341_WHITE
+            tft.fillRect(innerX, innerY, innerW, innerH, TFT_WHITE);
             _prevFillWidth = 0;
             _initialized = true;
         }
 
         if (newFillWidth > _prevFillWidth) {
-            // Growing — only draw the new strip
             tft.fillRect(innerX + _prevFillWidth, innerY,
-                         newFillWidth - _prevFillWidth, innerH, ILI9341_GREEN);
+                         newFillWidth - _prevFillWidth, innerH, TFT_GREEN);   // was: ILI9341_GREEN
         } else if (newFillWidth < _prevFillWidth) {
-            // Shrinking — only erase the removed strip
             tft.fillRect(innerX + newFillWidth, innerY,
-                         _prevFillWidth - newFillWidth, innerH, ILI9341_WHITE);
+                         _prevFillWidth - newFillWidth, innerH, TFT_WHITE);
         }
         _prevFillWidth = newFillWidth;
 
-        // --REDRAWING TEXT-- Only redraw text if the displayed number actually changed
         if (value != _prevValue) {
-            tft.fillRect(barX, barY - 25, 100, 20, ILI9341_WHITE);
+            tft.fillRect(barX, barY - 25, 100, 20, TFT_WHITE);
             tft.setCursor(barX, barY - 25);
-            tft.setTextColor(ILI9341_WHITE);
+            tft.setTextColor(TFT_WHITE);
             tft.setTextSize(2);
             tft.print(value);
             tft.print("%");
@@ -46,5 +42,5 @@ public:
 private:
     bool _initialized = false;
     int _prevFillWidth = 0;
-    int _prevValue = -1;   // force first draw
+    int _prevValue = -1;
 };
