@@ -12,6 +12,7 @@ private:
 
     static EncoderDriver* _instance;
     uint8_t _clkPin, _dtPin;
-    volatile bool _lastClkState;
+    volatile uint8_t _state = 0;          // quadrature state machine
     volatile int _pendingStep = 0;
+    volatile unsigned long _lastEdgeMicros = 0;
 };

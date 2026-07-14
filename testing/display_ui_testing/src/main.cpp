@@ -30,7 +30,7 @@ void showBootLogo() {
 void setup() {
     // SPI.begin(...) line is GONE — LGFX owns the bus internally
     tft.init();              // was: tft.begin(20000000)
-    tft.setRotation(1);      // same API, no change
+    tft.setRotation(3);      // same API, no change
 
     btnNext.begin(BTN_NEXT_PIN);
     btnSelect.begin(BTN_SELECT_PIN);

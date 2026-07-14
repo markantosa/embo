@@ -25,4 +25,3 @@
 #define PERCENT_MIN 0
 #define PERCENT_MAX 100
 #define PERCENT_STEP 1 //step change per detent
-

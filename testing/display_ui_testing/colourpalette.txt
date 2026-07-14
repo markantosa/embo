@@ -1,0 +1,9 @@
+White #FFFFFF 0xffff
+Black #000000 0x0000
+
+Crystal Bell #EFEFEF 0xef7d
+Lunar Rock #c5c4c5 0xc618
+Waiting #9c9d9e 0x9cf3
+Guilliman Blue #639ae9 0x64dc
+Clown Nose #ea4758 0xe24b
+Bright Blue #0564f5 0x0b3e
