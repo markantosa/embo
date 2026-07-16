@@ -8,6 +8,7 @@
 //     Characteristic TELEMETRY (notify): packed TelemetryPacket, ~20Hz
 //     Characteristic MOTOR_CMD (write):  MotorCmd  {motorId, dir(-1/0/1), speedPct}
 //     Characteristic HOME_CMD  (write):  1 byte motorId (0=M1, 1=M2, 2=both)
+//     Characteristic LOG       (notify): UTF-8 text log line, for bring-up debugging
 //
 // This is a bench-test protocol, not the production BLE debug link.
 
@@ -30,6 +31,11 @@ struct MotorCmd {
 
 void bleServiceInit();
 void bleNotifyTelemetry(const TelemetryPacket &pkt);
+
+// Formats like printf, sends to Serial AND (if a client is subscribed) as a
+// BLE notification on the LOG characteristic — lets the web dashboard show
+// firmware debug output without a serial monitor.
+void bleLog(const char *fmt, ...);
 
 // Set by the BLE write callbacks, drained from loop() so motor/homing
 // logic never runs inside the NimBLE callback/task context.

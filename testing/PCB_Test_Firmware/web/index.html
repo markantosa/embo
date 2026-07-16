@@ -54,6 +54,18 @@
   .step-count { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
   .step-count b { color: var(--text); font-variant-numeric: tabular-nums; }
   .footer-note { color: var(--muted); font-size: 0.75rem; margin-top: 24px; }
+  .log-card { grid-column: 1 / -1; }
+  .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .log-header button {
+    background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted);
+    padding: 4px 10px; font-size: 0.8rem; cursor: pointer;
+  }
+  #logView {
+    background: #0d0f12; color: #c9f7c9; font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.8rem; height: 220px; overflow-y: auto; border-radius: 8px; padding: 10px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  #logView .line.warn { color: #f59e0b; }
 </style>
 </head>
 <body>
@@ -124,6 +136,14 @@
 
 <button class="home-btn" id="homeBothBtn" style="max-width:320px">Home Both</button>
 
+<div class="card log-card" style="margin-top:16px">
+  <div class="log-header">
+    <h2 style="margin:0">Firmware Log</h2>
+    <button id="clearLogBtn">Clear</button>
+  </div>
+  <div id="logView"></div>
+</div>
+
 <div class="footer-note">
   Requires Chrome or Edge with Web Bluetooth enabled. Jog buttons are press-and-hold —
   releasing (mouse up / touch end / pointer leaving the button) immediately sends a stop command.
@@ -136,6 +156,7 @@ const SERVICE_UUID     = '8f6a0001-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 const TELEMETRY_UUID   = '8f6a0002-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 const MOTOR_CMD_UUID   = '8f6a0003-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 const HOME_CMD_UUID    = '8f6a0004-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const LOG_UUID         = '8f6a0005-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 
 let device, motorCmdChar, homeCmdChar;
 let connected = false;
@@ -163,13 +184,19 @@ async function connect() {
     const telemetryChar = await service.getCharacteristic(TELEMETRY_UUID);
     motorCmdChar = await service.getCharacteristic(MOTOR_CMD_UUID);
     homeCmdChar = await service.getCharacteristic(HOME_CMD_UUID);
+    const logCharacteristic = await service.getCharacteristic(LOG_UUID);
 
     await telemetryChar.startNotifications();
     telemetryChar.addEventListener('characteristicvaluechanged', onTelemetry);
 
+    await logCharacteristic.startNotifications();
+    logCharacteristic.addEventListener('characteristicvaluechanged', onLogLine);
+
     setConnected(true);
+    appendLog('-- connected --');
   } catch (err) {
     console.error('BLE connect failed:', err);
+    appendLog('ERROR: connect failed — ' + (err && err.message ? err.message : err));
     setConnected(false);
   }
 }
@@ -213,6 +240,27 @@ function onTelemetry(event) {
   if (flags & 0x04) cards[0].querySelector('.homed-tag').style.display = 'inline';
   if (flags & 0x08) cards[1].querySelector('.homed-tag').style.display = 'inline';
 }
+
+const logView = document.getElementById('logView');
+const textDecoder = new TextDecoder('utf-8');
+
+function appendLog(text) {
+  const line = document.createElement('div');
+  line.className = 'line' + (/warn/i.test(text) ? ' warn' : '');
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = `[${ts}] ${text}`;
+  logView.appendChild(line);
+  logView.scrollTop = logView.scrollHeight;
+}
+
+function onLogLine(event) {
+  const text = textDecoder.decode(event.target.value);
+  appendLog(text);
+}
+
+document.getElementById('clearLogBtn').addEventListener('click', () => {
+  logView.innerHTML = '';
+});
 
 async function sendMotorCmd(motorId, dir, speedPct) {
   if (!motorCmdChar) return;

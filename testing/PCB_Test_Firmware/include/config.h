@@ -6,8 +6,13 @@
 // UAS envelope ADC
 constexpr int PIN_UAS_ADC   = 1;   // ADC1_CH0, envelope output
 
-// Shared TMC2209 UART (single wire, both drivers on same bus, different addr)
-constexpr int PIN_TMC_UART  = 4;
+// Shared TMC2209 UART bus (both drivers on same bus, different addr).
+// TX on the board's original GPIO4/R_UART trace. RX is a hand-soldered
+// jumper wire to GPIO46 (hardware input-only pin, tied to the same
+// PDN_UART bus node) — a shared single GPIO for both TX+RX was tried first
+// and never worked reliably, so this uses genuinely separate pins instead.
+constexpr int PIN_TMC_UART_TX = 4;
+constexpr int PIN_TMC_UART_RX = 46;
 
 // Motor 1 (U5, TMC UART addr 0)
 constexpr int PIN_STEP_M1   = 5;
@@ -42,8 +47,14 @@ constexpr uint32_t HOMING_SPEED_SPS   = 400;   // steps/sec while seeking the sw
 constexpr uint32_t HOMING_BACKOFF_STEPS = 100; // back off after trigger
 
 // Jog / slider speed range (steps/sec), mapped from the 0-100 BLE speed value
-constexpr uint32_t JOG_MIN_SPS = 100;
-constexpr uint32_t JOG_MAX_SPS = 2000;
+constexpr uint32_t JOG_MIN_SPS = 1800;
+constexpr uint32_t JOG_MAX_SPS = 36000;
+
+// Ramp rate (steps/sec, per second) used to glide from JOG_MIN_SPS up to the
+// commanded target instead of snapping straight there — a NEMA17 simply
+// cannot start instantly at the higher end of this speed range without
+// stalling. ~1.7s to go from min to max at this rate.
+constexpr uint32_t JOG_ACCEL_SPS2 = 20000;
 
 // Sensor polling
 constexpr uint32_t UAS_SAMPLE_PERIOD_MS = 40;   // ~25 Hz
