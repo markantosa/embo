@@ -23,8 +23,8 @@ AppStateMachine appState;
 void showBootLogo() {
     int16_t x = (tft.width()  - LOGO_WIDTH)  / 2;
     int16_t y = (tft.height() - LOGO_HEIGHT) / 2;
-    tft.pushImage(x, y, LOGO_WIDTH, LOGO_HEIGHT, epd_bitmap_embo_logo); // was: drawRGBBitmap
-    delay(2000);
+    tft.pushImage(x, y, LOGO_WIDTH, LOGO_HEIGHT, epd_bitmap_embo_logoembologo320240); // was: drawRGBBitmap
+    delay(5000);
 }
 
 void setup() {
