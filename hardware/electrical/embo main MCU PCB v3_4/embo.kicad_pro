@@ -739,7 +739,7 @@
         "uuid": "7ba7b830-b54e-44de-afe6-f7f489323a5a"
       }
     ],
-    "used_designators": "Dusb1,#PWR7,#PWR10,#PWR21-22,#PWR26-27,#PWR31,#PWR37-39,#PWR41,#PWR46,#PWR52-54,#PWR77,#PWR81-82,#PWR84,#PWR123-125,#PWR130-131,#PWR133-137,Rsnub1,C_adc1,CdecT1_C1,CdecT1_E1,J_extra_T2_mal1,CdecT2_C1,CdecT2_E1,R_gate1,Clim1_C1,Csnub1,LED_pwr1,Clim2_C1,Jup_TMC2_extra3-4,Dprot1,R_in1,Denv1,R_UART1,R_LEDpw1,R_PDN_UP1,Rbleed1,RfO2_A1,R_EN3,J3,J5,J16-22,RfO2_B1,RgO2_A1,R_BOOT1,RgO2_B1,R_MS2,R_M1S3-4,Jdo_TMC2_extra3-4,C_BOOT1,C_EN1,Dcatch1,Dclamp1,J_extra_T1_fem1,J_extra_T1_mal1,J_extra_T2_fem1,Lbuck1,R_statLED1",
+    "used_designators": "",
     "variants": []
   },
   "sheets": [

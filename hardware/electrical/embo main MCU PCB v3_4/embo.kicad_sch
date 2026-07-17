@@ -11506,6 +11506,17 @@
 		)
 		(uuid "0120c45c-06d7-41c8-81f5-fc8bacfe3e98")
 	)
+	(label "RPi_RX"
+		(at 125.73 191.77 180)
+		(effects
+			(font
+				(size 0.9652 0.9652)
+				(thickness 0.1207)
+			)
+			(justify right bottom)
+		)
+		(uuid "02f6b4d8-cf75-4ede-8e6d-f290f619543d")
+	)
 	(label "TX_OUT"
 		(at 349.25 33.02 0)
 		(effects
@@ -11589,6 +11600,17 @@
 			(justify right bottom)
 		)
 		(uuid "19aaa48b-4c34-4baf-be92-fdf0537e0d98")
+	)
+	(label "RPi_TX"
+		(at 125.73 194.31 180)
+		(effects
+			(font
+				(size 0.9652 0.9652)
+				(thickness 0.1207)
+			)
+			(justify right bottom)
+		)
+		(uuid "2199fde2-d38b-4a24-9fa7-173fd3328965")
 	)
 	(label "STEP_M1"
 		(at 60.96 87.63 180)
@@ -11693,17 +11715,6 @@
 			(justify right bottom)
 		)
 		(uuid "315b8d84-2d1a-41b2-a51f-0db3fb90c248")
-	)
-	(label "UART_RX"
-		(at 125.73 191.77 180)
-		(effects
-			(font
-				(size 0.889 0.889)
-				(thickness 0.1111)
-			)
-			(justify right bottom)
-		)
-		(uuid "345107f6-de0a-4271-ba0d-9acc2c29a439")
 	)
 	(label "M1_B1"
 		(at 90.17 82.55 0)
@@ -12109,17 +12120,6 @@
 			(justify right bottom)
 		)
 		(uuid "832ff273-67ff-473e-ad2b-2ed5d6f35c03")
-	)
-	(label "UART_TX"
-		(at 125.73 194.31 180)
-		(effects
-			(font
-				(size 0.889 0.889)
-				(thickness 0.1111)
-			)
-			(justify right bottom)
-		)
-		(uuid "8a621a80-6ab8-4bc6-83e2-99c556408592")
 	)
 	(label "BUZ_PWM"
 		(at 184.15 170.18 180)
