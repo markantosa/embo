@@ -39,9 +39,9 @@
         "other_text_thickness": 0.15,
         "other_text_upright": false,
         "pads": {
-          "drill": 0.8,
-          "height": 1.27,
-          "width": 2.54
+          "drill": 1.0,
+          "height": 1.7,
+          "width": 1.7
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -52,19 +52,19 @@
         "zones": {
           "border_display_style": 2,
           "border_hatch_pitch": 0.5,
-          "corner_radius": 0.0,
-          "corner_smoothing": 0,
+          "corner_radius": 1.0,
+          "corner_smoothing": 2,
           "fill_mode": 0,
           "hatch_gap": 1.5,
           "hatch_orientation": 0.0,
           "hatch_smoothing_level": 0,
           "hatch_smoothing_value": 0.1,
           "hatch_thickness": 1.0,
-          "min_clearance": 0.5,
+          "min_clearance": 0.6,
           "min_island_area": 10.0,
           "min_thickness": 0.25,
-          "pad_connection": 2,
-          "remove_islands": 1,
+          "pad_connection": 1,
+          "remove_islands": 0,
           "thermal_relief_gap": 0.5,
           "thermal_relief_spoke_width": 1.0
         }
@@ -691,7 +691,7 @@
           "show": false
         }
       ],
-      "filter_string": "j13",
+      "filter_string": "",
       "group_symbols": true,
       "include_excluded_from_bom": true,
       "name": "",
@@ -739,7 +739,7 @@
         "uuid": "7ba7b830-b54e-44de-afe6-f7f489323a5a"
       }
     ],
-    "used_designators": "R12-13,J4,J8,J16-33,Rsnub1,#PWR32-35,#PWR102-103,C_adc1,C_envRC1,CdecAD_C1,C_inBU_E1,C_inBU_C1,CdecO1_C1,CdecO2_C1,CinAC_C1,CinLD_T1,CouBU_C1,CouBU_E1,CouLD_C1,CouLD_T1,Csnub1,R_envRC1,R_gate1,R_TL1,Rbleed1",
+    "used_designators": "Dusb1,#PWR7,#PWR10,#PWR21-22,#PWR26-27,#PWR31,#PWR37-39,#PWR41,#PWR46,#PWR52-54,#PWR77,#PWR81-82,#PWR84,#PWR123-125,#PWR130-131,#PWR133-137,Rsnub1,C_adc1,CdecT1_C1,CdecT1_E1,J_extra_T2_mal1,CdecT2_C1,CdecT2_E1,R_gate1,Clim1_C1,Csnub1,LED_pwr1,Clim2_C1,Jup_TMC2_extra3-4,Dprot1,R_in1,Denv1,R_UART1,R_LEDpw1,R_PDN_UP1,Rbleed1,RfO2_A1,R_EN3,J3,J5,J16-22,RfO2_B1,RgO2_A1,R_BOOT1,RgO2_B1,R_MS2,R_M1S3-4,Jdo_TMC2_extra3-4,C_BOOT1,C_EN1,Dcatch1,Dclamp1,J_extra_T1_fem1,J_extra_T1_mal1,J_extra_T2_fem1,Lbuck1,R_statLED1",
     "variants": []
   },
   "sheets": [

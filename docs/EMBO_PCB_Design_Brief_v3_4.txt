@@ -1,0 +1,1136 @@
+EMBO
+Embolization Particle Sizing System
+Custom MCU Board — PCB Design Brief
+
+Field             |  Detail                                                                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------
+Document version  |  v3.4 — Full reference-designator naming pass; on-board backstop fuse; UAS/TMC/ESP32/USB hardening; GPIO short-fault protection added
+Date              |  July 2026                                                                                                               
+Status            |  For schematic re-design (rebuild from scratch) — 8 wiring blocks per team request                                        
+MCU module        |  ESP32-S3-WROOM-1-N4 (4MB flash, PCB antenna, no PSRAM) — unchanged since v3.3                                              
+Motor drivers     |  2× MKS TMC2209 V2.0 plug-in modules, socketed — current ceiling documented at 1.77A RMS (110mΩ sense), not 2.0A             
+UI system         |  Breakout board via 20-pin IDC ribbon, pinout UNCHANGED — touch via GPIO repoint, one button — unchanged since v3.3           
+Reverse polarity  |  AO4407A SOIC-8 P-MOSFET + BZX84C15 15V Zener gate clamp — pin numbering/orientation corrected v3.2 — power LED wiring added v3.4
+Turbidity sensing |  APDS9960 (I2C 0x39, ALS transmission) + MAX30102 (I2C 0x57, backscatter) — shared I2C bus, LED hardwired to 3.3V             
+Force sensing     |  2× load cell + HX711 amplifier, socketed, hardware fallback for StallGuard SG_RESULT — unaffected by this version's changes 
+Fuse              |  5×20mm slow-blow glass, 5A 250V (T5A) off-board PRIMARY, inline before J14 — NEW v3.4: on-board 8A SMD backstop, F2           
+Signal generator  |  AD9833 plug-in breakout module (VCC/DGND/SDATA/SCLK/FSYNC/AGND/OUT)                                                         
+
+v3.4 SUMMARY OF CHANGES — this revision is a hardware-hardening and naming-discipline pass, prompted directly by (a) a live TMC2209 hot-swap incident on the fabricated v2.51 board that sparked and left the ESP32 module overheating on every subsequent power-up, and (b) the recognition that this document's passives had never been given individual reference designators, which had already let one BOM gap (the Tx/Rx bias-divider resistors) go uncounted. (1) FULL REFERENCE-DESIGNATOR NAMING PASS: every passive on the board — resistors, capacitors, diodes, the inductor, both LEDs — now has an explicit, unique ref designator assigned at the point it's introduced, plus a master lookup table (§12.3) and a "which reel do I actually need" non-standard-value quick reference (§12.2), specifically so a stray label like "input ceramic" can never again refer to the wrong physical part. (2) ON-BOARD BACKSTOP FUSE, F2: a second, on-board 8A SMD slow-blow fuse (Littelfuse Nano2 452-series) added in series after Q1, sized deliberately ABOVE the primary inline T5A so it never coordinates against it in a normal fault — it exists only to catch the case where the inline holder is empty, bypassed, or mis-fitted. See §2.1. (3) TMC2209 UART PIN CORRECTION: physical inspection of the actual MKS V2.0 module silkscreen found pin 5 (not pin 4) is the direct PDN_UART node, with the module's own R8 separator sitting between pin 5 and pin 4 — the OPPOSITE of what every version through v3.3 documented (inherited from generic third-party SilentStepStick writeups, not this specific module). Jumper default flipped accordingly on both U5 and U6. See §7.3. (4) TMC2209 MS1/MS2 ADDRESS JUMPERS: both U5 and U6 gain 1×3+shunt jumpers on MS1 and MS2 (4 headers total), making the two modules fully interchangeable across UART addresses 0–3 instead of hardwired at fixed addresses. See §7.2. (5) GPIO SHORT-FAULT PROTECTION: following the hot-swap/spark incident, a 220Ω series resistor is now placed on every ESP32-to-TMC2209 control line (STEP, DIR, EN, PDN_UART, MS1, MS2 — ×2 modules = 12 resistors) at the socket boundary, limiting fault current into the GPIO's internal clamp structure if a module is ever seated off-axis or hot-swapped again. A procedural line is also added to §13: power off and allow VM bulk caps to discharge before inserting/removing any TMC2209 module. See §7.6 and the fabricated-board incident note in §7.1. (6) UAS TX/RX HARDENING: IC1's Tx gain resistor (RfO1_1, 390Ω) changes footprint from SMD to THT for field gain adjustment (fixed value retained — no trim potentiometer, to avoid accidental drift); the Rx chain gains an explicit interstage AC-coupling network between stage 1 and stage 2 (CouAC_C2 + RbiasO2_3/RbiasO2_4) to block op-amp offset accumulation ahead of the ×10.1 second stage. See §5.2 and §5.5. (7) COMPONENT PACKAGE/PROCUREMENT CHANGES: TMC2209 VM bulk caps change from 100µF/50V THT radial to 100µF/50V SMD radial, 8mm height, placed beside (not under) each module socket for physical clearance; screw terminal J14 changes from 3.5mm to 5.0mm pitch for higher current margin and heavier-gauge wire; boot/reset buttons change from SMD 6×6 tactile to THT 6mm tactile for rework durability — mechanical footprint to be verified against the actual part's drawing, not the KiCad footprint name alone. See §6.3, §9, §12. (8) 24V POWER LED WIRED: LED_pwr + new R_LEDpwr (10kΩ) now explicitly wired in §2, tapping the PROTECTED rail (Q1 Source) rather than raw input, so the indicator only lights when Q1 is actually passing current correctly. (9) LIVE HARDWARE STATUS CARRIED FORWARD (open, not resolved by this revision): the v2.51 fabricated board's original LM2596 buck fault (external buck module workaround in place, U2 never bench-verified standalone) and the TMC2209 hot-swap short (ESP32 module suspected damaged, diagnosis in progress) are both still open — see §13.
+
+DATASHEET / REFERENCE INDEX — every technical claim in this document traces to one of these sources. Two of the highest-stakes claims (Q1 pinout/orientation, OPA2354 package) were independently re-verified against the primary datasheet during this revision, not just carried forward from the prior review.
+
+Tag      |  Source                                     |  Link                                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ESP32    |  ESP32-S3-WROOM-1 datasheet                 |  https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf
+ESP32c   |  ESP32-S3 series datasheet (strapping)      |  https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf                
+AO4407   |  AO4407A Rev 11.1 (AOS)                     |  https://www.aosmd.com/res/datasheets/AO4407A.pdf                                                     
+LM2596   |  LM2596 Rev G (TI)                          |  https://www.ti.com/lit/ds/symlink/lm2596.pdf                                                         
+AMS      |  AMS1117 (Advanced Monolithic Systems)      |  Vendor datasheet — confirm against your specific supplier                                            
+AD9833   |  AD9833 Rev G (Analog Devices)               |  https://www.analog.com/media/en/technical-documentation/data-sheets/ad9833.pdf                       
+OPA      |  OPA2354 SBOS233F (TI)                       |  https://www.ti.com/product/OPA2354                                                                   
+TMC      |  TMC2209 Rev 1.09 (ADI/Trinamic)             |  https://www.analog.com/media/en/technical-documentation/data-sheets/tmc2209_datasheet_rev1.09.pdf     
+TMCmod   |  SilentStepStick pinout (Watterott)          |  https://learn.watterott.com/silentstepstick/pinconfig/tmc2209/                                       
+HX711    |  HX711 (Avia Semiconductor)                  |  https://cdn.sparkfun.com/datasheets/Sensors/ForceFlex/hx711_english.pdf                              
+MAX      |  MAX30102 (ADI/Maxim)                        |  https://www.analog.com/media/en/technical-documentation/data-sheets/max30102.pdf                     
+APDS     |  APDS-9960 (Broadcom AV02-4191EN)            |  Search "APDS-9960 datasheet Broadcom"                                                                 
+SMBJ     |  SMBJ28A / SMB (DO-214AA) package            |  https://www.littelfuse.com/assetdocs/tvs-diodes-smbj-series-datasheet                                 
+Nano2    |  Littelfuse 452-series Slo-Blo Nano2 (F2)     |  https://www.littelfuse.com/assetdocs/fuse-452-and-454-datasheet — confirm 125VDC vs 32VDC rating against this primary source, not aggregator listings
+BAV99    |  BAV99 dual series diode pinout               |  Vendor datasheet (e.g. onsemi/Vishay) — confirm pin1/pin2/pin3 = anode1/cathode2/junction before wiring Drx1/Drx2
+KiCad    |  KiCad 10 (10.0.4 stable, 2026)              |  https://www.kicad.org — footprint/symbol library nicknames unchanged from KiCad 9; v10 adds "Jumpers" for off-board module pads and PCB Design Blocks
+
+======================================================================
+REVISION HISTORY
+======================================================================
+
+Version  |  Summary of change                                                                                               
+----------------------------------------------------------------------------------------------------------------------------
+v2.0     |  STM32G474 → ESP32-S3-WROOM-1-N8. USB-C native programming. BLE debug.                                           
+v2.1     |  UAS gain correction. TMC2209 VCP + SPREAD fixes. Power hardening.                                               
+v2.2     |  AO3401A → AO4407A + Zener. Motor 4×2-pin → 2×6-pin. KiCad footprints.                                           
+v2.3     |  ILI9341 confirmed, 14-pin header. RPi UART JST-XH 3-pin. C_adc explicit. USB-C pins documented.                 
+v2.4     |  UI system moved to breakout board via 20-pin IDC ribbon.                                                        
+v2.5     |  TMC2209 QFN-28 → BTT module sockets. SpreadCycle firmware-enforced. CLK pin correction.                         
+v2.51    |  ERRATA: ESP32 module decoupling corrected (single 3V3 pin). AD9833 RSET/COMP/200Ω errors corrected (§2.2, §5.1).
+v3.0     |  F1 → 5×20mm fuseholder + 5A slow-blow. R_snub → 0603. Added APDS9960+MAX30102 turbidity sensing (I2C). Motor conn. 6-pin→4-pin.
+v3.1     |  AD9833 → plug-in module (MCLK fix). BTT→MKS TMC2209 V2.0. PDN_UART → 2-GPIO. Motor conn. XH→PH. LED hardwired. GPIO budget corrected.
+v3.2     |  Full rebuild in 8 wiring blocks. Added HX711×2 load-cell fallback. Touch removed, GPIOs freed. Fuse off-board. Q1/OPA2354/SMBJ corrected.
+v3.3     |  Module corrected N8→N4. Touch restored via GPIO repoint only (no breakout change). One button. BOM table formatting fixed. GPIO datasheet re-verified.
+v3.4     |  Full ref-designator naming pass. F2 backstop fuse added. TMC UART pin4/5 corrected from module silkscreen. MS1/MS2 address jumpers. 12× GPIO protection resistors after hot-swap spark incident. Rf → THT. Rx interstage AC coupling. J14 → 5.0mm. Buttons → THT. VM bulk caps → SMD. Power LED wired.
+
+
+====================================================================================
+1. SYSTEM OVERVIEW, POWER RAILS, AND MASTER GPIO MAP
+====================================================================================
+
+1.1 Overview
+------------
+EMBO is a closed-loop embolic-agent preparation device. The MCU board integrates the
+UAS acoustic chain, a CV-camera trigger, two stepper actuators (TMC2209), two limit
+switches, an I2C turbidity pair (APDS9960 + MAX30102), a UI breakout via 20-pin IDC,
+USB-C native programming, and — new in v3.2 — a 2-channel load-cell force sensor
+(HX711 x2) at the syringe contact point as a StallGuard fallback.
+
+MCU module: ESP32-S3-WROOM-1-N4 (4 MB flash, PCB antenna, NO PSRAM). [ESP32] CORRECTED v3.3 — prior versions of this brief documented N8 (8MB); the actual module on hand is N4 (4MB). Confirmed against the datasheet that this changes nothing pin-side (see §1.3.1) — flash capacity only affects OTA partition sizing in firmware, not GPIO behavior.
+A no-PSRAM variant (N4, N8, or N16 — any plain suffix without R or V) is REQUIRED, because GPIO35/36/37 are only free for the SPI
+bus on non-PSRAM parts — on R8 (Octal PSRAM) variants IO35/36/37 are consumed internally
+and must not be used. [ESP32, "IO35, IO36, IO37 connect to Octal SPI PSRAM and are not
+available for other uses"]
+
+1.2 Power rails
+---------------
+Rail    | Source            | Voltage   | Consumers                                        | Max
+--------------------------------------------------------------------------------------------------
+24 V    | PSU (via inline   | 12-24 V   | 2x TMC2209 module VM                              | 6 A pk
+        | fuse + Q1)        |           |                                                  |
+5 V     | LM2596-5.0 buck   | 5 V ±2%   | LED panel, TMC2209 VCC_IO, buzzer                | 2 A
+3.3 V   | AMS1117-3.3 LDO   | 3.3 V ±1% | ESP32, AD9833 module, OPA2354 x2, TFT logic,     | 800 mA
+        |                   |           | HX711 x2, I2C sensors' bus                        |
+
+NOTE: HX711 modules run from the 3.3 V rail (see Block 9) so their DOUT/PD_SCK logic
+is 3.3 V — directly ESP32-compatible with no level shifting. Do NOT power them from 5 V.
+
+1.3 Master GPIO map (35 of 36 used; GPIO45 free, broken out to SP7)
+-------------------------------------------------------------------------
+GPIO | Signal        | Dir    | Connects to               | Notes
+------------------------------------------------------------------------------------------------------
+0    | BOOT          | strap  | R_BOOT/C_BOOT/SW_boot     | Strapping (boot mode). [ESP32c]
+1    | UAS_ADC       | AIN    | Envelope out              | ADC1_CH0 (ADC1 avoids Wi-Fi/ADC2 clash). C_adc <2 mm.
+2    | STATUS_LED    | OUT    | R_statLED(330R) → LED_stat → GND | 
+3    | I2C_SDA       | BIDIR  | J15 p3 (sensors)          | Strapping (JTAG src), no internal pull; 4.7k to 3V3. See 5.6.
+4    | TMC_UART_TX   | OUT    | R_UART(1k) → R_gpPDN_T1/T2 → PDN bus (pin 5) | TX leg of TMC UART pair. Block 6. PDN target pin corrected v3.4 — see §7.3.
+5    | STEP_M1       | OUT    | R_gpSTEP_T1 → U5 STEP     | MCPWM/LEDC. 220R GPIO protection added v3.4, §7.6.
+6    | DIR_M1        | OUT    | R_gpDIR_T1 → U5 DIR       | 220R GPIO protection added v3.4, §7.6.
+7    | EN_M1         | OUT    | R_gpEN_T1 → U5 EN         | 10k pull-up on main board. 220R GPIO protection added v3.4, §7.6.
+8    | STEP_M2       | OUT    | R_gpSTEP_T2 → U6 STEP     | MCPWM/LEDC. 220R GPIO protection added v3.4, §7.6.
+9    | DIR_M2        | OUT    | R_gpDIR_T2 → U6 DIR       | 220R GPIO protection added v3.4, §7.6.
+10   | EN_M2         | OUT    | R_gpEN_T2 → U6 EN         | 10k pull-up on main board. 220R GPIO protection added v3.4, §7.6.
+11   | BTN1          | IN     | IDC 16                    | Breakout pull-up + debounce.
+12   | T_CS          | OUT    | IDC 11                    | CHANGED v3.3 (was BTN2). Touch chip select, restored — see §8.3.
+13   | BUZ_PWM       | OUT    | IDC 18                    | LEDC PWM.
+14   | LIMIT_M1      | IN     | J6                        | 100 nF debounce.
+15   | LIMIT_M2      | IN     | J7                        | 100 nF debounce.
+16   | EC11_A        | IN     | IDC 13                    | Breakout pull-up + debounce.
+17   | EC11_B        | IN     | IDC 14                    | Breakout pull-up + debounce.
+18   | EC11_SW       | IN     | IDC 15                    | Breakout pull-up + debounce.
+19   | USB D-        | USB    | J13 A7+B7                 | Native USB PHY. [ESP32]
+20   | USB D+        | USB    | J13 A6+B6                 | Native USB PHY. [ESP32]
+21   | HX711_2_DT    | IN     | HX711 #2 DOUT             | Unaffected by touch restoration — HX711 is on its own header, not the ribbon. See §10.2.
+35   | SPI_MOSI      | OUT    | AD9833 SDATA + IDC 5      | SPI2 (FSPI). PSRAM-free variant only (N4 here). [ESP32]
+36   | SPI_CLK       | OUT    | AD9833 SCLK + IDC 7       | SPI2, 20 MHz, shared TFT + touch. PSRAM-free variant only (N4 here). [ESP32]
+37   | HX711_SCK     | OUT    | both HX711 PD_SCK (shared)| Unaffected by touch restoration. See §8.3, §10.2.
+38   | AD9833_CS     | OUT    | AD9833 FSYNC              |
+39   | TFT_CS        | OUT    | IDC 8                     | (ESP32-S3 JTAG MTCK; fine, JTAG over USB.)
+40   | TFT_DC        | OUT    | IDC 9                     | (MTDO.)
+41   | TFT_RST       | OUT    | IDC 10                    | (MTDI.)
+42   | HX711_1_DT    | IN     | HX711 #1 DOUT             | Unaffected by touch restoration. See §8.3, §10.2.
+43   | I2C_SCL       | OUT    | J15 p4 (sensors)          | UART0-TX by default but board uses USB-JTAG; 4.7k to 3V3.
+44   | TMC_UART_RX   | IN     | R_UART → R_gpPDN_T1/T2 → PDN bus (pin 5) | RX leg of TMC UART pair. PDN target pin corrected v3.4 — see §7.3.
+46   | T_DO          | IN     | IDC 6                     | CHANGED v3.3 (was FREE/strap). Touch data out, restored — placed here deliberately, see §8.3 for why this is the safe strapping-pin choice.
+47   | RPi_TX        | OUT    | J3 p3                     | UART1 TX 921600.
+48   | RPi_RX        | IN     | J3 p2                     | UART1 RX.
+45   | FREE (strap)  | -      | SP7 1-pin header          | VDD_SPI select; MUST be low at boot. Sole remaining spare pin on the board — see §8.3 for why T_IRQ was deliberately not placed here.
+
+IDC pins now NC on the main board (breakout unchanged): pin 12 (T_IRQ, polled instead — see §8.3) and pin 17 (BTN2, removed — see §8.1). See §8 for the full IDC pinout.
+
+1.3.1 N4 vs N8 — confirmed no pinout impact
+------------------------------------------------
+This board uses ESP32-S3-WROOM-1-N4 (corrected from N8 in earlier versions — see revision history). Checked directly against the module comparison table in the WROOM-1 datasheet [ESP32]: N4 and N8 share the identical die (plain ESP32-S3, no PSRAM either way) — the only difference is external flash chip capacity. Every GPIO-side fact in this document (GPIO35/36/37 free since there's no PSRAM, GPIO45/46 strapping behavior, GPIO47/48 running at 3.3V since this isn't a "V"-suffix module) applies identically to N4 and N8. Flash capacity only affects firmware OTA partition sizing, not any hardware pin assignment in this brief.
+
+
+====================================================================================
+2. INPUT PROTECTION (BLOCK 1)
+====================================================================================
+Order of elements (source to board):
+   PSU(+) → [INLINE 5x20 mm fuse, F1] → J14 screw terminal → F2 (on-board SMD backstop) →
+   Q1 (reverse polarity) → D5 TVS across 24 V rail → R_LEDpwr/LED_pwr indicator →
+   24 V rail (buck + motor VM bulk).
+
+2.1 Inline fuse F1 (OFF-BOARD, PRIMARY) + on-board backstop F2 (NEW v3.4)
+--------------------------------------------------------------------------
+F1 (primary, off-board):
+- 5x20 mm cartridge, 5 A 250 V SLOW-BLOW (time-delay, "T5A"), glass.
+- Inline panel/wire holder in the +24 V lead before J14. Not a PCB part.
+- Slow-blow: correct for inductive/motor inrush (a fast-blow nuisance-trips on stepper
+  startup). Glass: visible blown indication, field-replaceable by hand.
+- SIZING CHECK (do this): F1 carries ALL board current, not just motors. Confirm the true
+  steady-state 24 V input draw. For 2x sub-1.8 A-RMS steppers the VM SUPPLY current is far
+  below the coil current (the driver is a chopper: supply A ~= coil W / 24 V / eff.),
+  typically ~1 A steady with the "6.5 A peak" being acceleration inrush. Keep continuous
+  load <= ~75 % of the fuse rating; if real continuous draw approaches 4.5-5 A, step up to
+  T6.3A. The inline holder makes this a 10-second field change — start conservative.
+JUST IN CASE: keep T3.15A / T5A / T6.3A on the bench during bring-up.
+
+F2 (NEW v3.4, on-board backstop, NOT the primary protection):
+- Littelfuse Nano2 452-series Slo-Blo, 8 A, 125 VAC/VDC, 2410 (6125 metric) SMD, part
+  0452008.MRL or equivalent. Placed on-board between J14 and Q1's Drain.
+- DELIBERATELY sized ABOVE F1 (8 A vs F1's 5 A) so the two elements do not coordinate
+  against each other in a normal motor-stall fault — F1 (lower rating, field-replaceable)
+  is meant to open first every time. F2 exists only to catch the case where F1's holder is
+  empty, bypassed, or mis-fitted with an oversized fuse; it is not a substitute for F1.
+- Silkscreen clearly: "F2 BACKSTOP 8A — PRIMARY IS INLINE T5A" so nobody mistakes it for
+  the primary protection during bring-up or field service.
+- CAVEAT: distributor listings disagree on whether this Nano2 452 series is rated 125VDC
+  or only 32VDC continuous — confirm against the primary Littelfuse 452/454 datasheet
+  before final BOM lock, not against aggregator listings alone.
+
+2.2 Reverse-polarity P-MOSFET — Q1 (AO4407A) + Dprot (BZX84C15)  [AO4407]
+---------------------------------------------------------------------
+Component | Value / part                    | Connection
+-----------------------------------------------------------------------------------------------
+Q1        | AO4407A, P-ch, VDS -30 V,        | Drain (pins 5-8) → F2 → J14 V+ (INPUT side).
+          | VGS(max) +/-25 V, ID -12 A,      | Source (pins 1-3) → 24 V rail (LOAD side).
+          | RDS(on) 13 mΩ @ -10 V, SOIC-8    | Gate (pin 4) → R_gate / Dprot junction.
+R_gate    | 10 kΩ 0402                       | Gate → GND.
+Dprot     | BZX84C15, 15 V Zener, SOT-23     | Cathode → Source. Anode → Gate. Clamps VGS to -15 V. (was "D7")
+
+PINOUT (from [AO4407] p.1): Source = pins 1,2,3 ; Gate = pin 4 ; Drain = pins 5,6,7,8.
+  *** This corrects the v3.1 text, which listed Gate=1 / Source=2-4. Verify the KiCad
+      symbol's pin→function mapping before routing; DO NOT trust pin numbers from prose. ***
+
+ORIENTATION (corrected v3.2): For a P-channel high-side reverse-polarity switch the body
+diode (anode=Drain, cathode=Source) must be REVERSE-biased during a reverse fault so it
+blocks. That requires Drain → input, Source → load (as above). v3.1 had Source→input /
+Drain→load, which lets the body diode conduct a reverse fault and defeats the protection.
+BENCH CHECK: power Q1 from a current-limited supply and deliberately reverse the leads — a
+correct board draws ~0 mA reversed.
+
+VGS CLAMP: at normal polarity Source sits at +24 V and Gate is pulled to GND via R_gate,
+so unclamped VGS = -24 V, which exceeds a conservative rating. BZX84C15 clamps VGS to
+-15 V, safely inside the AO4407A +/-25 V VGS(max) [AO4407 p.1]. The Zener also fails "off"
+(gate to source), so a fault here does not release smoke.
+
+2.3 TVS — Dclamp (SMBJ28A)
+---------------------------
+- SMBJ28A, unidirectional, 28 V standoff, ~45.4 V max clamp, 600 W, SMB (DO-214AA).
+  *** FOOTPRINT CORRECTION: SMBJ = SMB (DO-214AA), not SMA. v3.1 listed D_SMA, which is
+      the SMAJ (400 W) package. Use Diode_SMD:D_SMB for SMBJ28A, OR switch the part to
+      SMAJ28A (400 W) if you keep D_SMA. Do not pair SMBJ with an SMA land. ***
+- Placement: across the 24 V rail AFTER Q1 (protects the rail; reverse faults are handled
+  by Q1, so the TVS never sees reverse voltage).
+- MARGIN NOTE: SMBJ28A clamps at ~45 V, above the TMC2209 VM abs-max (~29-30 V, [TMC]).
+  The 24 V-rail / 29 V-max window is inherently tight. If you run 24 V, confirm the PSU
+  cannot overshoot/load-dump beyond ~29 V and rely on module VM bulk caps for fast
+  transients. If you run 12 V, this is a non-issue (large margin).
+
+2.4 24V power LED (NEW v3.4 — wiring closed out; parts already existed in v3.3 BOM unwired)
+---------------------------------------------------------------------------------------------
+LED_pwr (red 0805) + R_LEDpwr (10 kΩ 0402, NEW ref) placed AFTER Q1, tapping the PROTECTED
+rail (Q1 Source — the same node D5/buck/VM bulk all tap from), not the raw input side.
+Rationale: an indicator wired to raw input lights on any polarity and stays lit even if Q1
+fails open, telling you nothing useful; wired to the protected rail it only lights when Q1
+is actually passing current the right way — same "tells you the truth" philosophy as D7
+failing safe. I = (24V - Vf~2V) / 10kΩ ≈ 2.2 mA, P ≈ 48 mW — well inside an 0805 resistor's
+typical 1/8 W rating. No new non-standard value: 10kΩ is already the board's common reel.
+Placement: anywhere convenient on the protected-rail side; does NOT need to be inside the
+tight Q1/D7 3mm keepout (low-current DC load, no EMI/loading concern at 2.2 mA).
+
+(Section renumbering note: all "D5" references above and below now read "Dclamp"; all "D7" now read "Dprot" — see §12.3 Master Reference-Designator Table for the full old→new cross-reference.)
+
+WIRING GUIDE (Block 1): J14 pin1 = V+, pin2 = GND. V+ → F2 → Q1 Drain (pins 5-8). Q1 Source
+(1-3) = protected 24 V rail. Q1 Gate (4) node ties R_gate (to GND) and Dprot anode; Dprot
+cathode to Q1 Source. Dclamp anode to GND, cathode to 24 V rail. Protected rail → R_LEDpwr
+→ LED_pwr anode; LED_pwr cathode → GND. Keep Q1/Dprot within 3 mm; wide copper on the 24 V
+rail; TVS ground return short and direct.
+
+
+====================================================================================
+3. BUCK CONVERTER — 24V → 5V, LM2596-5.0 (BLOCK 2)
+====================================================================================
+Pin functions [LM2596 Rev G, Table 6-1]: 1 = +VIN, 2 = OUTPUT (internal switch / SW node),
+3 = GROUND, 4 = FEEDBACK, 5 = ON/OFF.
+
+Parameter        | Requirement
+------------------------------------------------------------------------------------------
+IC (U2)          | LM2596S-5.0 fixed 5 V, TO-263-5. Vin 8-40 V, 150 kHz, 3 A.
+Input electrolytic| C_inBU_E1 — 100 µF 50 V radial, low-ESR, close to pin 1.
+Input ceramic    | C_inBU_C1 — 100 nF, bypass at pin 1.
+Catch diode      | Dcatch — SS34A (3 A, 40 V Schottky, SMA). CATHODE → pin 2 (SW node); ANODE → GND.
+                 |   *** This is the exact v2.51 failure (symbol pin swap). Verify polarity. ***
+Inductor         | Lbuck — 100 µH, >=3 A saturation, shielded. From pin 2 to output node.
+Output electrolytic| CouBU_E1 — 220 µF 16 V low-ESR radial.
+Output ceramic   | C_ouBU_C1 — 100 nF, bypass at output node.
+Snubber resistor | Rsnub — 10 Ω 0603, across the SW node (pin 2 to GND).
+Snubber ceramic  | Csnub — 1 nF 50 V, between Rsnub and GND.
+Bleed            | Rbleed — 4.7 kΩ from 5 V to GND.
+
+SNUBBER THERMAL (verified): P = C.V^2.f/2 = 1 nF x 24^2 x 150 kHz / 2 ≈ 43 mW = 68 % of an
+0402's ~63 mW rating → 0603 (~100 mW) is correct. It is the only 0603 resistor on the board.
+CATCH-DIODE RATING: SS34A 3 A / 40 V is adequate for the 2 A load at 24 V input; 40 V leaves
+little margin if input ever nears the 40 V device max — fine at your real 12-24 V.
+
+WIRING GUIDE (Block 2): 24 V rail → LM2596 pin1 (+ C_inBU_E1 + C_inBU_C1 to GND). Pin 3 →
+GND. Pin 5 (ON/OFF) → GND to enable (or to a control GPIO if soft-enable ever wanted —
+currently GND). Pin 2 → Lbuck → 5 V node (+ CouBU_E1 + C_ouBU_C1 to GND, + Rbleed). Dcatch
+cathode to pin 2, anode to GND, placed within 5 mm of pin 2. Rsnub+Csnub across pin 2/GND.
+Feedback pin 4 → 5 V node (fixed version senses internally; tie per LM2596-5.0 fixed-output
+app circuit). Keep the SW-node copper compact; single-point ground the power return.
+
+
+====================================================================================
+4. LDO — 5V → 3.3V, AMS1117-3.3 (BLOCK 3)
+====================================================================================
+Parameter   | Requirement
+--------------------------------------------------------------------------------------------
+IC (U3)     | AMS1117-3.3, SOT-223-3. Vout 3.3 V, up to 1 A (800 mA budget). Dropout ~1.3 V.
+Input tantalum | CinLD_T1 — 10 µF 16 V tantalum, Case A (16 V for real derating margin on a 5 V input).
+Output tantalum| CouLD_T1 — 10 µF 10 V tantalum, Case A (3x derating at 10 V — fine).
+Output ceramic | CouLD_C1 — 100 nF bypass.
+Thermal     | SOT-223 tab (= Vout) → >=100 mm^2 copper + >=4 thermal vias.
+
+THERMAL (corrected math): worst-case dissipation P = (5 - 3.3) x 0.8 = 1.36 W at the full
+800 mA budget (v3.1's "~850 mW" was the 500 mA figure). 1.36 W on SOT-223 is hot; keep the
+copper pour + vias, and confirm typical continuous 3.3 V load is well under 800 mA (ESP32
+Wi-Fi TX bursts are the peak driver). Dropout is OK: ~1.3 V vs 1.7 V headroom.
+JUST IN CASE: lay out the SOT-223 so a pin-compatible higher-current / lower-dropout LDO
+drops in, and leave board room for a small 3.3 V buck if the linear runs too hot in-enclosure.
+
+WIRING GUIDE (Block 3): 5 V → pin 3 (Vin) + CinLD_T1 to GND. Pin 1 → GND. Pin 2 / tab →
+3.3 V + CouLD_T1 + CouLD_C1 to GND. Fan the 3.3 V pour under the tab with the vias.
+
+
+====================================================================================
+5. UAS SIGNAL CHAIN (BLOCK 4)
+====================================================================================
+1 MHz acoustic chain on the 3.3 V rail; AD9833 sweepable 0.5-3 MHz in firmware.
+
+5.1 AD9833 signal generator — plug-in module (SK3)  [AD9833]
+-----------------------------------------------------------
+Module pins (7): VCC / DGND / SDATA / SCLK / FSYNC / AGND / OUT.
+Module pin | Connects to                | Notes
+-------------------------------------------------------------------------------------------
+VCC        | 3.3 V                      | Chip is 2.3-5.5 V; confirm the module has no 5 V-only reg.
+DGND       | GND                        |
+AGND       | GND (single star point)    | Tie DGND+AGND to one star-ground, not nearest trace.
+SDATA      | GPIO35 (SPI2 MOSI)         |
+SCLK       | GPIO36 (SPI2 CLK)          |
+FSYNC      | GPIO38 (AD9833_CS)         |
+OUT        | CpreAC_C1 (100 nF) AC-couple → IC1 chA non-inv input | No intermediate resistor.
+
+AD9833 module decoupling: CdecAD_C8 (10 µF ≥16V X5R 0805) + CdecAD_C1 (100 nF), at SK3's VCC pin.
+
+KEY FACTS [AD9833 Rev G, p.7]: (a) 200 Ω load resistor is ON-CHIP — no external R_load.
+(b) There is NO RSET pin (that belongs to the AD9834) — no R_RSET. (c) The chip has NO
+internal oscillator: it needs MCLK. The module carries its own 25 MHz oscillator wired to
+MCLK internally, which is the whole point of using the module. (d) Output ≈ 0.6 Vpp typ.
+(e) SPI Mode 2 (CPOL=1; data clocked on the FALLING SCLK edge).
+BRING-UP: scope OUT with only VCC/GND (no SPI, no firmware) to confirm the onboard clock is
+alive — SPI writes completing only proves the digital interface, not that MCLK/output work.
+
+5.2 Tx amplifier — IC1 ch-A, G = 4.9  [OPA]
+-------------------------------------------
+IC (IC1)   | OPA2354, ch-A. 250 MHz unity-gain BW / 100 MHz GBW, 2.5-5.5 V, RRIO.
+Bias       | RbiasO1_1 + RbiasO1_2, 10 kΩ each (3.3 V → non-inv → GND) = 1.65 V mid-rail.
+Input      | CpreAC_C1 (100 nF) AC couple from AD9833 OUT (~0.6 Vpp).
+Gain       | RfO1_1 = 390 Ω 1%, RgO1_1 = 100 Ω 1%; G = 1 + Rf/Rg = 4.9.
+Output     | R_TL1 (47 Ω series) + CinAC_C1 (100 nF couple) → J1 SMA.
+Decoupling | CdecO1_C1 (100 nF) within 2 mm of V+ + CdecO1_C8 (10 µF 0805) bulk.
+CLIP MARGIN (verify on scope): at the datasheet-typical 0.6 Vpp input, G=4.9 → ~2.94 Vpp,
+which fits the 3.3 V rail (RRIO swings within 100 mV of rails) but with little margin; a hot
+part near 0.65 Vpp → ~3.19 Vpp clips. Be ready to trim RfO1_1 down. Bandwidth at G=4.9 is
+~20 MHz (100 MHz GBW) >> 3 MHz — ample.
+RfO1_1 FOOTPRINT — CHANGED v3.4, SMD → THT: switched to a through-hole 1% resistor
+specifically so gain can be hand-swapped in the field without hot-air rework. Electrically
+fine at 1 MHz — lead inductance/capacitance (~10-20nH, ~0.5-1pF) puts any added pole near
+175 MHz on a 100 MHz-GBW part, nowhere near the 1 MHz operating frequency. DELIBERATELY NOT
+a trim potentiometer — a fixed swappable THT part was chosen over a trimpot to avoid
+accidental gain drift from an unintentional wiper knock. Value unchanged at 390 Ω; the real
+gate on any future value change is still an unmeasured AD9833 real output amplitude — scope
+SK3's OUT pin (VCC/GND only, no SPI) before trusting any gain number in this section.
+
+5.3 IC1 ch-B — unused, tied off
+-------------------------------
+Non-inv (pin 5) → 1.65 V mid-rail. Inv (pin 6) → output (pin 7): unity follower. (No NC
+pins on the OPA2354; all 8 used.)
+
+5.4 Rx input protection
+-----------------------
+R_in (100 Ω 0402, series fault limiter) → Drx1 (BAV99, clamp 0-3.3 V) → IC2.
+Drx1 WIRING (BAV99 is a series-pinout dual diode, NOT common-anode/common-cathode — only
+the package's internal junction pin can carry the signal): common junction pin → signal
+node; the anode-only pin → GND; the cathode-only pin → 3.3 V. Confirm this against the
+actual BAV99 pinout diagram before placing — do not wire "both cathodes to 3.3V", which is
+not physically achievable with this pinout and would leave one clamp direction unprotected.
+
+5.5 Rx two-stage amplification — G = 100 total  [OPA]
+-----------------------------------------------------
+Stage 1 | IC2 ch-A | RfO2_1 910 Ω 1% | RgO2_1 100 Ω 1% | 10.1x
+Interstage AC coupling (NEW v3.4) | CouAC_C2 (100 nF) + RbiasO2_3/RbiasO2_4 (10 kΩ each,
+1.65V mid-rail) between IC2 chA's output and chB's non-inv input — blocks op-amp offset
+accumulation ahead of the ×10.1 second stage. High-pass corner ≈1/(2π×5kΩ×100nF)≈320 Hz,
+far below the 1 MHz operating frequency — no passband impact.
+Stage 2 | IC2 ch-B | RfO2_2 910 Ω 1% | RgO2_2 100 Ω 1% | 10.1x  (total ~100x; max non-clip Rx in ~32 mVpp)
+Per-stage bandwidth ~10 MHz (100 MHz GBW / 10.1) >> 1 MHz — ample.
+Rx input bias (chA, at CouAC_C1): RbiasO2_1 + RbiasO2_2, 10 kΩ each, 1.65V mid-rail.
+IC2 decoupling: CdecO2_C1 (100 nF) + CdecO2_C8 (10 µF 0805) bulk.
+
+5.6 Envelope detector + ADC — GPIO1
+-----------------------------------
+Denv (BAT54, Vf~0.3 V envelope rectifier, anode toward signal flow) → R_envRC1 (10 kΩ) +
+C_envRC1 (10 nF, t=100µs, fc≈1.6 kHz, 5t settling ≈ 500µs) → Drx2 (BAV99, hard clamp at
+GPIO1, same wiring caution as Drx1 above) → C_adc (100 nF, GPIO1 to AGND, within 2 mm of
+the GPIO1 pad, separate from C_envRC1). GPIO1 = ADC1_CH0.
+
+5.7 OPA2354 PACKAGE / FOOTPRINT (corrected v3.2)  [OPA]
+------------------------------------------------------
+The dual OPA2354 is NOT offered in plain SOIC-8. Choose ONE and match the footprint:
+  - OPA2354AIDDA  → SO PowerPAD-8 (DDA), 1.27 mm pitch, exposed thermal pad.
+        Footprint: Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm (tie EP to GND).
+        RECOMMENDED for hand assembly (1.27 mm pitch).
+  - OPA2354AIDGKR → VSSOP-8 (DGK), 0.65 mm pitch.
+        Footprint: Package_SO:VSSOP-8_3.0x3.0mm_P0.65mm.
+Do NOT use Package_SO:SOIC-8_3.9x4.9mm_P1.27mm for IC1/IC2 (that plain-SOIC land is correct
+only for Q1, which genuinely is SOIC-8).
+
+WIRING GUIDE (Block 4): keep IC1 and IC2 >=15 mm apart; UAS analog on the top layer only,
+no vias in UAS paths. SK3 placed for a short, direct OUT→coupling-cap→IC1 run. Star-ground
+the AD9833 grounds. C_adc hugs the GPIO1 pad.
+
+
+====================================================================================
+6. ESP32-S3-WROOM-1-N4 — U1 (BLOCK 5)
+====================================================================================
+6.1 Footprint / keepout
+-----------------------
+18.0 x 25.5 x 3.1 mm, castellated 1.27 mm pitch, 41 pads.
+Footprint: RF_Module:ESP32-S3-WROOM-1.
+ANTENNA KEEPOUT: no copper/traces/vias/parts within 15 mm of the PCB antenna, ALL layers.
+EPAD: solder to GND pour (improves thermal; not strictly required).
+
+6.2 Power decoupling
+--------------------
+The module exposes ONE external 3.3 V pin (castellated pin 2, "3V3"). VDD3P3 / VDD3P3_RTC /
+VDD3P3_CPU are internal die rails. Decouple the single 3V3 pad with CdecES_C8 (10 µF X5R
+0805) + CdecES_C1 (100 nF X7R 0402) within 2 mm. (Do not add the old three-group decoupling.)
+
+6.3 EN reset + boot — buttons CHANGED v3.4: SMD 6×6 → THT 6mm tactile
+------------------------------------------------------------------------
+R_EN (10 kΩ, 3V3→EN); C_EN (1 µF, EN→GND); SW_reset (EN→GND).
+R_BOOT (10 kΩ, 3V3→GPIO0); C_BOOT (100 nF, GPIO0→GND); SW_boot (GPIO0→GND).
+The 10 kΩ / 1 µF EN RC is exactly Espressif's recommended value [ESP32, Peripheral Schematics].
+BUTTON FOOTPRINT CHANGE (v3.4): SW_reset and SW_boot move from SMD 6x6 tactile (prone to
+pad lift under repeated hard presses on a bring-up board) to THT 6mm tactile for rework
+durability. TWO THINGS TO VERIFY BEFORE ROUTING, not assumed from the "6mm" name: (1) "6mm
+THT tactile" is not necessarily 6mm PITCH — common 4-pin THT parts are often ~6.5mm on one
+axis and ~4.5mm on the other; compare the actual part's mechanical drawing against whatever
+KiCad footprint gets selected, don't trust the footprint name alone. (2) the four pins are
+two internally-shorted PAIRS, not four independent nodes — wire diagonally opposite pins;
+picking the wrong pair permanently shorts EN (or GPIO0) to GND and the board looks exactly
+like a dead ESP32 at first power-up.
+
+6.4 USB-C programming (J13)
+---------------------------
+D- (A7+B7 tied) → GPIO19. D+ (A6+B6 tied) → GPIO20. [ESP32 native USB]
+CC1 (A5) R_cc1 5.1 kΩ to GND; CC2 (B5) R_cc2 5.1 kΩ to GND (mandatory sink/UFP Rd). VBUS →
+5 V via Dusb (1N5819). SBU1/SBU2/SSTX/SSRX = NC. CC resistors within 5 mm of J13.
+
+6.5 Strapping pins
+------------------
+Four strapping pins: GPIO0 (boot), GPIO3 (JTAG source), GPIO45 (VDD_SPI voltage), GPIO46 (boot mode) [ESP32c]. Rules:
+
+GPIO45 must read LOW at boot — its internal weak pull-down gives VDD_SPI = 3.3V, correct for a PSRAM-free module (N4 here). Never drive it high at reset. As of v3.3 this is the board's sole remaining spare GPIO — broken out to SP7, left unpopulated, no signal assigned. See §8.3 for why touch's IRQ line was deliberately kept off this pin rather than placed here.
+
+GPIO46 must not read HIGH at the same moment GPIO0 reads LOW (that specific combination is invalid and triggers unexpected behavior; GPIO0 only goes low during a deliberate firmware-flash entry, not normal boot). CHANGED v3.3: GPIO46 is now T_DO (touch data out) — an ESP32-S3 *input*, driven by the touch chip only when its own CS is asserted and left high-impedance otherwise. With no external pull-up on this specific signal (see §8.3), it settles to the chip's internal weak pull-down by default and does not fight the strap read under normal conditions. Confirm on the assembled board that no accidental pull-up was added on this net before relying on this.
+
+GPIO3 (I2C_SDA) has no internal pull; the 4.7kΩ I2C pull-up holds it high at reset. This is benign when debugging over USB-Serial/JTAG (which this board does), but confirm it does not select an unwanted JTAG source at boot.
+
+6.6 I2C notes
+-------------
+SDA=GPIO3, SCL=GPIO43, 400kHz (both sensors). One pair of 4.7kΩ pull-ups to 3.3V, near U1 (shared bus, not per device). GPIO43 is UART0-TX by default in Arduino-ESP32 but the board uses USB-Serial/JTAG for all debug, so GPIO43 is free — call Serial0.end() or don't remap.
+
+6.7 GPIO capability verification — every assignment checked against the datasheet
+---------------------------------------------------------------------------------------
+Requested for v3.3: a systematic re-check that every signal assigned to a pin in this document is something that pin can actually do, not just a number that happened to be free. Checked directly against the ESP32-S3-WROOM-1 and ESP32-S3 series datasheets [ESP32, ESP32c], not carried forward from memory.
+
+Analog input (UAS_ADC, GPIO1): must be an ADC1 channel, not ADC2 — ADC2 shares hardware with the Wi-Fi radio and becomes unreliable whenever Wi-Fi is active. GPIO1 is ADC1_CH0. Confirmed correct.
+
+Fixed-function pins (USB D+/D-, GPIO19/20): these are the native USB PHY pins and cannot be reassigned to any other function on this module — confirmed they carry no other signal anywhere in this design.
+
+PSRAM-gated pins (GPIO35/36/37): only free for general use on a module with no PSRAM in the package. Confirmed this board's ESP32-S3-WROOM-1-N4 has no PSRAM (§1.3.1) — all three pins are legitimately available and are used for SPI_MOSI, SPI_CLK, and HX711_SCK respectively.
+
+Voltage-gated pins (GPIO47/48): run at 1.8V instead of 3.3V only on "V"-suffix modules (VDD_SPI = 1.8V). This module has no V suffix, so both run at normal 3.3V logic — confirmed safe for RPi_TX/RPi_RX as assigned.
+
+Strapping pins (GPIO0, 3, 45, 46): each individually addressed in §6.5. GPIO46 additionally confirmed output-*and*-input capable post-boot (not input-only, an earlier open question in this project now resolved against the datasheet) — relevant because T_DO only needs it as an input, but confirms the pin isn't more restricted than assumed.
+
+JTAG-shared pins (GPIO39/40/41, used for TFT_CS/DC/RST): these double as MTCK/MTDO/MTDI. Since this board uses USB-Serial/JTAG rather than the dedicated JTAG pins for debugging, no conflict — confirmed no other part of this design enables hardware JTAG on these pins.
+
+General-purpose pins (everything else — GPIO2/4-18/21/38/42-44): no fixed role on this module; each is routed through the GPIO matrix to its assigned peripheral (UART, I2C, PWM/LEDC, MCPWM, plain digital I/O). No datasheet restriction applies beyond the ones already called out above.
+
+WIRING GUIDE (Block 5): place CdecES_C8+CdecES_C1 at the 3V3 pad first in the fanout. Keep the antenna edge clear (15mm). Route USB D+/D- as a matched pair, R_cc1/R_cc2 at the connector. SP7 is a bare 1-pin pad on GPIO45 — leave unpopulated unless deliberately used after a reset-safety review.
+
+
+====================================================================================
+7. MOTOR DRIVERS — 2× MKS TMC2209 V2.0 MODULES (BLOCK 6)
+====================================================================================
+2x8 sockets (SK1/SK2). Field-replaceable; eliminates QFN-28 thermal-pad failure mode.
+StallGuard SG_RESULT feeds the PID mixing-stop — see Block 9 for the load-cell fallback.
+
+7.1 Module specs & current  [TMC, TMCmod]
+-----------------------------------------
+Onboard sense resistors: 110 mΩ class (confirm by unpowered resistance check).
+*** CURRENT CEILING (important): with 110 mΩ sense, full-scale current is
+    I_RMS = 325 mV / (R_sense + 20 mΩ) x 1/√2 = 0.325/0.130 x 0.707 ≈ 1.77 A RMS
+    → 2.5 A peak MAX [TMC current equation; TMCmod]. This holds for BOTH analog-VREF and
+    UART IHOLD_IRUN with I_scale_analog=0 — the sense resistor sets the ceiling. You CANNOT
+    reach 2.0 A RMS / 2.8 A peak on 110 mΩ; that needs ~95 mΩ. Baseline torque and StallGuard
+    tuning at ~1.77 A RMS, or source lower-Rsense modules if more torque is required. ***
+Current set: firmware uses UART IHOLD_IRUN with I_scale_analog=0 for repeatability. VREF
+trimpot 0-2.5 V is the analog fallback; break VREF out to a test point (SP headers) to probe.
+
+FABRICATED-BOARD INCIDENT (v2.51 hardware, drives §7.6 below): a TMC2209 module was removed
+and reinserted with the board still powered. A visible spark occurred at the socket, and the
+ESP32 module has heated abnormally on every power-up since (both USB and 24V). Suspected
+mechanism: the 2×8 header has no keying, so a module can seat off-axis or row-shifted for a
+brief moment during a live insert — VM (24V) and coil pins share the same header block as
+EN/STEP/DIR/PDN_UART, all of which trace to ESP32 GPIOs with no series impedance between the
+pin and the chip prior to v3.4. A momentary bridge is enough to exceed a GPIO's internal
+ESD/clamp rating. DIAGNOSIS BEFORE RE-POWERING (do not just add protection and retry):
+unpowered, measure 3V3-to-GND resistance; near-zero confirms a hard short. Isolate by lifting
+the ESP32 module first (short disappears → ESP32 is the failure) then working outward
+section by section if it persists. Bench-test the swapped TMC module standalone before
+assuming it's undamaged. Do not re-power the full board repeatedly while still isolating —
+see §7.6 for the protection added in response, and §13 for the new procedural checklist line.
+
+7.2 UART addressing  [TMC: NODEADDR = MS1(bit0), MS2(bit1)] — CHANGED v3.4: field-jumpered
+-----------------------------------------------------------------------------------------
+Both modules share ONE PDN bus (multi-drop, distinguished by address). Address is now
+field-selectable per module instead of hardwired, making U5 and U6 fully interchangeable
+spares rather than fixed-position boards.
+MS1/MS2 jumpers: 1×3 header + shunt on each pin, per module (4 headers total: JMP_MS1_T1,
+JMP_MS2_T1, JMP_MS1_T2, JMP_MS2_T2), same convention as JMP_U5/JMP_U6 below. Center pin =
+the module's MS1 (or MS2) pad; one end = 3.3 V via a 10 kΩ pull-up (R_M1S1/R_M1S2 for
+module 1's MS1/MS2 pulls, R_M2S1/R_M2S2 for module 2's); other end = GND. No shunt = pin
+floats to the TMC2209's internal pull-down (safe default = 0 on that bit).
+*** PULL-UP MARGIN CAUTION: MS1/MS2 have an internal pull-down inside the TMC2209 chip
+    itself. An external 10 kΩ pull-up fights this internal pull-down rather than driving a
+    clean logic high — the resulting voltage depends on the internal pull-down's exact
+    resistance, which was not confirmed in any source checked for this document. Before
+    final value lock: either measure the resulting high-level voltage on the bench against
+    VIH (~0.7×VIO ≈ 2.31 V), or pull the TMC2209 Rev 1.09 DC-characteristics table for the
+    exact internal pull-down value. If marginal, drop the external pull-up to 2.2-4.7 kΩ. ***
+VERIFY BEFORE ROUTING: confirm which physical module pin is genuinely MS1/MS2 against the
+MKS V2.0 schematic, not generic third-party SilentStepStick documentation — this project has
+already found one instance (§7.3 below) where this specific module's actual silkscreen
+disagreed with generic community documentation for the family.
+
+7.3 PDN_UART — 2-GPIO TX/RX pair — *** PIN ASSIGNMENT CORRECTED v3.4, FLIPPED FROM v3.3 ***
+---------------------------------------------------------------------------------------------
+GPIO4 = TX, GPIO44 = RX, joined by R_UART = 1 kΩ; the junction feeds the shared PDN bus.
+R_PDN_UP = 10 kΩ, PDN bus → 3.3 V (one pull-up for the whole bus).
+Firmware must suppress the TX echo on RX (standard for resistor-separated half-duplex).
+*** CORRECTION: physical inspection of the actual MKS V2.0 module's own silkscreen shows
+    "UART" labeled at pin 5, with R8 drawn between pin 5 and pin 4 — i.e. PIN 5 IS THE
+    DIRECT PDN_UART NODE and pin 4 is on the far side of the module's own separator
+    resistor R8. This is the OPPOSITE of every version through v3.3, which followed generic
+    third-party SilentStepStick documentation (pin 4 = direct) rather than this specific
+    module's own primary-source silkscreen. Trust the physical part's own markings over
+    generic community writeups for a different board in the same family — same lesson as
+    the LM2596 symbol-swap finding earlier in this project. ***
+DEFAULT (corrected): use the main board R_UART; connect module PIN 5 (not pin 4). Per-module
+3-pin jumper (JMP_U5/JMP_U6) selects pin 5 (direct, shunt 2-1, DEFAULT) vs pin 4 (via R8,
+shunt 2-3, FALLBACK) as a no-rework option if this reading is ever found to be wrong on a
+given unit. Silkscreen "PDN SEL: 1=DIRECT(PIN5) / 3=VIA R8(PIN4)". Never shunt both sides.
+Verify R8's actual resistance with an unpowered resistance check across module pins 4-5
+before relying on the fallback path — silkscreen confirms which pin is which, not R8's value.
+GPIO PROTECTION (NEW v3.4): R_gpPDN_T1 / R_gpPDN_T2 (220 Ω each) placed in series between
+the shared PDN bus and each module's jumper-selected pin — see §7.6.
+
+7.4 SpreadCycle
+---------------
+Firmware writes GCONF.en_spreadcycle=1 at every boot and reads back to confirm. Confirm the
+module's SPREAD/MS3 behavior against its schematic before assuming. Load-test on real
+hardware before trusting SG_RESULT for the PID.
+
+7.5 CLK pin
+-----------
+Per SilentStepStick-derived design CLK ties to GND on-module (internal oscillator selected).
+[TMCmod / FYSETC: "add CLK pin, tie to GND via 0R"]. PENDING: confirm with an unpowered
+continuity check (module CLK to GND) before removing any main-board CLK-tie. Do NOT confuse
+with the AD9833 MCLK, which is the opposite requirement (AD9833 has no internal oscillator).
+
+7.6 GPIO short-fault protection (NEW v3.4 — added directly in response to the §7.1 incident)
+------------------------------------------------------------------------------------------------
+A 220 Ω series resistor is now placed on every ESP32-to-TMC2209 control line, at the socket
+boundary, for both modules — 12 resistors total:
+  Module 1 (U5/SK1): R_gpSTEP_T1, R_gpDIR_T1, R_gpEN_T1, R_gpPDN_T1, R_gpMS1_T1, R_gpMS2_T1
+  Module 2 (U6/SK2): R_gpSTEP_T2, R_gpDIR_T2, R_gpEN_T2, R_gpPDN_T2, R_gpMS1_T2, R_gpMS2_T2
+PURPOSE: does not prevent a momentary bridge between VM/coil pins and a logic pin during a
+mis-seated or hot-swapped module (that's a mechanical/procedural problem — see §13), but
+limits the fault current that reaches the GPIO's internal ESD/clamp structure during such a
+transient to something the pin can survive, rather than taking the fault directly.
+ELECTRICAL IMPACT: negligible. 220 Ω into a GPIO's few pF of input capacitance gives a
+sub-nanosecond RC time constant — no effect on STEP pulse timing even at high microstep
+rates, and no meaningful voltage drop on EN/MS1/MS2 (near-zero static current into a CMOS
+input). PDN_UART placement: in series between the shared bus and each module's
+jumper-selected pin (§7.3), downstream of the existing R_UART/R_PDN_UP bus-level resistors.
+
+7.7 VIO / VM
+-----------
+VIO (logic) is a SEPARATE pin from VM (motor) on this module [TMCmod: VCC_IO distinct from
+VM]. VIO → 3.3 V (must match ESP32 logic; a mismatch here risks GPIO damage). VM → 24 V +
+bulk caps: CdecT1_E / CdecT2_E (100 µF 50 V SMD radial, 8mm height — CHANGED v3.4 from THT,
+placed BESIDE each socket, not underneath — an 8mm-tall SMD can does not clear the ~8.5mm
+socket body plus module PCB stacked on top) + CdecT1_C / CdecT2_C (100 nF ceramic, close to
+each socket's VM pin for HF bypass the electrolytic can't provide above ~1MHz). Verify VIO
+against your schematic copy before power-up.
+
+7.8 Pin mapping (verify against the MKS V2.0 schematic before routing)
+---------------------------------------------------------------------
+JP1: EN=GPIO7(U5)/GPIO10(U6) [10k pull-up main board] via R_gpEN_T1/T2;
+     MS1/MS2=jumper-selected via JMP_MS1_T1/T2, JMP_MS2_T1/T2, through R_gpMS1_T1/T2 and
+     R_gpMS2_T1/T2 (§7.2, §7.6); PDN=jumper-selected pin 5 default (§7.3) through
+     R_gpPDN_T1/T2; CLK=GND (pending); STEP=GPIO5(U5)/GPIO8(U6) via R_gpSTEP_T1/T2;
+     DIR=GPIO6(U5)/GPIO9(U6) via R_gpDIR_T1/T2.
+JP2: VM=24 V+bulk (CdecT1_E/T2_E + CdecT1_C/T2_C); VIO=3.3 V; OA1/OA2/OB1/OB2 → J4/J5
+     (confirm exact coil pin order against schematic — do not assume BTT ordering carries
+     over); GND.
+Spare 1-pin headers (SP1-SP6, unpopulated): DIAG x2, INDEX x2, VREF x2. Leave bare until
+used (a populated-but-floating header is a noise antenna near the analog chain).
+
+7.9 Mechanical
+--------------
+Module+socket taller than QFN-28. Confirm enclosure clearance against the MKS module's
+dimensions, now also accounting for the beside-socket VM bulk caps (§7.7). Use retention
+sockets or an adhesive dab given stepper proximity. No keying/shrouding added in v3.4 —
+considered and deliberately deferred to a possible future mechanical-only revision rather
+than holding up this pass; GPIO protection resistors (§7.6) and the powered-off swap
+procedure (§13) are the v3.4 mitigation instead.
+
+WIRING GUIDE (Block 6): VM bulk caps beside each socket (§7.7); VIO from 3.3 V; STEP/DIR/EN
+per map, each through its 220Ω protection resistor (§7.6), with EN pull-ups; MS1/MS2 via
+their jumpers and protection resistors; PDN via the jumper (pin 5 default) through its
+protection resistor to the shared bus with R_UART at the MCU and R_PDN_UP once on the bus.
+Motor coil outputs to J4/J5. Keep STEP/DIR away from the UAS analog top-layer region.
+
+
+====================================================================================
+8. UI IDC CONNECTOR — 20-PIN 2×10, TOUCH RESTORED (BLOCK 7)
+====================================================================================
+The breakout board (TFT + EC11 + 1 button + buzzer) and the 20-pin IDC pinout are BOTH unchanged from the original design — touch's three signals have always lived on ribbon pins 6, 11, and 12, and stay exactly there. What changes in v3.3 is only which ESP32 GPIO the main board connects to those three pins, plus one button removed. No breakout revision needed.
+
+8.1 IDC pinout (main-board view)
+--------------------------------
+
+Pin  |  Signal   |  Main-board net  |  Notes                                                
+--------------------------------------------------------------------------------------------
+1    |  GND      |  GND             |  Red-stripe reference.                                
+2    |  3.3V     |  3.3V            |                                                        
+3    |  GND      |  GND             |                                                        
+4    |  5V       |  5V              |  Buzzer supply.                                        
+5    |  SPI_MOSI |  GPIO35          |                                                        
+6    |  T_DO     |  GPIO46          |  CHANGED v3.3 — touch data out, restored (was NC in v3.2, was GPIO37 pre-v3.2). GPIO37 stays free for HX711_SCK — see §8.3.
+7    |  SPI_CLK  |  GPIO36          |  20MHz, shared TFT + touch.                            
+8    |  TFT_CS   |  GPIO39          |                                                        
+9    |  TFT_DC   |  GPIO40          |                                                        
+10   |  TFT_RST  |  GPIO41          |                                                        
+11   |  T_CS     |  GPIO12          |  CHANGED v3.3 — touch chip select, restored. Reused from removed BTN2 — see §8.3.
+12   |  T_IRQ    |  NC (main board) |  CHANGED v3.3 — touch runs polled, not interrupt-driven. See §8.3 for why.
+13   |  EC11_A   |  GPIO16          |                                                        
+14   |  EC11_B   |  GPIO17          |                                                        
+15   |  EC11_SW  |  GPIO18          |                                                        
+16   |  BTN1     |  GPIO11          |                                                        
+17   |  BTN2     |  NC (main board) |  REMOVED v3.3 — one-button UI per team decision. Ribbon pin left connected on the breakout, just NC here.
+18   |  BUZ_PWM  |  GPIO13          |                                                        
+19   |  GND      |  GND             |                                                        
+20   |  NC       |  —               |  Spare.                                                
+
+8.2 Touch chip behavior on this bus
+--------------------------------------
+The XPT2046 shares SCK/MOSI with the ILI9341 on the same physical SPI bus and drives T_DO (MISO) only when its own CS is asserted low — otherwise it stays high-impedance, so it cannot interfere with TFT traffic when deselected. This is standard shared-bus SPI behavior, not something specific to this revision.
+
+8.3 GPIO assignment rationale — why CS, DO, and IRQ landed where they did
+------------------------------------------------------------------------------
+This isn't an arbitrary pin reshuffle — it's built around one constraint: GPIO45 and GPIO46 are the board's only two strapping pins with any headroom left, and strapping pins are riskiest when an external pull resistor could be asserting a level during the boot-time strap sample.
+
+T_CS commonly gets an external pull-up so the touch chip idles deselected before firmware configures anything — that makes it the "loudest" of the three touch signals at boot. It goes on GPIO12, freed by removing BTN2, which carries zero strapping role — so an external pull-up there is a complete non-issue.
+
+T_DO (touch's MISO output) has no external pull-up in a typical XPT2046 wiring — the chip drives it push-pull when selected and leaves it high-impedance when not. That makes it the cleanest of the three signals, so it's the one placed on a strapping pin — GPIO46.
+
+T_IRQ is usually open-drain with its own external pull-up (needed since it's open-drain), which makes it electrically similar to T_CS — exactly the kind of signal that risks fighting GPIO45's or GPIO46's boot-time strap read. Rather than accept that risk, T_IRQ is simply not connected on the main board as of v3.3. Touch presence is polled in firmware instead of interrupt-driven — a small, predictable firmware cost (§11.2), not a hardware risk. This also means GPIO45 stays completely unused, leaving it as the one genuinely spare, unclaimed pin on the entire board.
+
+HX711's clock and data pins (GPIO37/42/21) are unaffected by any of this — they were never wired to the touch ribbon pins to begin with; they connect to the separate SK4/SK5 header sockets. See §10.2.
+
+WIRING GUIDE (Block 7): J9 at the board edge, pin 1 marked. GPIO46 and GPIO12 route to IDC pins 6 and 11 respectively; IDC pin 12 (T_IRQ) and pin 17 (BTN2) are left unconnected on the main board — do not populate silkscreen footprints suggesting otherwise. Keep the 20-pin land pattern and silkscreen identical to the breakout's mating side, since the breakout itself is unchanged.
+
+
+====================================================================================
+9. MISCELLANEOUS CONNECTORS OUT (BLOCK 8)
+====================================================================================
+Ref | Label            | Type              | Wiring
+----------------------------------------------------------------------------------------------
+J1  | TX transducer    | SMA edge-launch   | IC1 chA → R_TL1 (47 Ω) + CinAC_C1 (100 nF) → J1.
+J2  | RX transducer    | SMA edge-launch   | J2 → R_in (100 Ω) → Drx1 (BAV99) → IC2.
+J3  | RPi UART         | JST-XH 3-pin      | 1:GND / 2:RX(GPIO48) / 3:TX(GPIO47), 921600.
+J4  | Motor 1          | JST-PH 4-pin      | 1:OA1 2:OA2 3:OB1 4:OB2 (confirm order vs module).
+J5  | Motor 2          | JST-PH 4-pin      | 1:OA1 2:OA2 3:OB1 4:OB2.
+J6  | Limit M1         | JST-XH 2-pin      | 1:GND 2:GPIO14, Clim1_C1 (100 nF) debounce at MCU.
+J7  | Limit M2         | JST-XH 2-pin      | 1:GND 2:GPIO15, Clim2_C2 (100 nF) debounce at MCU.
+J8  | LED panel        | JST-XH 2-pin      | 1:5 V 2:GND.
+J14 | PSU              | 5.0 mm screw term | CHANGED v3.4 (was 3.5mm) — higher current margin, heavier-gauge wire. 1:V+ (from inline fuse F1) 2:GND → F2 → Q1 (Block 1). Confirm 5.00mm (Phoenix PT-1,5/2-5,0) vs 5.08mm generic part before final BOM lock — either works on a 2-pin block, but pick one real P/N.
+J15 | Turbidity I2C    | JST-XH 4-pin      | 1:3.3 V 2:GND 3:SDA(GPIO3) 4:SCL(GPIO43).
+J16 | APDS9960 ext LED | JST-XH 2-pin      | 1:LED+ (3.3 V via R_LEDext 330 Ω) 2:GND.
+
+MOTOR CONNECTOR CURRENT: JST-PH is ~2 A/contact. With the Block-6 ceiling the coil current is
+<=1.77 A RMS, so PH is marginally OK (confirm the specific PH part's rating). The 2.8 A "peak"
+that PH could not carry is not actually reachable on 110 mΩ sense — this ceiling de-risks the
+connector.
+
+TURBIDITY SENSING (on J15, off-board modules) [MAX, APDS]:
+- APDS9960: I2C 0x39 (fixed), ALS clear-channel transmission mode (internal proximity path
+  unused). External visible LED across the syringe, hardwired ON: 3.3 V → R_LEDext 330 Ω →
+  J16 pin1 (anode); J16 pin2 → GND. Hardwiring removes software ambient subtraction — depends
+  on enclosure light-sealing; flag for mechanical review. (Ref name R_LEDext assigned this
+  pass — carried under its original functional name for several revisions before now.)
+- MAX30102: I2C 0x57 (fixed), backscatter mode, own 660/880 nm LEDs, hardware ambient-light
+  cancellation and 18-bit ADC [MAX]. No external LED.
+- No address conflict (0x39 vs 0x57). Both modules self-decouple on their own PCBs; the main
+  board supplies only the bus + one pull-up pair. Bring-up: I2C scanner should show 0x39+0x57.
+
+WIRING GUIDE (Block 8): J15/J16 at the board edge near each other for a clean syringe cable
+run. Limit/LED/UART connectors grouped by function. SMA edge-launches on the analog edge,
+away from the switchers.
+
+
+====================================================================================
+10. LOAD-CELL FORCE SENSING — 2× HX711 (ADDED IN v3.2)
+====================================================================================
+Purpose: a hardware fallback for TMC2209 StallGuard SG_RESULT. Two load cells at the syringe contact/push point measure plunger force directly; if PDN_UART / SG_RESULT proves unreliable, the PID mixing-stop uses force instead. This is an independent sensing path with no UART dependency.
+
+10.1 HX711 module facts  [HX711 datasheet, Avia Semiconductor]
+-------------------------------------------------------------
+Selected module: XFW-HX711 (green board, SKU MOD-BRE-007). Confirmed from the module photo: the MCU-side 4-pin header order, top to bottom, is GND, DT, SCK, VCC. The load-cell side is a 6-position screw terminal: E+, E-, A-, A+, B-, B+. An on-board RATE select is silkscreened "80Hz / 10Hz" with a 0Ω/solder-jumper between them — set this to 80Hz for force feedback (12.5ms latency vs. 100ms at 10Hz). This resolves the original "expose RATE" just-in-case item on its own, since the module already exposes it with no rework needed. Verify on a scope that DT produces ~80 samples/s once selected.
+
+General HX711 behavior: supply range 2.6–5.5V at under 1.5mA, with a 24-bit sigma-delta ADC. It's a two-wire interface — SCK/PD_SCK is the clock in from the MCU, DT/DOUT is data out to the MCU. DT reads HIGH when the chip isn't ready and goes LOW once a sample is ready to read. A read consists of 25–27 PD_SCK pulses, where the exact count selects the channel and gain for the *next* reading: 25 pulses selects channel A at gain 128 (the default, ±20mV full-scale), 26 selects channel B at gain 32, and 27 selects channel A at gain 64.
+
+On the XFW board, AVDD (bridge excitation) tracks VCC directly. At VCC=3.3V, a typical 2mV/V load cell produces roughly 6.6mV full-scale — comfortably inside the ±20mV gain-128 range, so 3.3V operation is fine.
+
+Timing constraint worth building firmware around: if PD_SCK stays HIGH for more than 60µs, the chip powers itself down. A read burst must never be stalled mid-sequence by a long ISR — see §11 for how the compute budget protects this.
+
+10.2 Wiring — XFW-HX711 modules on 4-pin sockets (SK4, SK5), shared clock
+-----------------------------------------------------------------------
+Each socket (SK4/SK5) matches the XFW header order GND/DT/SCK/VCC, top to bottom.
+
+Module          |  GND  |  DT (DOUT)            |  SCK (PD_SCK)     |  VCC 
+--------------------------------------------------------------------------
+HX711 #1 (SK4)  |  GND  |  GPIO42 (HX711_1_DT)  |  GPIO37 (shared)  |  3.3V
+HX711 #2 (SK5)  |  GND  |  GPIO21 (HX711_2_DT)  |  GPIO37 (shared)  |  3.3V
+
+VCC is 3.3V so DT/SCK logic runs at 3.3V — direct to the ESP32, no level shifting needed. At 5V VCC, DT's high level would also be 5V and would damage the ESP32 GPIO — do not power these modules from 5V.
+
+SCK is shared between both modules (both module SCK pins tie to GPIO37); DT is separate, one GPIO per module. Firmware clocks both chips together and reads both DT lines within the same loop — this needs a custom bit-bang driver, since standard HX711 libraries assume one dedicated clock pin per chip. Wait until both DT lines read LOW before starting a clock burst.
+
+On the load-cell side, wire to the XFW screw terminals at E+/E- (excitation) and A+/A- (signal — channel A is the one in use). Keep load-cell leads short and twisted, and route them away from the switching regulators.
+
+10.3 NC / spare breakout (just-in-case philosophy)
+-------------------------------------------------
+RATE is already exposed on the XFW board itself as the 80Hz/10Hz jumper (§10.1) — set to 80Hz, no main-board rework needed. Channel B (the B+/B- terminals, fixed gain 32) is unused and left available on the module's own screw terminal for a possible second or redundant sensor later — again, no board change required to use it if that need comes up.
+
+WIRING GUIDE (Block 9): place SK4/SK5 near the board edge for the syringe cable run. GPIO37 (shared SCK) routes to both headers; keep the two DT lines short. The modules self-decouple; add a 100nF cap at each header's VCC pin if the specific module you receive lacks one onboard. Treat the force-sensor cable like an analog run — keep it away from the switchers and the STEP/DIR traces.
+
+
+====================================================================================
+11. FIRMWARE NOTES & COMPUTE BUDGET
+====================================================================================
+Goal: confirm the ESP32-S3 (dual-core Xtensa LX7 @ 240MHz, ~600+ DMIPS aggregate) can run every peripheral in real time. The design leans on hardware peripherals for anything fast, so the CPU only supervises rather than bit-banging.
+
+11.1 Core allocation
+---------------------
+Core 0 handles Wi-Fi + BLE (NimBLE) stack, the USB-Serial/JTAG console, and non-real-time communication (RPi UART). Core 1 handles the real-time control tasks — STEP supervision, HX711 reads, the PID mixing-stop loop, ADC sampling, and TMC UART polling. The HX711 burst is deliberately pinned to core 1 so Wi-Fi interrupts on core 0 can never stall it.
+
+11.2 Per-peripheral load
+--------------------------
+STEP/DIR generation uses MCPWM, RMT, or LEDC — all hardware peripherals, never bit-banged. Worst-case example: a NEMA17 at 1/16 microstepping, 200 full steps/rev, ~600 RPM (10 rev/s) works out to 10 × 200 × 16 = 32,000 steps/s per motor. Hardware timers produce this directly; the CPU only updates a frequency register on ramp changes, which is effectively 0% CPU load. Even a naive bit-banged implementation would only cost roughly 0.3% per motor (32kHz × ~20 cycles ≈ 0.6M cycles/s) — but the point is not to bit-bang this at all; use the hardware timers.
+
+HX711 ×2, shared clock: at 80 SPS, that's one 27-pulse burst every 12.5ms. Clocking at ~500kHz (2µs/pulse, safely under the 50–60µs power-down limit) makes each burst roughly 54µs. Per second, that's 80 × 54µs ≈ 4.3ms, or about 0.43% of one core — both channels are read within the same burst. This burst needs a short critical section so no other ISR can push PD_SCK-high past the 60µs power-down threshold mid-read.
+
+UAS ADC (GPIO1): the envelope is already formed in analog hardware (diode + RC), so the ADC is only sampling a slow, settled envelope (~500µs settling time). A few kSPS with the on-chip ADC plus simple peak/threshold math comes in well under 1% CPU load.
+
+TMC2209 UART (2 drivers, multi-drop): SG_RESULT and status polling at roughly 1kHz over a hardware UART routed through the GPIO matrix costs under 1%.
+
+I2C turbidity sensing (400kHz bus, 50–100Hz sampling, hardware I2C peripheral) also costs under 1%.
+
+TFT (SPI2 @ 20MHz, DMA): bursty during screen updates, but DMA offloads the actual transfer. Budget the refresh rate to what the UI actually needs — 5–15fps of partial updates is comfortably within a single core's headroom.
+
+Touch (SPI, shared bus with TFT, polled rather than interrupt-driven as of v3.3 — see §8): adds one additional SPI transaction per poll cycle. Polling at, say, 60Hz costs a small fraction of a percent — negligible next to the TFT traffic it shares a bus with.
+
+Buzzer/LED (LEDC), EC11 (edge interrupts), and the remaining button/limit switches (debounced GPIO) are all negligible.
+
+**Aggregate: real-time load on core 1 is a few percent; core 0 handles the radios.** The ESP32-S3 has ample headroom for this full peripheral set. Two design rules keep that true going forward: (1) use hardware peripherals for STEP, SPI (TFT/touch), I2C, UART, and PWM — never bit-bang them; (2) keep the HX711 burst on core 1 and short-critical-section it so a long ISR can never stall PD_SCK-high past 60µs, which would power the HX711 down mid-read.
+
+11.3 Key firmware settings
+-----------------------------
+TMC2209: set GCONF.en_spreadcycle=1 with readback confirmation, and GCONF.I_scale_analog=0 with UART IHOLD_IRUN. Suppress the TX echo on the resistor-separated PDN half-duplex bus.
+
+SPI: ILI9341 at 20MHz, AD9833 in SPI Mode 2 (CPOL=1), touch (XPT2046) sharing the same bus at a lower clock rate appropriate to the chip, polled per §8 rather than interrupt-driven.
+
+I2C: Wire.begin(SDA=3, SCL=43, 400kHz). APDS9960 in ALS mode at address 0x39; MAX30102 in backscatter mode at address 0x57, sampled 50–100Hz for rolling variance.
+
+HX711: a custom shared-clock driver, selecting 80 SPS (RATE pin high) since latency matters here. Wait for both DT lines to read low before starting a burst; read 24 bits MSB-first on falling PD_SCK edges; the 25th-and-beyond pulse count sets the gain for the next reading.
+
+EC11 quadrature decoding runs on GPIO16/17 via edge interrupts.
+
+
+====================================================================================
+12. BILL OF MATERIALS — FULL SPECS (MAIN BOARD, V3.4)
+====================================================================================
+Buy exactly these. Dielectric, voltage rating, tolerance and package are called out so
+nothing is under-rated. All resistors 0402 1/16 W unless noted; all MLCCs 0402 unless noted.
+NEW v3.4: every passive now has an explicit, individually-assigned reference designator —
+see §12.3 for the full master lookup and old→new cross-reference, and §12.2 for a
+quick-reference of every value that ISN'T one of the board's two common reels (10kΩ, 100nF).
+
+12.1 ACTIVE / MODULES
+------------------------------------------------------------------------------------------
+Ref        | Part                    | Key spec                                        | Package / footprint
+--------------------------------------------------------------------------------------------------------------------------------------------
+U1         | ESP32-S3-WROOM-1-N4     | 4 MB flash, NO PSRAM, PCB ant.                  | RF_Module:ESP32-S3-WROOM-1
+Q1         | AO4407A                 | P-ch, -30 V, VGS +/-25 V, -12 A, 13 mΩ          | Package_SO:SOIC-8_3.9x4.9mm_P1.27mm
+Dprot      | BZX84C15                | 15 V Zener, 300 mW                              | Diode_SMD:D_SOT-23
+Dclamp     | SMBJ28A                 | TVS uni, 28 V standoff, ~45 V clamp, 600 W      | Diode_SMD:D_SMB   (NOT D_SMA)
+U2         | LM2596S-5.0             | Buck, 5 V/3 A, 150 kHz, Vin 8-40 V              | Package_TO_SOT_SMD:TO-263-5_TabPin3
+Dcatch     | SS34A                   | Schottky, 40 V, 3 A                             | Diode_SMD:D_SMA
+Lbuck      | 100 µH, >=3 A sat, shld | DCR low, shielded                               | Inductor_SMD:L_Bourns-SRR1260 (or >=3 A equiv.)
+U3         | AMS1117-3.3             | LDO, 3.3 V, 1 A, dropout ~1.3 V                 | Package_TO_SOT_SMD:SOT-223-3_TabPin2
+IC1, IC2   | OPA2354AIDDA (or IDGKR) | Dual op-amp, 250 MHz UGBW/100 MHz GBW, 2.5-5.5 V| DDA: Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm
+           |                         | RRIO                                            | DGK alt: Package_SO:VSSOP-8_3.0x3.0mm_P0.65mm
+Drx1, Drx2 | BAV99                   | Dual series switching, 70 V, 200 mA             | Diode_SMD:D_SOT-23
+Denv       | BAT54                   | Schottky, 30 V, 200 mA, Vf~0.3 V                | Diode_SMD:D_SOD-123
+Dusb       | 1N5819                  | Schottky, 40 V, 1 A                             | Diode_SMD:D_SOD-123 (SMD variant)
+F2         | Littelfuse Nano2 452, 8A| SMD backstop, Slo-Blo, 125 VAC/VDC              | Fuse_2410 (6125 metric) — see §2.1 datasheet caveat
+SK3        | AD9833 module (7-pin)   | onboard 25 MHz osc, 0.6 Vpp out, 2.3-5.5 V      | Connector_PinSocket_2.54mm:PinSocket_1x07_P2.54mm_Vertical
+SK1, SK2   | TMC2209 MKS V2.0 (2x8)  | 110 mΩ sense, VIO+VM separate                   | Connector_PinSocket_2.54mm:PinSocket_2x08_P2.54mm_Vertical
+SK4, SK5   | XFW-HX711 module (4-pin)| 24-bit, 2.6-5.5 V, gain 128, 10/80 SPS jumper.  | Connector_PinSocket_2.54mm:PinSocket_1x04_P2.54mm_Vertical
+           |  (SKU MOD-BRE-007)      | Header order GND/DT/SCK/VCC; load side E/A/B.   |  (orient socket to that header order)
+
+PASSIVES — RESISTORS (0402 unless noted)
+Value  | Tol | Qty | Refs
+---------------------------------------------------------------------------------------------
+10 kΩ  | 5 % | ~14 | R_EN, R_BOOT, R_gate, R_M1S1/R_M1S2/R_M2S1/R_M2S2, R_PDN_UP, R_LEDpwr, RbiasO1_1/RbiasO1_2, RbiasO2_1/RbiasO2_2, RbiasO2_3/RbiasO2_4
+5.1 kΩ | 1 % | 2   | R_cc1, R_cc2 (USB-C sink Rd)
+4.7 kΩ | 5 % | 3   | I2C SDA pull-up, I2C SCL pull-up, Rbleed
+1 kΩ   | 5 % | 1   | R_UART
+390 Ω  | 1 % | 1   | RfO1_1 (THT, NEW v3.4 — was SMD)
+910 Ω  | 1 % | 2   | RfO2_1, RfO2_2
+220 Ω  | 5 % | 12  | R_gpSTEP_T1/T2, R_gpDIR_T1/T2, R_gpEN_T1/T2, R_gpPDN_T1/T2, R_gpMS1_T1/T2, R_gpMS2_T1/T2 — NEW v3.4, GPIO short-fault protection, §7.6
+100 Ω  | 1 % | 4   | RgO1_1, RgO2_1, RgO2_2, R_in
+330 Ω  | 5 % | 2   | R_statLED, R_LEDext
+47 Ω   | 5 % | 1   | R_TL1
+10 Ω   | 5 % | 1   | Rsnub — 0603 (Resistor_SMD:R_0603_1608Metric); the ONLY 0603
+(All 0402: Resistor_SMD:R_0402_1005Metric)
+
+PASSIVES — CAPACITORS
+Value            | Diel/rating       | Qty | Refs                                       | Footprint
+-----------------------------------------------------------------------------------------------------------------------
+100 nF           | X7R, >=16 V, 0402 | ~26 | decoupling/coupling/debounce family — see §12.2 and §12.3 for the full per-net list | Capacitor_SMD:C_0402_1005Metric
+10 nF            | X7R, 0402         | 1   | C_envRC1                                  | Capacitor_SMD:C_0402_1005Metric
+1 nF             | X7R, >=50 V, 0402 | 1   | Csnub (sees 24 V transients)              | Capacitor_SMD:C_0402_1005Metric
+1 µF             | X7R, 0402         | 1   | C_EN (EN RC)                              | Capacitor_SMD:C_0402_1005Metric
+10 µF            | X5R, >=16 V, 0805 | 4   | CdecES_C8, CdecO1_C8, CdecO2_C8, CdecAD_C8 | Capacitor_SMD:C_0805_2012Metric
+10 µF            | 16 V tantalum, A  | 1   | CinLD_T1                                  | Capacitor_Tantalum_SMD:CP_EIA-3216-18_Kemet-A
+10 µF            | 10 V tantalum, A  | 1   | CouLD_T1                                  | Capacitor_Tantalum_SMD:CP_EIA-3216-18_Kemet-A
+100 µF           | 50 V radial       | 1   | C_inBU_E1                                 | Capacitor_THT:C_Radial_D8.0mm_P3.5mm
+220 µF           | 16 V low-ESR rad. | 1   | CouBU_E1                                  | Capacitor_THT:C_Radial_D8.0mm_P3.5mm
+100 µF           | 50 V SMD radial, 8mm H | 2 | CdecT1_E, CdecT2_E — CHANGED v3.4 (was THT); placed BESIDE each socket, not under — see §7.7 | Capacitor_SMD radial can, 8mm height, confirm land pattern against actual part
+
+CONNECTORS / HEADERS
+Ref                          | Part                        | Footprint
+------------------------------------------------------------------------------------------------------------
+J1, J2                       | SMA edge-launch             | Connector_Coaxial:SMA_Molex_0732511150_EdgeMount
+J3                           | JST-XH 3-pin                | Connector_JST:JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical
+J4, J5                       | JST-PH 4-pin                | Connector_JST:JST_PH_B4B-PH-K_1x04_P2.00mm_Vertical
+J6, J7, J8, J16              | JST-XH 2-pin                | Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
+J9                           | IDC 2x10 box header         | Connector_IDC:IDC-Header_2x10_P2.54mm_Vertical
+J13                          | USB-C receptacle            | Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12
+J14                          | 5.0 mm screw terminal 2-pin | CHANGED v3.4 (was 3.5mm) — confirm 5.00mm vs 5.08mm real P/N before lock, §9
+J15                          | JST-XH 4-pin                | Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical
+JMP_U5, JMP_U6               | 1x3 header + 2.54 shunt     | Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical — DEFAULT FLIPPED v3.4, now selects pin 5 direct (§7.3)
+JMP_MS1_T1, JMP_MS2_T1,      | 1x3 header + 2.54 shunt     | Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical — NEW v3.4, §7.2
+JMP_MS1_T2, JMP_MS2_T2       |                             |
+SP1-SP6                      | 1-pin header (TMC spares)   | Connector_PinHeader_2.54mm:PinHeader_1x01_P2.54mm_Vertical
+SP7                          | 1-pin header (GPIO45)       | Connector_PinHeader_2.54mm:PinHeader_1x01_P2.54mm_Vertical
+
+SWITCHES / LEDS
+Ref               | Part                              | Footprint
+------------------------------------------------------------------------------
+SW_boot, SW_reset | 6mm THT tactile — CHANGED v3.4 (was SMD 6x6) | Button_Switch_THT — VERIFY real pad spacing against the part's mechanical drawing, §6.3; confirm diagonal-pair wiring
+LED_pwr           | Red 0805                          | LED_SMD:LED_0805_2012Metric — wiring closed out v3.4, §2.4
+LED_stat          | Green 0805                        | LED_SMD:LED_0805_2012Metric
+
+OFF-BOARD (wiring BOM, not placed on PCB)
+- F1: inline 5x20 mm fuse holder + 5 A 250 V slow-blow (T5A) glass fuse (input lead before J14). PRIMARY protection — F2 above is an on-board backstop only, see §2.1.
+- 2x load cell (capacity per mechanical spec) with 4-wire leads to SK4/SK5 module terminals.
+- UI breakout board (unchanged) + 20-conductor IDC ribbon.
+
+REMOVED vs v3.1
+- On-board 5x20 mm fuseholder + fuse (now inline/off-board; F2 backstop added v3.4 is a
+  different, smaller, higher-rated part — not a reintroduction of the old on-board fuseholder).
+- XPT2046 touch-related main-board provisions (touch is NC; MISO freed).
+- One 10 µF 0805 and touch-area 100 nF associated with removed functions.
+
+KiCad 10 tips: use the new "Jumpers" feature to mark module header pads (TMC/AD9833/HX711)
+that connect off-board, and organize the schematic + PCB by these 9 blocks with Design Blocks.
+
+
+====================================================================================
+12.2 NON-STANDARD VALUE QUICK REFERENCE (NEW v3.4)
+====================================================================================
+Most resistors on this board are 10 kΩ and most capacitors are 100 nF — those two reels
+cover the majority of placements. This table is everything that ISN'T one of those two
+common values — the "don't grab the wrong reel" checklist for placement before soldering.
+
+RESISTORS (not 10 kΩ)
+Ref                                                    | Value | Notes
+---------------------------------------------------------------------------------------------
+Rbleed                                                 | 4.7 kΩ  |
+I2C SDA pull-up, I2C SCL pull-up                       | 4.7 kΩ  | ×2
+R_cc1, R_cc2                                           | 5.1 kΩ  | USB-C sink Rd, ×2
+R_UART                                                 | 1 kΩ    |
+RfO1_1                                                 | 390 Ω   | THT, NEW v3.4
+RfO2_1, RfO2_2                                         | 910 Ω   | ×2
+R_gpSTEP_T1/T2, R_gpDIR_T1/T2, R_gpEN_T1/T2,           | 220 Ω   | ×12, NEW v3.4 — GPIO protection, §7.6
+R_gpPDN_T1/T2, R_gpMS1_T1/T2, R_gpMS2_T1/T2            |         |
+RgO1_1, RgO2_1, RgO2_2, R_in                           | 100 Ω   | ×4
+R_statLED, R_LEDext                                    | 330 Ω   | ×2
+R_TL1                                                  | 47 Ω    |
+Rsnub                                                  | 10 Ω    | 0603 — the ONLY 0603 resistor on the board
+
+CAPACITORS (not 100 nF)
+Ref                                                    | Value              | Notes
+---------------------------------------------------------------------------------------------
+C_envRC1                                               | 10 nF              |
+Csnub                                                  | 1 nF, ≥50 V        |
+C_EN                                                   | 1 µF               |
+CdecES_C8, CdecO1_C8, CdecO2_C8, CdecAD_C8             | 10 µF, ≥16V X5R 0805| ×4
+CinLD_T1                                               | 10 µF, 16 V tantalum|
+CouLD_T1                                               | 10 µF, 10 V tantalum|
+C_inBU_E1                                              | 100 µF, 50 V radial |
+CouBU_E1                                               | 220 µF, 16 V low-ESR radial|
+CdecT1_E, CdecT2_E                                     | 100 µF, 50 V SMD radial, 8mm H | ×2, CHANGED v3.4 — was THT, now beside socket not under, §7.7
+
+FUSES (not the common reel — one of each on the board)
+F1 (off-board, PRIMARY)                                | 5 A, T5A slow-blow, 5x20mm glass |
+F2 (on-board, BACKSTOP only)                           | 8 A, Nano2 452 Slo-Blo, SMD | NEW v3.4, deliberately above F1's rating, §2.1
+
+Everything not listed above — both bias-divider pairs at 10kΩ, both IC decoupling 100nF
+pairs, C_adc, CpreAC_C1, CinAC_C1, CouAC_C1/C2, R_gate, R_EN, R_BOOT, C_BOOT, MS1/MS2
+pull-ups, R_M1S1/R_M1S2/R_M2S1/R_M2S2, R_LEDpwr, R_PDN_UP — is genuinely 10 kΩ or 100 nF.
+
+
+====================================================================================
+12.3 MASTER REFERENCE-DESIGNATOR TABLE (NEW v3.4)
+====================================================================================
+Every passive and diode on the board, one lookup. "Old ref" shows the v3.3-and-earlier
+functional name where one existed, for cross-referencing older notes/photos/measurements.
+
+REVERSE POLARITY / INPUT PROTECTION (§2)
+Ref        | Function                          | Value/Part            | Old ref
+------------------------------------------------------------------------------------------
+R_gate     | Q1 gate pulldown                  | 10 kΩ                 | R_gate
+Dprot      | Q1 VGS clamp Zener                | BZX84C15              | D7
+Dclamp     | 24V rail TVS                      | SMBJ28A               | D5
+F1         | Primary inline fuse (off-board)   | 5A T5A slow-blow      | F1
+F2         | On-board backstop fuse            | 8A Nano2 452 Slo-Blo  | (new)
+R_LEDpwr   | Power LED series resistor         | 10 kΩ                 | (new)
+LED_pwr    | 24V power indicator               | Red 0805              | LED_pwr
+
+BUCK CONVERTER (§3)
+Ref          | Function                        | Value/Part            | Old ref
+------------------------------------------------------------------------------------------
+C_inBU_E1    | Input bulk electrolytic          | 100 µF 50V radial     | (input cap)
+C_inBU_C1    | Input ceramic bypass             | 100 nF                | (new)
+Rsnub        | SW-node snubber resistor         | 10 Ω 0603             | R_snub
+Csnub        | SW-node snubber cap              | 1 nF 50V              | (new)
+Dcatch       | Catch/freewheel diode            | SS34A                 | D4
+Lbuck        | Buck inductor                    | 100 µH shielded       | L1
+CouBU_E1     | Output bulk electrolytic         | 220 µF 16V radial     | (output cap)
+C_ouBU_C1    | Output ceramic bypass            | 100 nF                | (new)
+Rbleed       | Output bleed resistor            | 4.7 kΩ                | (new)
+
+LDO (§4)
+Ref        | Function                          | Value/Part            | Old ref
+------------------------------------------------------------------------------------------
+CinLD_T1   | Input tantalum                    | 10 µF 16V             | (input cap)
+CouLD_T1   | Output tantalum                   | 10 µF 10V             | (output cap)
+CouLD_C1   | Output ceramic bypass             | 100 nF                | (new)
+
+UAS TX (§5.1-5.2)
+Ref                    | Function                     | Value/Part      | Old ref
+------------------------------------------------------------------------------------------
+CdecAD_C8              | AD9833 decoupling, bulk      | 10 µF 0805      | (new)
+CdecAD_C1              | AD9833 decoupling, bypass    | 100 nF          | (new)
+CpreAC_C1              | Pre-IC1 AC coupling          | 100 nF          | (new)
+RbiasO1_1, RbiasO1_2   | IC1 chA 1.65V bias pair      | 10 kΩ each      | (new)
+CdecO1_C8              | IC1 decoupling, bulk         | 10 µF 0805      | (new)
+CdecO1_C1              | IC1 decoupling, bypass       | 100 nF          | (new)
+RfO1_1                 | IC1 gain feedback (THT)      | 390 Ω           | Tx amp Rf
+RgO1_1                 | IC1 gain ground leg          | 100 Ω           | Tx amp Rg
+R_TL1                  | TX transmission-line match   | 47 Ω            | Tx output series
+CinAC_C1               | Pre-SMA AC coupling          | 100 nF          | (new)
+
+UAS RX (§5.4-5.6)
+Ref                    | Function                     | Value/Part      | Old ref
+------------------------------------------------------------------------------------------
+R_in                   | Post-SMA series fault limiter| 100 Ω           | R_in
+Drx1                   | Rx input clamp               | BAV99           | D1
+CouAC_C1               | Pre-IC2 chA AC coupling       | 100 nF          | (new)
+RbiasO2_1, RbiasO2_2   | IC2 chA 1.65V bias pair      | 10 kΩ each      | (new)
+CouAC_C2               | Interstage AC coupling (NEW) | 100 nF          | (new, v3.4)
+RbiasO2_3, RbiasO2_4   | IC2 chB 1.65V bias pair (NEW)| 10 kΩ each      | (new, v3.4)
+RfO2_1, RgO2_1          | IC2 chA gain feedback/ground | 910 Ω / 100 Ω   | Rx amp stage 1
+RfO2_2, RgO2_2          | IC2 chB gain feedback/ground | 910 Ω / 100 Ω   | Rx amp stage 2
+CdecO2_C8              | IC2 decoupling, bulk          | 10 µF 0805      | (new)
+CdecO2_C1              | IC2 decoupling, bypass        | 100 nF          | (new)
+Denv                   | Envelope rectifier diode      | BAT54           | D2
+R_envRC1, C_envRC1      | Envelope detector RC          | 10 kΩ / 10 nF   | R_env / C_env
+Drx2                   | Pre-ADC hard clamp             | BAV99           | D3
+C_adc                  | Pre-ADC filter cap             | 100 nF          | C_adc
+
+TMC2209 ×2 — MODULE 1 / U5 / SK1 (§7)
+Ref                | Function                          | Value/Part      | Old ref
+------------------------------------------------------------------------------------------
+R_M1S1              | MS1 pull-up (jumper-fed)          | 10 kΩ           | (new)
+R_M1S2              | MS2 pull-up (jumper-fed)          | 10 kΩ           | (new)
+JMP_MS1_T1, JMP_MS2_T1| MS1/MS2 address jumpers          | 1x3 + shunt     | (new, v3.4)
+CdecT1_E             | VM bulk electrolytic (beside socket)| 100 µF 50V SMD, 8mm H | (VM bulk)
+CdecT1_C             | VM ceramic bypass                | 100 nF          | (new)
+R_gpSTEP_T1          | STEP GPIO protection              | 220 Ω           | (new, v3.4)
+R_gpDIR_T1           | DIR GPIO protection               | 220 Ω           | (new, v3.4)
+R_gpEN_T1            | EN GPIO protection                | 220 Ω           | (new, v3.4)
+R_gpPDN_T1           | PDN_UART GPIO protection          | 220 Ω           | (new, v3.4)
+R_gpMS1_T1           | MS1 GPIO protection               | 220 Ω           | (new, v3.4)
+R_gpMS2_T1           | MS2 GPIO protection               | 220 Ω           | (new, v3.4)
+
+TMC2209 ×2 — MODULE 2 / U6 / SK2 (§7)
+Ref                | Function                          | Value/Part      | Old ref
+------------------------------------------------------------------------------------------
+R_M2S1              | MS1 pull-up (jumper-fed)          | 10 kΩ           | (new)
+R_M2S2              | MS2 pull-up (jumper-fed)          | 10 kΩ           | (new)
+JMP_MS1_T2, JMP_MS2_T2| MS1/MS2 address jumpers          | 1x3 + shunt     | (new, v3.4)
+CdecT2_E             | VM bulk electrolytic (beside socket)| 100 µF 50V SMD, 8mm H | (VM bulk)
+CdecT2_C             | VM ceramic bypass                | 100 nF          | (new)
+R_gpSTEP_T2          | STEP GPIO protection              | 220 Ω           | (new, v3.4)
+R_gpDIR_T2           | DIR GPIO protection               | 220 Ω           | (new, v3.4)
+R_gpEN_T2            | EN GPIO protection                | 220 Ω           | (new, v3.4)
+R_gpPDN_T2           | PDN_UART GPIO protection          | 220 Ω           | (new, v3.4)
+R_gpMS1_T2           | MS1 GPIO protection               | 220 Ω           | (new, v3.4)
+R_gpMS2_T2           | MS2 GPIO protection               | 220 Ω           | (new, v3.4)
+
+PDN_UART BUS (shared, §7.3)
+Ref        | Function                          | Value/Part            | Old ref
+------------------------------------------------------------------------------------------
+R_UART     | TX/RX separator, bus junction feed | 1 kΩ                  | R_UART
+R_PDN_UP   | Bus pull-up to 3.3V                | 10 kΩ                 | R_PDN_UP
+
+LIMIT SWITCHES (§9)
+Ref        | Function                          | Value/Part            | Old ref
+------------------------------------------------------------------------------------------
+Clim1_C1   | Limit switch 1 debounce            | 100 nF                | (new)
+Clim2_C2   | Limit switch 2 debounce            | 100 nF                | (new)
+
+ESP32 (§6)
+Ref        | Function                          | Value/Part            | Old ref
+------------------------------------------------------------------------------------------
+CdecES_C8  | 3V3 pad decoupling, bulk           | 10 µF 0805            | (new)
+CdecES_C1  | 3V3 pad decoupling, bypass         | 100 nF                | (new)
+R_EN       | EN pull-up                         | 10 kΩ                 | R_en
+C_EN       | EN pulldown/RC cap                 | 1 µF                  | C_en
+R_BOOT     | BOOT (GPIO0) pull-up                | 10 kΩ                 | R_boot
+C_BOOT     | BOOT (GPIO0) pulldown/RC cap        | 100 nF                | C_boot
+R_statLED  | Status LED series resistor          | 330 Ω                 | R_LED
+SW_reset   | EN reset button (THT)               | 6mm tactile           | SW_reset
+SW_boot    | BOOT button (THT)                   | 6mm tactile           | SW_boot
+
+USB-C (§6.4)
+Ref        | Function                          | Value/Part            | Old ref
+------------------------------------------------------------------------------------------
+R_cc1      | CC1 sink Rd                        | 5.1 kΩ                | (new)
+R_cc2      | CC2 sink Rd                        | 5.1 kΩ                | (new)
+Dusb       | VBUS protection diode               | 1N5819                | D6
+
+DIODES / LEDS / INDUCTOR — CROSS-SECTION SUMMARY
+Ref               | Part      | Function                        | Old ref
+------------------------------------------------------------------------------------------
+Dprot             | BZX84C15  | Q1 gate clamp                   | D7
+Dclamp            | SMBJ28A   | 24V rail TVS                    | D5
+Dcatch            | SS34A     | Buck catch diode                | D4
+Drx1, Drx2        | BAV99 ×2  | Rx input clamp / pre-ADC clamp  | D1, D3
+Denv              | BAT54     | Envelope rectifier              | D2
+Dusb              | 1N5819    | USB VBUS diode                  | D6
+LED_stat          | Green 0805| Status LED                      | LED_stat
+LED_pwr           | Red 0805  | 24V power LED                   | LED_pwr
+Lbuck             | 100µH shld| Buck inductor                   | L1
+
+
+====================================================================================
+13. PRE-SUBMISSION CHECKLIST (V3.4)
+====================================================================================
+INPUT PROTECTION
+[ ] Inline fuse F1 (T5A slow-blow) is in the input lead before J14; on-board fuseholder removed.
+[ ] F2 (8A Nano2 452 SMD backstop) placed between J14 and Q1 Drain; silkscreened "BACKSTOP" so it isn't mistaken for primary protection.
+[ ] Q1 symbol maps Source=1-3, Gate=4, Drain=5-8 (per AO4407A datasheet), NOT the v3.1 prose.
+[ ] Q1 orientation: Drain → input (J14), Source → load (24 V rail). Reverse-polarity bench test passes (~0 mA reversed).
+[ ] Dprot (BZX84C15): cathode → Q1 source, anode → Q1 gate.
+[ ] Dclamp (SMBJ28A) on Diode_SMD:D_SMB (SMB), not D_SMA.
+[ ] LED_pwr + R_LEDpwr wired to the PROTECTED rail (Q1 Source), not raw input — confirm before assuming the indicator means what you think it means.
+BUCK
+[ ] Dcatch (SS34A) cathode → LM2596 pin 2 (SW), anode → GND (the v2.51 failure — check the symbol).
+[ ] Rsnub is 0603; Rsnub+Csnub + Dcatch within 5 mm of the SW pin.
+LDO
+[ ] AMS1117 input tantalum (CinLD_T1) 16 V; >=100 mm^2 copper + >=4 vias on the tab; thermals checked at 1.36 W.
+UAS
+[ ] IC1/IC2 = OPA2354 with the correct package footprint (DDA exposed-pad or DGK VSSOP) — NOT plain SOIC-8.
+[ ] AD9833 module OUT → CpreAC_C1 (100 nF) → IC1 chA (no intermediate R); scope OUT with only VCC/GND at bring-up — still not done as of this revision, see open items below.
+[ ] C_adc (100 nF) within 2 mm of GPIO1; IC1 chB tied off; no external RSET/R_load.
+[ ] RfO1_1 is now THT (390 Ω, unchanged value) — confirm footprint change didn't shift placement into the UAS analog keepout.
+[ ] Rx interstage coupling (CouAC_C2 + RbiasO2_3/RbiasO2_4) placed between IC2 chA output and chB non-inv input.
+[ ] Drx1/Drx2 (BAV99) wiring confirmed: common junction pin → signal, one leg → GND, other leg → 3.3V — NOT "both cathodes to 3.3V".
+ESP32
+[ ] CdecES_C8 + CdecES_C1 at the one 3V3 pad; EN RC R_EN/C_EN 10k/1uF; USB-C R_cc1/R_cc2 5.1k x2; antenna 15 mm keepout.
+[ ] GPIO45 unloaded except the SP7 break-out; GPIO46 confirmed no external pull-up on T_DO; GPIO3 boot state confirmed benign.
+[ ] SW_reset/SW_boot THT footprint verified against the actual part's mechanical drawing (not the KiCad footprint name); diagonal-pair pins confirmed, not adjacent.
+TMC2209
+[ ] Current baselined at ~1.77 A RMS / 2.5 A peak (110 mΩ) — StallGuard tuned there, or lower-Rsense modules sourced.
+[ ] VIO → 3.3 V (not 5 V/VM); PDN jumpers DEFAULT FLIPPED v3.4 — now selects PIN 5 (direct), not pin 4; confirm both JMP_U5 and JMP_U6 shunts sit in the corrected position.
+[ ] PDN pin4/pin5 identity confirmed against THIS module's own silkscreen (UART label + R8 trace), not generic third-party documentation.
+[ ] CLK-to-GND confirmed on-module by continuity before removing any main-board tie.
+[ ] MS1/MS2 jumpers (JMP_MS1_T1/T2, JMP_MS2_T1/T2) populated; pull-up value (R_M1S1/R_M1S2/R_M2S1/R_M2S2, nominally 10kΩ) checked against the TMC2209's internal pull-down for real VIH margin — not just assumed.
+[ ] All 12 GPIO protection resistors (R_gp*, 220Ω) placed in series on STEP/DIR/EN/PDN/MS1/MS2 for both modules.
+[ ] CdecT1_E/CdecT2_E (100µF 50V SMD, 8mm) physically dry-fit beside each socket before ordering quantity — confirm clearance.
+UI IDC
+[ ] IDC pinout identical to breakout; only pins 12 (T_IRQ) and 17 (BTN2) NC on the main board — pins 6/11 now carry T_DO/T_CS, confirm NOT left NC by mistake.
+[ ] T_CS (GPIO12) and T_DO (GPIO46) confirmed wired to IDC pins 11 and 6 respectively, not swapped.
+MISC
+[ ] J4/J5 JST-PH; specific PH current rating checked vs <=1.77 A RMS.
+[ ] J14 confirmed as 5.0mm pitch (5.00mm Phoenix-style or 5.08mm generic — pick one real P/N).
+[ ] I2C scanner shows 0x39 + 0x57; one 4.7 k pull-up pair near U1.
+LOAD CELLS
+[ ] XFW-HX711 socket (SK4/SK5) wired to header order GND/DT/SCK/VCC; VCC = 3.3 V (logic-safe).
+[ ] SCK shared to GPIO37; DT to GPIO42 (#1) and GPIO21 (#2); load cell to E+/E-/A+/A- (ch A).
+[ ] On-board 80Hz/10Hz jumper set to 80 Hz; verify ~80 samples/s on DT at bring-up.
+[ ] Custom shared-clock driver waits for both DT low before clocking a 25-pulse burst.
+FIRMWARE/COMPUTE
+[ ] STEP/SPI/I2C/UART/PWM on hardware peripherals; HX711 burst pinned to core 1 and critical-sectioned (<60µs high).
+PROCEDURAL — NEW v3.4, added after the hot-swap/spark incident on the v2.51 board
+[ ] Power off and allow VM bulk caps to fully discharge before inserting or removing any TMC2209 module, every time, no exceptions during debugging.
+OPEN ITEMS CARRIED FORWARD FROM FABRICATED HARDWARE (v2.51 board — status as of this revision)
+[ ] LM2596 (U2) buck fault: external buck module workaround in place; U2 itself never bench-tested standalone to confirm damaged vs. always-fine; symbol-swap explanation not independently bench-verified.
+[ ] TMC2209 hot-swap short: diagnosis in progress per §7.1 — unpowered 3V3-to-GND resistance check and ESP32 isolation not yet reported complete as of this revision.
+[ ] AD9833 module real output amplitude: still never measured on a scope — every UAS gain figure in §5 rests on the datasheet-typical ~0.6 Vpp, not a confirmed measurement.
+
+
+====================================================================================
+14. "JUST IN CASE" PHILOSOPHY (KEPT AT EVERY IMPORTANT POINT)
+====================================================================================
+All active complex parts sit on sockets/headers — ESP32 (module), TMC2209 ×2, AD9833, HX711 ×2 — field-replaceable, no hot-air rework needed to swap any of them.
+
+NC/reserved IC pins are broken out to 1-pin headers to solder later if needed: TMC2209 DIAG/INDEX/VREF (SP1–SP6), HX711 RATE and channel B kept accessible on the module itself. ESP32 GPIO45 is the board's only remaining spare pin (SP7) — GPIO46 is committed to T_DO and is no longer available as a just-in-case header.
+
+Fallbacks without rework: PDN jumpers (pin 5 direct vs. pin 4 via on-module R8 — default flipped v3.4, §7.3); MS1/MS2 address jumpers, NEW v3.4, make U5/U6 fully interchangeable spares instead of fixed-address boards; RfO1_1 is THT so Tx gain can be hand-swapped without hot-air rework (deliberately not a trimpot, to avoid accidental drift); the inline fuse F1 swaps in seconds, with F2 as an on-board backstop if F1's holder is ever empty or mis-fitted; touch runs polled rather than interrupt-driven specifically so GPIO45 stays free for whatever comes up next, rather than being spent on T_IRQ.
+
+GPIO short-fault protection, NEW v3.4: 12× 220Ω series resistors on every ESP32-to-TMC2209 control line, added directly in response to a live hot-swap/spark incident on the fabricated v2.51 board (§7.1) — a mitigation for the specific failure mode already observed on real hardware, not a hypothetical.
+
+Independent redundancy for the mixing-stop: TMC StallGuard SG_RESULT and HX711 force — either can drive the PID if the other proves unreliable.
+
+Bench-verify before trusting: reverse-polarity draw ~0mA when reversed; AD9833 OUT clock alive on VCC/GND only, before trusting SPI (still not done — see §13 open items); TMC CLK-to-GND and R8 by unpowered continuity; MS1/MS2 pull-up margin against the TMC2209's internal pull-down; coil current on a scope; I2C scan confirms both 0x39 and 0x57; confirm no external pull-up landed on T_DO (GPIO46) before first power-up; PDN pin4/pin5 identity confirmed against each specific module's own silkscreen, not generic documentation for the part family.
+
+— End of v3.4 —
