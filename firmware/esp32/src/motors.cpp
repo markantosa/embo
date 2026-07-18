@@ -5,8 +5,11 @@
 #include <TMCStepper.h>
 
 // Half-duplex UART for both TMC2209 modules on the shared PDN line.
-// Serial1 is used; TX and RX are both tied to PIN_TMC_UART via R_UART (1kΩ)
-// and R_PDN_UP (10kΩ pull-up) on the main board.
+// Serial1 is used; TX (GPIO4) and RX (GPIO44) are genuinely separate ESP32
+// pins as of v3.4, both wired to the same physical PDN_UART bus node via
+// R_UART (1kΩ) + R_PDN_UP (10kΩ pull-up) on the main board — a same-pin
+// shared TX/RX config was tried first and proved unreliable, see
+// docs/EMBO_PCB_Design_Brief_v3_4.txt §7.3.
 static HardwareSerial _tmc_serial(1);
 static TMC2209Stepper _driver_m1(&_tmc_serial, 0.11f, TMC_ADDR_M1);
 static TMC2209Stepper _driver_m2(&_tmc_serial, 0.11f, TMC_ADDR_M2);
@@ -91,10 +94,8 @@ void motors_init() {
     attachInterrupt(digitalPinToInterrupt(PIN_LIMIT_M1), isr_limit_m1, FALLING);
     attachInterrupt(digitalPinToInterrupt(PIN_LIMIT_M2), isr_limit_m2, FALLING);
 
-    // TMC2209 UART — half-duplex: TX and RX on the same physical pin.
-    // begin() with the same pin for both directs the ESP32 UART peripheral
-    // into half-duplex mode.
-    _tmc_serial.begin(BAUD_TMC, SERIAL_8N1, PIN_TMC_UART, PIN_TMC_UART);
+    // TMC2209 UART — separate TX/RX GPIOs, same shared bus node (see above).
+    _tmc_serial.begin(BAUD_TMC, SERIAL_8N1, PIN_TMC_UART_RX, PIN_TMC_UART_TX);
     delay(50);  // allow drivers to finish power-on reset before any UART traffic
 
     _tmc_init_driver(_driver_m1, TMC_ADDR_M1);

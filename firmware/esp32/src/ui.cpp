@@ -1,203 +1,279 @@
 #include "ui.h"
 #include "config.h"
-#include "pid.h"
+#include "scheduler.h"
 #include "motors.h"
-#include "rpi_uart.h"
+#include "ble_debug.h"
+#include "LGFX_Config.h"
 #include <Arduino.h>
-// TFT_eSPI: copy User_Setup.h below into the library config, or set via build flags
-#include <TFT_eSPI.h>
 
-// TFT_eSPI pins are set via build_flags in platformio.ini (see User_Setup_Select.h).
-// See include/tft_user_setup.h for the pin defines pushed via -D flags.
-static TFT_eSPI _tft;
+static LGFX _tft;
 
-static void encoder_init();
-static void buttons_init();
-static void buzzer_init();
-static void handle_encoder();
-static void handle_buttons();
-static void beep(uint32_t freq_hz, uint32_t duration_ms);
-static void draw_screen(bool force);
-static void IRAM_ATTR isr_encoder();
+enum class UiState { SET_TARGET, RUNNING, DONE, ERROR_SCREEN };
+static UiState _state = UiState::SET_TARGET;
+static bool _needsRedraw = true;
+static char _resultMsg[32] = "";
+static char _errorMsg[48] = "";
 
-// Quadrature decode — written only from ISR, consumed+cleared in ui_update().
-static volatile int32_t _encoder_delta = 0;
-static volatile uint8_t _encoder_last_ab = 0;
+// ── EC11 rotary encoder — quadrature decode (Buxton table), ported from
+// testing/display_ui_testing/src/hal/encoder_driver.cpp, validated there as
+// the most responsive option on the bench. ──────────────────────────────────
 
-static uint16_t _target_um = TARGET_SIZE_UM_DEFAULT;
+#define R_START      0x0
+#define R_CW_FINAL   0x1
+#define R_CW_BEGIN   0x2
+#define R_CW_NEXT    0x3
+#define R_CCW_BEGIN  0x4
+#define R_CCW_FINAL  0x5
+#define R_CCW_NEXT   0x6
+#define DIR_NONE     0x0
+#define DIR_CW       0x10
+#define DIR_CCW      0x20
 
-// Button debounce state.
-static const uint32_t BTN_DEBOUNCE_MS = 30;
-static bool _btn1_last = HIGH, _btn2_last = HIGH;
-static uint32_t _btn1_change_ms = 0, _btn2_change_ms = 0;
+static const uint8_t _encTable[7][4] = {
+    {R_START,     R_CW_BEGIN,  R_CCW_BEGIN, R_START},
+    {R_CW_NEXT,   R_START,     R_CW_FINAL,  R_START | DIR_CW},
+    {R_CW_NEXT,   R_CW_BEGIN,  R_START,     R_START},
+    {R_CW_NEXT,   R_CW_BEGIN,  R_CW_FINAL,  R_START},
+    {R_CCW_NEXT,  R_START,     R_CCW_BEGIN, R_START},
+    {R_CCW_NEXT,  R_CCW_FINAL, R_START,     R_START | DIR_CCW},
+    {R_CCW_NEXT,  R_CCW_FINAL, R_CCW_BEGIN, R_START},
+};
+
+static volatile uint8_t _encState = R_START;
+static volatile int _encPendingStep = 0;
+
+static void IRAM_ATTR _isrEncoder() {
+    uint8_t a = digitalRead(PIN_EC11_A);
+    uint8_t b = digitalRead(PIN_EC11_B);
+    uint8_t pinState = (a << 1) | b;
+    _encState = _encTable[_encState & 0xF][pinState];
+    uint8_t result = _encState & 0x30;
+    if (result == DIR_CW) _encPendingStep -= 1;
+    else if (result == DIR_CCW) _encPendingStep += 1;
+}
+
+static int _encReadStep() {
+    noInterrupts();
+    int step = _encPendingStep;
+    _encPendingStep = 0;
+    interrupts();
+    return step;
+}
+
+// ── EC11 push-switch — confirm/start (short press only) ─────────────────────
+
+static bool _encSwLastState = HIGH;
+static uint32_t _encSwLastChangeMs = 0;
+
+static bool _encSwWasPressed() {
+    bool reading = digitalRead(PIN_EC11_SW);
+    bool pressedEdge = false;
+    if (reading != _encSwLastState && (millis() - _encSwLastChangeMs) > EC11_SW_DEBOUNCE_MS) {
+        _encSwLastChangeMs = millis();
+        if (reading == LOW) pressedEdge = true;
+        _encSwLastState = reading;
+    }
+    return pressedEdge;
+}
+
+// ── BTN1 — dedicated stop/e-stop, short vs. long press ───────────────────────
+// One safety-critical button with one job: this build does NOT use BTN1 to
+// start a run (see ui.h) — start/confirm lives on the encoder's own switch.
+
+static bool _btn1Down = false;
+static uint32_t _btn1DownAtMs = 0;
+static bool _btn1LongFired = false;
+
+// Returns 1 for a short-press event (graceful stop), 2 for a long-press
+// event (emergency stop, fires once as soon as the hold threshold is
+// crossed rather than waiting for release), 0 for no event this call.
+static int _btn1PollEvent() {
+    bool down = (digitalRead(PIN_BTN1) == LOW);
+
+    if (down) {
+        if (!_btn1Down) {
+            _btn1Down = true;
+            _btn1DownAtMs = millis();
+            _btn1LongFired = false;
+        } else if (!_btn1LongFired && (millis() - _btn1DownAtMs) >= BTN1_LONGPRESS_MS) {
+            _btn1LongFired = true;
+            return 2;
+        }
+    } else {
+        if (_btn1Down && !_btn1LongFired && (millis() - _btn1DownAtMs) >= BTN1_DEBOUNCE_MS) {
+            _btn1Down = false;
+            return 1;
+        }
+        _btn1Down = false;
+    }
+    return 0;
+}
+
+// ── Drawing ──────────────────────────────────────────────────────────────────
+
+static void _drawCentered(const char *text, int16_t y, uint16_t color, uint8_t size) {
+    _tft.setTextColor(color);
+    _tft.setTextSize(size);
+    int16_t w = _tft.textWidth(text);
+    _tft.setCursor((_tft.width() - w) / 2, y);
+    _tft.print(text);
+}
+
+static void _drawSetTargetScreen() {
+    _tft.fillScreen(TFT_BLACK);
+    _drawCentered("EMBO", 30, TFT_WHITE, 3);
+    _drawCentered("Set target size", 90, TFT_DARKGREY, 2);
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%u um", scheduler_get_target_um());
+    _drawCentered(buf, 130, TFT_WHITE, 4);
+
+    const char *ready = motors_is_homed() ? "Press knob to start" : "NOT HOMED";
+    _drawCentered(ready, 200, motors_is_homed() ? TFT_DARKGREY : TFT_RED, 2);
+}
+
+// Simple animated spinner + "Mixing..." — deliberately NOT a live sensor
+// readout. Raw sensor/diagnostic data belongs on the BLE dashboard
+// (testing/PCB_Test_Firmware_v3_4/web), not this screen — see ui.h.
+static uint8_t _spinnerFrame = 0;
+static uint32_t _lastSpinnerMs = 0;
+
+static void _drawRunningScreen(bool forceFull) {
+    if (forceFull) {
+        _tft.fillScreen(TFT_BLACK);
+        _drawCentered("Mixing", 100, TFT_WHITE, 3);
+        _drawCentered("Hold BTN1 for emergency stop", 220, TFT_DARKGREY, 1);
+    }
+
+    uint32_t now = millis();
+    if (now - _lastSpinnerMs >= 150) {
+        _lastSpinnerMs = now;
+        _spinnerFrame = (_spinnerFrame + 1) % 4;
+        int16_t cx = _tft.width() / 2;
+        int16_t cy = 160;
+        _tft.fillRect(cx - 40, cy - 10, 80, 20, TFT_BLACK);
+        char dots[5] = "";
+        for (uint8_t i = 0; i < _spinnerFrame; i++) dots[i] = '.';
+        dots[_spinnerFrame] = '\0';
+        _drawCentered(dots, cy - 8, TFT_WHITE, 2);
+    }
+}
+
+static void _drawDoneScreen() {
+    _tft.fillScreen(TFT_BLACK);
+    _drawCentered(_resultMsg, 110, TFT_GREEN, 2);
+    _drawCentered("Press knob for new run", 200, TFT_DARKGREY, 2);
+}
+
+static void _drawErrorScreen() {
+    _tft.fillScreen(TFT_BLACK);
+    _drawCentered("HARDWARE FAULT", 100, TFT_RED, 2);
+    _drawCentered(_errorMsg, 140, TFT_RED, 2);
+    _drawCentered("Reboot required", 200, TFT_DARKGREY, 2);
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
 
 void ui_init() {
-    encoder_init();
-    buttons_init();
-    buzzer_init();
-
     _tft.init();
-    _tft.setRotation(1);
+    _tft.setRotation(3);
+
+    pinMode(PIN_BTN1, INPUT_PULLUP);
+    pinMode(PIN_EC11_SW, INPUT_PULLUP);
+    pinMode(PIN_EC11_A, INPUT_PULLUP);
+    pinMode(PIN_EC11_B, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(PIN_EC11_A), _isrEncoder, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(PIN_EC11_B), _isrEncoder, CHANGE);
+
     _tft.fillScreen(TFT_BLACK);
-    _tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    _tft.setTextSize(2);
-    _tft.setCursor(10, 10);
-    _tft.print("EMBO");
-    delay(500);
-    draw_screen(true);
+    _drawCentered("EMBO", 110, TFT_WHITE, 4);
+    _drawCentered("initializing...", 160, TFT_DARKGREY, 2);
+
+    _state = UiState::SET_TARGET;
+    _needsRedraw = true;
+}
+
+void ui_show_error(const char *msg) {
+    strncpy(_errorMsg, msg, sizeof(_errorMsg) - 1);
+    _errorMsg[sizeof(_errorMsg) - 1] = '\0';
+    _state = UiState::ERROR_SCREEN;
+    _needsRedraw = true;
+    ble_log("UI: HARDWARE FAULT - %s", msg);
 }
 
 void ui_update() {
-    handle_encoder();
-    handle_buttons();
-    draw_screen(false);
-}
-
-static void encoder_init() {
-    pinMode(PIN_EC11_A, INPUT_PULLUP);
-    pinMode(PIN_EC11_B, INPUT_PULLUP);
-    pinMode(PIN_EC11_SW, INPUT_PULLUP);
-
-    _encoder_last_ab = (digitalRead(PIN_EC11_A) << 1) | digitalRead(PIN_EC11_B);
-
-    attachInterrupt(digitalPinToInterrupt(PIN_EC11_A), isr_encoder, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(PIN_EC11_B), isr_encoder, CHANGE);
-}
-
-static void IRAM_ATTR isr_encoder() {
-    uint8_t ab = (digitalRead(PIN_EC11_A) << 1) | digitalRead(PIN_EC11_B);
-    uint8_t transition = (_encoder_last_ab << 2) | ab;
-    // Standard 2-bit gray code quadrature table: valid CW/CCW transitions only.
-    switch (transition) {
-        case 0b0001: case 0b0111: case 0b1110: case 0b1000:
-            _encoder_delta++; break;
-        case 0b0010: case 0b1011: case 0b1101: case 0b0100:
-            _encoder_delta--; break;
-        default: break;  // bounce / invalid transition — ignore
-    }
-    _encoder_last_ab = ab;
-}
-
-static void buttons_init() {
-    pinMode(PIN_BTN1, INPUT_PULLUP);
-    pinMode(PIN_BTN2, INPUT_PULLUP);
-}
-
-static void buzzer_init() {
-    // LEDC channel LEDC_CH_BUZ on PIN_BUZ_PWM
-    ledcSetup(LEDC_CH_BUZ, 1000, 8);
-    ledcAttachPin(PIN_BUZ_PWM, LEDC_CH_BUZ);
-    ledcWrite(LEDC_CH_BUZ, 0);   // silent
-}
-
-static void beep(uint32_t freq_hz, uint32_t duration_ms) {
-    ledcWriteTone(LEDC_CH_BUZ, freq_hz);
-    delay(duration_ms);
-    ledcWriteTone(LEDC_CH_BUZ, 0);
-}
-
-static void handle_encoder() {
-    if (pid_is_running()) {
-        // Setpoint is locked during a run (pid_set_target_um() no-ops anyway) —
-        // drop any accumulated delta so it doesn't jump the moment the run ends.
-        _encoder_delta = 0;
-        return;
+    if (_state == UiState::ERROR_SCREEN) {
+        if (_needsRedraw) { _drawErrorScreen(); _needsRedraw = false; }
+        return;  // no way out short of reboot
     }
 
-    noInterrupts();
-    int32_t delta = _encoder_delta;
-    _encoder_delta = 0;
-    interrupts();
-
-    if (delta == 0) return;
-
-    int32_t new_target = (int32_t)_target_um + delta * TARGET_SIZE_UM_STEP;
-    if (new_target < TARGET_SIZE_UM_MIN) new_target = TARGET_SIZE_UM_MIN;
-    if (new_target > TARGET_SIZE_UM_MAX) new_target = TARGET_SIZE_UM_MAX;
-    _target_um = (uint16_t)new_target;
-    pid_set_target_um(_target_um);
-}
-
-static void handle_buttons() {
-    uint32_t now = millis();
-
-    bool btn1 = digitalRead(PIN_BTN1);
-    if (btn1 != _btn1_last && (now - _btn1_change_ms) > BTN_DEBOUNCE_MS) {
-        _btn1_change_ms = now;
-        _btn1_last = btn1;
-        if (btn1 == LOW) {  // pressed (active low)
-            if (!pid_is_running() && motors_is_homed()) {
-                pid_set_target_um(_target_um);
-                pid_start();
-                beep(1500, 100);
-            } else {
-                beep(400, 50);  // not ready — short low chirp
-            }
+    switch (_state) {
+    case UiState::SET_TARGET: {
+        int step = _encReadStep();
+        if (step != 0) {
+            int32_t newTarget = (int32_t)scheduler_get_target_um() + step * TARGET_SIZE_UM_STEP;
+            if (newTarget < TARGET_SIZE_UM_MIN) newTarget = TARGET_SIZE_UM_MIN;
+            if (newTarget > TARGET_SIZE_UM_MAX) newTarget = TARGET_SIZE_UM_MAX;
+            scheduler_set_target_um((uint16_t)newTarget);
+            _needsRedraw = true;
         }
-    }
 
-    // BTN2 = stop / e-stop. Always live, not gated on run state — a doctor
-    // needs this to work even if PID/motors are in an unexpected state.
-    bool btn2 = digitalRead(PIN_BTN2);
-    if (btn2 != _btn2_last && (now - _btn2_change_ms) > BTN_DEBOUNCE_MS) {
-        _btn2_change_ms = now;
-        _btn2_last = btn2;
-        if (btn2 == LOW) {
-            motor_set_speed(1, 0);
-            motor_set_speed(2, 0);
-            motor_enable(1, false);
-            motor_enable(2, false);
-            pid_stop();
-            beep(2500, 200);
+        if (_encSwWasPressed() && motors_is_homed()) {
+            scheduler_start();
+            _state = UiState::RUNNING;
+            _needsRedraw = true;
         }
-    }
-}
 
-static void draw_screen(bool force) {
-    static uint32_t last_draw_ms = 0;
-    static int16_t last_median = -2, last_iqr = -2;
-    static uint16_t last_target = 0;
-    static bool last_running = false;
+        // BTN1 has no function while idle (dedicated stop button, nothing running yet).
+        _btn1PollEvent();
 
-    uint32_t now = millis();
-    if (!force && (now - last_draw_ms) < 200) return;  // ~5Hz refresh
-    last_draw_ms = now;
-
-    int16_t median = rpi_get_median_um();
-    int16_t iqr    = rpi_get_iqr_um();
-    bool running   = pid_is_running();
-
-    if (!force && median == last_median && iqr == last_iqr
-        && _target_um == last_target && running == last_running) {
-        return;  // nothing changed, skip redraw to avoid flicker
-    }
-    last_median = median; last_iqr = iqr; last_target = _target_um; last_running = running;
-
-    _tft.fillScreen(TFT_BLACK);
-    _tft.setTextSize(2);
-
-    _tft.setCursor(10, 10);
-    _tft.setTextColor(running ? TFT_GREEN : TFT_YELLOW, TFT_BLACK);
-    _tft.print(running ? "RUNNING" : (motors_is_homed() ? "READY" : "HOMING"));
-
-    _tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    _tft.setCursor(10, 40);
-    _tft.printf("Target: %u um", _target_um);
-
-    _tft.setCursor(10, 70);
-    if (median < 0) {
-        _tft.print("PSD: --");
-    } else {
-        _tft.printf("PSD: %d um", median);
+        if (_needsRedraw) { _drawSetTargetScreen(); _needsRedraw = false; }
+        break;
     }
 
-    _tft.setCursor(10, 100);
-    if (iqr < 0) {
-        _tft.print("IQR: --");
-    } else {
-        _tft.printf("IQR: %d um", iqr);
+    case UiState::RUNNING: {
+        int btnEvent = _btn1PollEvent();
+        if (btnEvent == 2) {
+            scheduler_emergency_stop();
+            strncpy(_resultMsg, "STOPPED (e-stop)", sizeof(_resultMsg) - 1);
+            _state = UiState::DONE;
+            _needsRedraw = true;
+            break;
+        } else if (btnEvent == 1) {
+            scheduler_stop();  // takes effect once the in-progress stroke finishes
+        }
+
+        if (scheduler_target_reached()) {
+            strncpy(_resultMsg, "Target reached", sizeof(_resultMsg) - 1);
+            _state = UiState::DONE;
+            _needsRedraw = true;
+            break;
+        }
+
+        if (!scheduler_is_running()) {
+            // Graceful stop finished taking effect.
+            strncpy(_resultMsg, "Stopped", sizeof(_resultMsg) - 1);
+            _state = UiState::DONE;
+            _needsRedraw = true;
+            break;
+        }
+
+        _drawRunningScreen(_needsRedraw);
+        _needsRedraw = false;
+        break;
     }
 
-    _tft.setCursor(10, 130);
-    _tft.printf("Strokes: %lu", (unsigned long)motor_get_stroke_count());
+    case UiState::DONE: {
+        _btn1PollEvent();
+        if (_encSwWasPressed()) {
+            _state = UiState::SET_TARGET;
+            _needsRedraw = true;
+        }
+        if (_needsRedraw) { _drawDoneScreen(); _needsRedraw = false; }
+        break;
+    }
+
+    case UiState::ERROR_SCREEN:
+        break;  // handled above
+    }
 }

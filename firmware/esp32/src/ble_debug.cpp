@@ -1,6 +1,9 @@
 #include "ble_debug.h"
 #include "motors.h"
 #include "uas.h"
+#include "turbidity.h"
+#include "force_sensor.h"
+#include "scheduler.h"
 #include "rpi_uart.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
@@ -20,7 +23,13 @@ static NimBLECharacteristic *_tx_char = nullptr;
 static bool _connected = false;
 
 // ── Streaming state ───────────────────────────────────────────────────────────
-static bool     _uas_streaming  = false;
+// All diagnostic streams stay available over this link regardless of what
+// the TFT is showing (which is deliberately just a loading screen while a
+// run is in progress) — this is the one place raw sensor data can still be
+// pulled from the board, for calibration data collection or bring-up.
+static bool     _uas_streaming    = false;
+static bool     _force_streaming  = false;
+static bool     _turb_streaming   = false;
 static uint32_t _stream_last_ms = 0;
 static const uint32_t STREAM_INTERVAL_MS = 200;
 
@@ -113,8 +122,40 @@ static void _handle_command(const char *cmd) {
         return;
     }
 
+    // FORCE ON / FORCE OFF — raw HX711 counts + calibrated grams, both channels
+    if (strcmp(cmd, "FORCE ON") == 0) {
+        _force_streaming = true;
+        ble_log("FORCE: streaming ON");
+        return;
+    }
+    if (strcmp(cmd, "FORCE OFF") == 0) {
+        _force_streaming = false;
+        ble_log("FORCE: streaming OFF");
+        return;
+    }
+
+    // TURB ON / TURB OFF — raw APDS9960 ALS + MAX30102 IR/RED counts
+    if (strcmp(cmd, "TURB ON") == 0) {
+        _turb_streaming = true;
+        ble_log("TURB: streaming ON");
+        return;
+    }
+    if (strcmp(cmd, "TURB OFF") == 0) {
+        _turb_streaming = false;
+        ble_log("TURB: streaming OFF");
+        return;
+    }
+
+    // FIT — dump the scheduler's current breakage-model fit (k, D0, point count)
+    if (strcmp(cmd, "FIT") == 0) {
+        ble_log("FIT: k=%.4f D0=%.1fum n=%u target=%uum",
+                scheduler_get_fit_k(), scheduler_get_fit_d0_um(),
+                scheduler_get_fit_num_points(), scheduler_get_target_um());
+        return;
+    }
+
     ble_log("CMD unknown: \"%s\"", cmd);
-    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON | UAS OFF");
+    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON|OFF | FORCE ON|OFF | TURB ON|OFF | FIT");
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -180,6 +221,17 @@ void ble_debug_update() {
 
     if (_move_active) {
         ble_log("SG M%d: %u", _move_motor, motor_sg_result(_move_motor));
+    }
+
+    if (_force_streaming) {
+        ble_log("FORCE: ch1=%.1fg ch2=%.1fg", force_sensor_get_grams_1(), force_sensor_get_grams_2());
+    }
+
+    if (_turb_streaming) {
+        ble_log("TURB: als=%u(%s) ir=%lu red=%lu(%s)",
+                turbidity_get_als_clear(), turbidity_apds_ok() ? "ok" : "NOT FOUND",
+                (unsigned long)turbidity_get_ir_raw(), (unsigned long)turbidity_get_red_raw(),
+                turbidity_max_ok() ? "ok" : "NOT FOUND");
     }
 }
 

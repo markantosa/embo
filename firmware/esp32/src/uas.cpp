@@ -47,8 +47,17 @@ void uas_init() {
                              ADC_WIDTH_BIT_12, 0, &_adc_chars);
 
     // Bring up SPI bus with explicit pins before AD9833.begin() calls SPI.begin().
-    // TFT_eSPI (ui_init) runs after uas_init and will adopt the same bus.
-    SPI.begin(PIN_SPI_CLK, PIN_SPI_MISO, PIN_SPI_MOSI, -1);
+    // No MISO: v3.3 moved touch's data-out off this bus's old shared MISO pin
+    // (see config.h), and the AD9833 is write-only (no readback register).
+    //
+    // INTEGRATION NOTE — verify on first bring-up: ui.cpp's LovyanGFX display
+    // now owns SPI2_HOST directly (its own Bus_SPI instance) rather than
+    // sharing this Arduino SPIClass object the way TFT_eSPI implicitly did.
+    // Both target the same physical MOSI/CLK GPIOs (35/36) with different CS
+    // lines, which is fine electrically, but confirm the two peripheral
+    // drivers don't fight over the same underlying SPI host — reassign the
+    // AD9833 to its own host (SPI3_HOST) if any contention shows up on scope.
+    SPI.begin(PIN_SPI_CLK, -1, PIN_SPI_MOSI, -1);
 
     // AD9833 init sequence:
     //   begin() — full reset, zero freq/phase registers
