@@ -1,6 +1,31 @@
 ================================================================
-EMBO — PINOUT CHEAT SHEET  (v2.4, ESP32-S3-WROOM-1-N8)
+EMBO — PINOUT CHEAT SHEET  (v3.4, ESP32-S3-WROOM-1-N4)
 ================================================================
+Quick reference only. Full spec, rationale, and pre-submission checklist:
+docs/EMBO_PCB_Design_Brief_v3_4.txt
+
+CHANGED SINCE v2.4 (do not wire from memory — several GPIOs below now
+carry a DIFFERENT signal than the old v2.4 sheet documented):
+  - MCU corrected N8 -> N4 (no pinout impact, flash size only)
+  - GPIO21, GPIO37, GPIO42 previously carried touch signals; they are now
+    HX711 load-cell pins (added v3.2). Touch was relocated in v3.3 to
+    GPIO12 (T_CS) / GPIO46 (T_DO); T_IRQ is NOT connected (polled instead).
+  - TMC UART is now two separate pins, GPIO4 (TX) + GPIO44 (RX), not one
+    bidirectional pin on GPIO4.
+  - PDN_UART target pin on the MKS V2.0 module corrected v3.4: pin 5
+    (direct), NOT pin 4 — opposite of every version through v3.3.
+  - Motor connectors J4/J5 changed JST-XH 6-pin -> JST-PH 4-pin.
+  - PSU input J14 changed 3.5mm -> 5.0mm screw terminal; on-board 8A
+    backstop fuse F2 added (v3.4) after the off-board 5A T5A fuse F1.
+  - TMC2209 MS1/MS2 address straps are now field jumpers, not hardwired.
+  - Turbidity (I2C, GPIO3/43) and force sensing (HX711, GPIO21/37/42)
+    added v3.2, both still present and hardened in v3.4.
+  - 12x 220R series resistors added v3.4 on every ESP32-to-TMC2209
+    control line (STEP/DIR/EN/PDN/MS1/MS2 x2) — GPIO-side short-fault
+    protection, added after a hot-swap/spark incident on the fabricated
+    v2.51 board. Electrically transparent (see design brief §7.6) but
+    physically present in the signal path — don't probe past them and
+    assume a dead short is at the GPIO itself.
 
 ----------------------------------------------------------------
 1. ESP32-S3 GPIO ASSIGNMENTS
@@ -8,58 +33,80 @@ EMBO — PINOUT CHEAT SHEET  (v2.4, ESP32-S3-WROOM-1-N8)
 
 GPIO  Signal          Dir    Connected to
 ----  --------------  -----  ----------------------------------------
+0     BOOT            Strap  R_BOOT/C_BOOT/SW_boot (THT tactile, v3.4)
 1     UAS_ADC         In     Envelope detector output (ADC1_CH0)
-2     STATUS_LED      Out    330Ω → green LED → GND
-4     TMC_UART        Bidir  TMC2209 PDN_UART (half-duplex UART1)
-5     STEP_M1         Out    TMC2209 U5 STEP (LEDC PWM)
-6     DIR_M1          Out    TMC2209 U5 DIR
-7     EN_M1           Out    TMC2209 U5 EN (10kΩ pull-up at IC)
-8     STEP_M2         Out    TMC2209 U6 STEP (LEDC PWM)
-9     DIR_M2          Out    TMC2209 U6 DIR
-10    EN_M2           Out    TMC2209 U6 EN (10kΩ pull-up at IC)
-11    BTN1            In     IDC pin 16 → breakout button 1
-12    BTN2            In     IDC pin 17 → breakout button 2
-13    BUZ_PWM         Out    IDC pin 18 → 2N7002 gate (LEDC PWM)
-14    LIMIT_M1        In     J6 pin 2 — limit switch 1 to GND
-15    LIMIT_M2        In     J7 pin 2 — limit switch 2 to GND
+2     STATUS_LED      Out    330Ω → green LED (LED_stat) → GND
+3     I2C_SDA         Bidir  J15 pin3 (turbidity) — 4.7kΩ pull-up to 3.3V. Strapping (JTAG src) — benign, see brief §6.5
+4     TMC_UART_TX     Out    R_UART(1kΩ) → shared PDN bus → jumper-selected module pin (5 default)
+5     STEP_M1         Out    TMC2209 U5 STEP, via 220Ω GPIO protection (R_gpSTEP_T1)
+6     DIR_M1          Out    TMC2209 U5 DIR, via 220Ω GPIO protection (R_gpDIR_T1)
+7     EN_M1           Out    TMC2209 U5 EN (10kΩ pull-up at IC), via 220Ω GPIO protection (R_gpEN_T1)
+8     STEP_M2         Out    TMC2209 U6 STEP, via 220Ω GPIO protection (R_gpSTEP_T2)
+9     DIR_M2          Out    TMC2209 U6 DIR, via 220Ω GPIO protection (R_gpDIR_T2)
+10    EN_M2           Out    TMC2209 U6 EN (10kΩ pull-up at IC), via 220Ω GPIO protection (R_gpEN_T2)
+11    BTN1            In     IDC pin 16 → breakout button 1 (pull-up + debounce on breakout)
+12    T_CS            Out    IDC pin 11 → XPT2046 T_CS (touch chip select, restored v3.3 — was BTN2)
+13    BUZ_PWM         Out    IDC pin 18 → buzzer (LEDC PWM)
+14    LIMIT_M1        In     J6 pin 2 — limit switch 1 to GND, 100nF debounce (Clim1_C1)
+15    LIMIT_M2        In     J7 pin 2 — limit switch 2 to GND, 100nF debounce (Clim2_C2)
 16    EC11_A (CLK)    In     IDC pin 13 → EC11 A
 17    EC11_B (DT)     In     IDC pin 14 → EC11 B
 18    EC11_SW         In     IDC pin 15 → EC11 push switch
 19    USB D−          Fixed  USB-C A7 + B7 (fixed PHY — no other use)
 20    USB D+          Fixed  USB-C A6 + B6 (fixed PHY — no other use)
-21    TOUCH_IRQ       In     IDC pin 12 → XPT2046 T_IRQ (active LOW)
-35    SPI_MOSI        Out    AD9833 SDATA + IDC pin 5 (TFT/touch)
-36    SPI_CLK         Out    AD9833 SCLK + IDC pin 7 (TFT/touch)
-37    SPI_MISO        In     IDC pin 6 (XPT2046 readback)
+21    HX711_2_DT      In     HX711 module #2 (SK5) DOUT — CHANGED v3.2, was TOUCH_IRQ pre-v3.2
+35    SPI_MOSI        Out    AD9833 SDATA + IDC pin 5 (TFT/touch) — PSRAM-free module only
+36    SPI_CLK         Out    AD9833 SCLK + IDC pin 7 (TFT/touch), 20MHz — PSRAM-free module only
+37    HX711_SCK       Out    Both HX711 modules' PD_SCK (shared clock) — CHANGED v3.2, was SPI_MISO/touch pre-v3.2
 38    AD9833_CS       Out    AD9833 FSYNC (active LOW, SPI Mode 2)
 39    TFT_CS          Out    IDC pin 8 → ILI9341 CS (active LOW)
 40    TFT_DC          Out    IDC pin 9 → ILI9341 DC
 41    TFT_RST         Out    IDC pin 10 → ILI9341 RESET (active LOW)
-42    TOUCH_CS        Out    IDC pin 11 → XPT2046 T_CS (active LOW)
-47    RPi_TX          Out    J3 pin 3 → RPi GPIO15 (921600 baud)
-48    RPi_RX          In     J3 pin 2 ← RPi GPIO14
+42    HX711_1_DT      In     HX711 module #1 (SK4) DOUT — CHANGED v3.2, was TOUCH_CS pre-v3.2
+43    I2C_SCL         Out    J15 pin4 (turbidity) — 4.7kΩ pull-up to 3.3V. UART0-TX by default; board uses USB-Serial/JTAG, so free
+44    TMC_UART_RX     In     R_UART → shared PDN bus (RX leg) — genuinely separate pin from TX (GPIO4), corrected in this project's bring-up after single-pin UART proved unreliable
+45    FREE (strap)    -      SP7 1-pin header, unpopulated — sole remaining spare GPIO. Must read LOW at boot (VDD_SPI select)
+46    T_DO            In     IDC pin 6 → XPT2046 T_DO (touch data out, restored v3.3 — was SPI_MISO pre-v3.3). No external pull-up — safe on this strapping pin, see brief §8.3
+47    RPi_TX          Out    J3 pin 3 → RPi UART, 921600 baud
+48    RPi_RX          In     J3 pin 2 ← RPi UART, 921600 baud
 
-SPI speeds: ILI9341 via ribbon → 20 MHz max | XPT2046 → 2 MHz max
-            AD9833 direct → ~10 MHz | AD9833 uses Mode 2, rest Mode 0
+IDC pin 12 (T_IRQ) and pin 17 (BTN2) are NOT CONNECTED on the main board
+(touch is polled, one-button UI). Physically present on the ribbon/breakout,
+just NC at the main-board connector — see design brief §8.3.
+
+SPI speeds: ILI9341 via ribbon → 20 MHz max | XPT2046 → per chip, lower
+            AD9833 direct → ~10 MHz (Mode 2) | TFT/touch → Mode 0
+I2C:        400kHz, Wire.begin(SDA=3, SCL=43)
 
 ----------------------------------------------------------------
 2. EXTERNAL CONNECTORS (MAIN BOARD)
 ----------------------------------------------------------------
 
-J1  TX Transducer     SMA edge-launch    Centre: IC1 out (47Ω+100nF)
-J2  RX Transducer     SMA edge-launch    Centre: R_in → D1 BAV99
-J3  RPi UART          JST-XH 2.5mm 3p   Pin 1: GND | 2: GPIO48 RX | 3: GPIO47 TX
-J4  Motor 1           JST-XH 2.5mm 6p   Pin 1:OA1 | 2:NC | 3:OA2 | 4:OB1 | 5:NC | 6:OB2
-J5  Motor 2           JST-XH 2.5mm 6p   Pin 1:OA1 | 2:NC | 3:OA2 | 4:OB1 | 5:NC | 6:OB2
-J6  Limit switch M1   JST-XH 2.5mm 2p   Pin 1: GND | 2: GPIO14
-J7  Limit switch M2   JST-XH 2.5mm 2p   Pin 1: GND | 2: GPIO15
-J8  LED panel         JST-XH 2.5mm 2p   Pin 1: 5V  | 2: GND
-J9  UI breakout IDC   IDC 2×10 2.54mm   20-pin ribbon (see Section 3)
+J1  TX Transducer     SMA edge-launch    Centre: IC1 out via R_TL1(47Ω) + CinAC_C1(100nF)
+J2  RX Transducer     SMA edge-launch    Centre: R_in(100Ω) → Drx1(BAV99) → IC2
+J3  RPi UART          JST-XH 3p 2.5mm    1:GND | 2:RX(GPIO48) | 3:TX(GPIO47), 921600 baud
+J4  Motor 1           JST-PH 4p 2.0mm    1:OA1 | 2:OA2 | 3:OB1 | 4:OB2 — CHANGED v3.1, was 6p JST-XH
+J5  Motor 2           JST-PH 4p 2.0mm    1:OA1 | 2:OA2 | 3:OB1 | 4:OB2
+J6  Limit switch M1   JST-XH 2p 2.5mm    1:GND | 2:GPIO14, 100nF debounce at MCU
+J7  Limit switch M2   JST-XH 2p 2.5mm    1:GND | 2:GPIO15, 100nF debounce at MCU
+J8  LED panel         JST-XH 2p 2.5mm    1:5V | 2:GND
+J9  UI breakout IDC   IDC 2×10 2.54mm    20-pin ribbon (see Section 3)
 J13 USB-C programming USB-C receptacle   A6+B6→GPIO20 | A7+B7→GPIO19 | CC1/CC2→5.1kΩ GND
-J14 24V PSU input     3.5mm screw 2p     Via Q1 AO4407A → F1 polyfuse → D5 TVS
+J14 24V PSU input     5.0mm screw 2p     CHANGED v3.4, was 3.5mm. 1:V+ | 2:GND. V+ → F1(off-board T5A) → F2(on-board 8A backstop) → Q1(AO4407A) → 24V rail
+J15 Turbidity I2C     JST-XH 4p 2.5mm    1:3.3V | 2:GND | 3:SDA(GPIO3) | 4:SCL(GPIO43)
+J16 APDS9960 ext LED  JST-XH 2p 2.5mm    1:LED+ (3.3V via R_LEDext 330Ω) | 2:GND
+
+SK1/SK2  TMC2209 modules (MKS V2.0)   2×8 socket   See Section 7
+SK3      AD9833 signal gen module     1×7 socket   VCC/DGND/SDATA/SCLK/FSYNC/AGND/OUT
+SK4/SK5  HX711 load-cell amplifiers   1×4 socket   See Section 8
+
+Fuses: F1 off-board 5x20mm 5A 250V T5A slow-blow (in the +24V lead before
+J14, PRIMARY protection) + F2 on-board 8A Nano2 452 SMD backstop (between
+J14 and Q1 Drain — NOT the primary, silkscreened "BACKSTOP" — see brief §2.1).
 
 ----------------------------------------------------------------
-3. J9 IDC RIBBON (20-PIN, MAIN ↔ UI BREAKOUT)
+3. J9 IDC RIBBON (20-PIN, MAIN <-> UI BREAKOUT) — pinout unchanged since
+   original design; only which main-board GPIO lands on each pin changed.
 ----------------------------------------------------------------
 Pin 1 = red stripe. Always GND. Both PCBs: shrouded (box) IDC headers.
 
@@ -68,26 +115,26 @@ Pin  Signal          GPIO / Net  Dir   Notes
 1    GND             —           —     Red stripe reference
 2    3.3V            3.3V rail   Out   TFT logic + breakout pull-ups
 3    GND             —           —     Extra GND
-4    5V              5V rail     Out   Buzzer supply (louder at 5V)
+4    5V              5V rail     Out   Buzzer supply
 5    SPI_MOSI        GPIO35      Out   ILI9341 SDI + XPT2046 T_DIN
-6    SPI_MISO        GPIO37      In    ILI9341 SDO + XPT2046 T_DO
-7    SPI_CLK         GPIO36      Out   20 MHz max via ribbon
+6    T_DO            GPIO46      In    XPT2046 T_DO — CHANGED v3.3, was GPIO37 pre-v3.2, NC in v3.2
+7    SPI_CLK         GPIO36      Out   20 MHz max via ribbon, shared TFT+touch
 8    TFT_CS          GPIO39      Out   ILI9341 CS — active LOW
 9    TFT_DC          GPIO40      Out   ILI9341 data/command
 10   TFT_RST         GPIO41      Out   ILI9341 reset — active LOW
-11   TOUCH_CS        GPIO42      Out   XPT2046 CS — active LOW
-12   TOUCH_IRQ       GPIO21      In    XPT2046 IRQ — active LOW
+11   T_CS            GPIO12      Out   XPT2046 CS — active LOW — CHANGED v3.3, was GPIO42 pre-v3.2, reused from removed BTN2
+12   T_IRQ           NC          —     CHANGED v3.3 — touch is polled, not interrupt-driven. NOT wired on main board
 13   EC11_A (CLK)    GPIO16      In    Encoder A
 14   EC11_B (DT)     GPIO17      In    Encoder B
 15   EC11_SW         GPIO18      In    Encoder push switch
 16   BTN1            GPIO11      In    Push button 1
-17   BTN2            GPIO12      In    Push button 2
-18   BUZ_PWM         GPIO13      Out   2N7002 gate (LEDC PWM)
+17   BTN2            NC          —     REMOVED v3.3 — one-button UI. Ribbon pin still wired on breakout, NC at main board
+18   BUZ_PWM         GPIO13      Out   Buzzer (LEDC PWM)
 19   GND             —           —     Extra GND
 20   NC              —           —     No connect
 
 ----------------------------------------------------------------
-4. TFT MODULE (14-PIN SOCKET ON BREAKOUT)
+4. TFT MODULE (14-PIN SOCKET ON BREAKOUT) — breakout board itself unchanged
 ----------------------------------------------------------------
 
 Socket  Module label  Signal (from ribbon/net)
@@ -100,17 +147,17 @@ Socket  Module label  Signal (from ribbon/net)
 6       SDI (MOSI)    Ribbon pin 5 (SPI_MOSI / GPIO35)
 7       SCK           Ribbon pin 7 (SPI_CLK / GPIO36) — 20 MHz max
 8       LED           3.3V via 47Ω on breakout (always-on backlight)
-9       SDO (MISO)    Ribbon pin 6 (SPI_MISO / GPIO37)
+9       SDO (MISO)    Ribbon pin 6 (T_DO / GPIO46) — CHANGED: was GPIO37 pre-v3.2
 10      T_CLK         Same net as pin 7 (SCK)
-11      T_CS          Ribbon pin 11 (TOUCH_CS / GPIO42)
+11      T_CS          Ribbon pin 11 (T_CS / GPIO12) — CHANGED: was GPIO42 pre-v3.2
 12      T_DIN         Same net as pin 6 (MOSI)
-13      T_DO          Same net as pin 9 (MISO)
-14      T_IRQ         Ribbon pin 12 (TOUCH_IRQ / GPIO21)
+13      T_DO          Same net as pin 9 (MISO / T_DO)
+14      T_IRQ         Ribbon pin 12 — NC at main board as of v3.3 (polled instead)
 
-On breakout: tie MOSI→pins 6+12, CLK→pins 7+10, MISO→pins 9+13
+On breakout: tie MOSI→pins 6+12, CLK→pins 7+10, MISO/T_DO→pins 9+13
 
 ----------------------------------------------------------------
-5. EC11 ROTARY ENCODER (BREAKOUT)
+5. EC11 ROTARY ENCODER (BREAKOUT) — unchanged
 ----------------------------------------------------------------
 
 EC11 pin  Signal   Ribbon pin  GPIO   Breakout filter
@@ -121,35 +168,80 @@ SW        EC11_SW  15          GPIO18  10kΩ pull-up + 100nF
 COM (×2)  GND      —           —      Tie to GND
 
 ----------------------------------------------------------------
-6. PUSH BUTTONS (BREAKOUT)
+6. PUSH BUTTON (BREAKOUT) — one button as of v3.3 (BTN2 removed)
 ----------------------------------------------------------------
 
 Button  Signal  Ribbon pin  GPIO   Breakout filter
 ------  ------  ----------  -----  --------------------
 BTN1    BTN1    16          GPIO11  10kΩ pull-up + 100nF
-BTN2    BTN2    17          GPIO12  10kΩ pull-up + 100nF
 
-One terminal to GND, one to signal + pull-up (+ GPIO internal pull-up backup)
-
-----------------------------------------------------------------
-7. TMC2209 MOTOR DRIVER ADDRESSING (U5 / U6)
-----------------------------------------------------------------
-
-Driver   Ref  MS1              MS2   UART Addr
--------  ---  ---------------  ----  ---------
-Motor 1  U5   GND              GND   0
-Motor 2  U6   3.3V via 10kΩ   GND   1
-
-Shared half-duplex UART on GPIO4 via R_UART 1kΩ + R_PDN_UP 10kΩ to 3.3V.
+BTN2 footprint may still exist on the breakout silkscreen; ribbon pin 17
+is left NC at the main board — do not populate a BTN2 connection there.
 
 ----------------------------------------------------------------
-8. POWER RAILS
+7. TMC2209 MOTOR DRIVER ADDRESSING (U5 / U6) — MKS V2.0 modules,
+   field-jumpered as of v3.4 (was hardwired through v3.3)
+----------------------------------------------------------------
+
+Driver   Ref  MS1 jumper (JMP_MS1_Tn)   MS2 jumper (JMP_MS2_Tn)   UART Addr
+-------  ---  ------------------------  ------------------------  ---------
+Motor 1  U5   GND (no shunt)            GND (no shunt)            0
+Motor 2  U6   3.3V via 10kΩ (shunt)     GND (no shunt)            1
+
+Shared half-duplex PDN_UART bus: GPIO4 (TX) + GPIO44 (RX), joined by
+R_UART (1kΩ), bus pull-up R_PDN_UP (10kΩ to 3.3V). Each module's PDN pin
+is selected by its own 3-pin jumper (JMP_U5 / JMP_U6):
+  - Shunt 2-1 (DEFAULT, v3.4): module pin 5, DIRECT — corrected v3.4 after
+    physical inspection of the MKS V2.0 module's own silkscreen.
+  - Shunt 2-3 (FALLBACK): module pin 4, via the module's own R8 resistor.
+  - NEVER shunt both sides at once.
+Both PDN legs route through a 220Ω GPIO protection resistor
+(R_gpPDN_T1/T2) before reaching the jumper.
+
+MS1/MS2 pull-up caution: the external 10kΩ pull-up fights the TMC2209's
+own internal pull-down. Bench-verify the resulting high level against VIH
+(~2.31V) before trusting an address bit — see brief §7.2.
+
+----------------------------------------------------------------
+8. LOAD CELLS — 2x HX711, shared clock (added v3.2)
+----------------------------------------------------------------
+
+Module          GND   DT (DOUT)          SCK (PD_SCK)   VCC
+--------------  ----  -----------------  -------------  -----
+HX711 #1 (SK4)  GND   GPIO42             GPIO37 (shared) 3.3V
+HX711 #2 (SK5)  GND   GPIO21             GPIO37 (shared) 3.3V
+
+VCC is 3.3V — do NOT power from 5V (DT would also read 5V and damage the
+ESP32 GPIO). RATE jumper on each XFW-HX711 module set to 80Hz (not 10Hz).
+SCK is shared between both modules; DT is separate per module — needs a
+custom bit-bang driver (standard single-clock HX711 libraries don't apply).
+Load-cell side wired to each module's own E+/E-/A+/A- screw terminal
+(channel A, gain 128); channel B (fixed gain 32) left spare on the module.
+
+----------------------------------------------------------------
+9. TURBIDITY SENSING — I2C, shared bus (added v3.2)
+----------------------------------------------------------------
+
+Device     Addr   Mode                          Notes
+---------  -----  ----------------------------  --------------------------
+APDS9960   0x39   ALS, clear-channel, transmission  External LED hardwired ON via J16 (3.3V → 330Ω → LED+)
+MAX30102   0x57   Backscatter, own onboard LEDs      18-bit ADC, hardware ambient cancellation
+
+Bus: GPIO3 (SDA) / GPIO43 (SCL), 400kHz, one 4.7kΩ pull-up pair near U1.
+Both modules connect via J15 (3.3V/GND/SDA/SCL). No address conflict.
+Bring-up: I2C scanner should show both 0x39 and 0x57.
+
+----------------------------------------------------------------
+10. POWER RAILS
 ----------------------------------------------------------------
 
 Rail   Source          Voltage    Max current  Key consumers
 -----  --------------  ---------  -----------  ----------------------------
-24V    PSU direct      12–24V     6A peak      2× TMC2209 VM
+24V    PSU → F1 → F2   12–24V     6A peak      2× TMC2209 VM
 5V     LM2596 buck     5V ±2%     2A           LED panel, TMC2209 VCC_IO, buzzer
-3.3V   AMS1117-3.3     3.3V ±1%   800mA        ESP32, AD9833, op-amps, TFT logic
+3.3V   AMS1117-3.3     3.3V ±1%   800mA        ESP32, AD9833, op-amps, TFT logic, HX711 x2, I2C sensors
+
+HX711 modules run from the 3.3V rail so DT/PD_SCK logic is directly
+ESP32-compatible — do not power them from 5V (see Section 8).
 
 ================================================================

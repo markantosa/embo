@@ -74,13 +74,14 @@ EMBO/
 │
 ├── docs/                              # Design documents and briefs
 │   ├── EMBO_Project_Overview.md       # Project context — public/general audience
-│   ├── EMBO_PCB_Design_Brief_v2.5.txt # Complete electrical design spec (current)
-│   ├── EMBO_PCB_Design_Brief_v2.5.docx
-│   └── EMBO_Pinout_Cheatsheet.txt     # Quick GPIO and connector reference
+│   ├── EMBO_PCB_Design_Brief_v3_4.txt # Complete electrical design spec (current)
+│   ├── EMBO_PCB_Design_Brief_v3_4.docx / .pdf
+│   ├── EMBO_PCB_Design_Brief_v2.51.txt# Superseded — kept for reference
+│   └── EMBO_Pinout_Cheatsheet.txt     # Quick GPIO and connector reference (being updated for v3.4)
 │
 ├── hardware/
 │   ├── electrical/                    # KiCad schematics + PCB layout — 2 boards:
-│   │   │                              #   main board (4-layer) + display breakout (2-layer)
+│   │   │                              #   main board (v3.4, current) + display breakout
 │   │   └── README.md
 │   └── mechanical/                    # CAD files (SolidWorks / Fusion 360)
 │       └── README.md
@@ -96,6 +97,9 @@ EMBO/
 │       ├── README.md
 │       └── RPI_SETUP_GUIDE.md         # RPi flash/SSH/VS Code dev setup
 │
+├── testing/
+│   └── PCB_Test_Firmware_v3_4/        # v3.4 bench-test firmware + Web Bluetooth sensor dashboard
+│
 └── assets/                            # Images, diagrams, photos
 ```
 
@@ -105,34 +109,40 @@ Note: TFT touchscreen UI code lives in `firmware/esp32/src/ui.cpp` and is tracke
 
 ## Hardware Overview
 
-### Main MCU Board (ESP32-S3) — v2.5, 4-layer PCB
+### Main MCU Board (ESP32-S3) — v3.4
 
 | Subsystem | Components |
 |---|---|
-| Microcontroller | ESP32-S3-WROOM-1-N8 (8MB flash, BLE 5.0, USB-C native programming) |
-| Motor drivers | 2× BigTreeTech TMC2209 V1.x plug-in modules in 2×8 sockets (field-replaceable) |
-| Ultrasound signal chain | AD9833 DDS → OPA2354 Tx (G=4.9, 2.96Vpp) → transducer → OPA2354 Rx (G=100) → BAT54 envelope → GPIO1 ADC |
+| Microcontroller | ESP32-S3-WROOM-1-N4 (4MB flash, no PSRAM, BLE 5.0, USB-C native programming) — corrected from N8 in v3.3, no pinout impact |
+| Motor drivers | 2× MKS TMC2209 V2.0 plug-in modules in 2×8 sockets, field-replaceable; MS1/MS2 jumpers (new v3.4) make both modules interchangeable across UART addresses |
+| Ultrasound signal chain | AD9833 DDS → OPA2354 Tx (G=4.9, 2.96Vpp) → transducer → OPA2354 Rx (G=100, interstage AC-coupled) → BAT54 envelope → GPIO1 ADC |
+| Turbidity sensing | APDS9960 (I2C 0x39, ALS transmission) + MAX30102 (I2C 0x57, backscatter), shared I2C bus |
+| Force sensing | 2× load cell + HX711 amplifier, socketed, shared-clock bit-bang driver — hardware fallback for StallGuard SG_RESULT |
 | Display | ILI9341 SPI TFT + XPT2046 resistive touch via 20-pin IDC ribbon to breakout board |
-| Power | 24V PSU → AO4407A reverse polarity protection → LM2596 buck (5V) → AMS1117 LDO (3.3V) |
+| Power | 24V PSU → F1 (off-board T5A fuse) → F2 (on-board 8A backstop, new v3.4) → AO4407A reverse polarity protection → LM2596 buck (5V) → AMS1117 LDO (3.3V) |
 | Comms | UART2 to Raspberry Pi (921600 baud, GPIO47/48); BLE UART debug stream (NimBLE) |
 
-| | |
-|:---:|:---:|
-| ![Main PCB layout](assets/main%20PCB%20layout.png) | ![Main PCB 3D view](assets/main%20PCB%203D%20view.png) |
-| *PCB layout* | *3D render* |
+v3.4 is a hardware-hardening pass: 12× 220Ω GPIO protection resistors on every ESP32-to-TMC2209 control line (added after a hot-swap/spark incident on the fabricated v2.51 board), the PDN_UART pin correction (module pin 5, not pin 4), and a full reference-designator naming pass. See [`hardware/electrical/README.md`](hardware/electrical/README.md) for the complete changelog.
+
+| | | |
+|:---:|:---:|:---:|
+| ![v3.4 PCB front](assets/EMBO%20Controller%20v3.4%20PCB%20Front.jpg) | ![v3.4 PCB back](assets/EMBO%20Controller%20v3.4%20PCB%20Back.jpg) | ![v3.4 PCB editor view](assets/EMBO%20Controller%20v3.4%20PCB%20Editor%20View.jpg) |
+| *Assembled board, front* | *Assembled board, back* | *KiCad PCB editor view* |
 
 ### GPIO Assignments (key signals)
 
 | GPIO | Signal | Notes |
 |---|---|---|
 | 1 | UAS_ADC | ADC1_CH0 — envelope detector output |
-| 4 | TMC_UART | Half-duplex UART1 to both TMC2209 via 1kΩ |
-| 5/8 | STEP_M1/M2 | LEDC PWM — step pulse generation |
-| 6/9 | DIR_M1/M2 | Motor direction |
-| 7/10 | EN_M1/M2 | Motor enable (active LOW, 10kΩ pull-up at IC) |
+| 3/43 | I2C_SDA/SCL | Shared bus, APDS9960 (0x39) + MAX30102 (0x57), 400kHz |
+| 4/44 | TMC_UART TX/RX | Half-duplex, shared PDN bus, via 1kΩ + 220Ω GPIO protection per module |
+| 5/8 | STEP_M1/M2 | Hardware timer — step pulse generation, 220Ω GPIO protection |
+| 6/9 | DIR_M1/M2 | Motor direction, 220Ω GPIO protection |
+| 7/10 | EN_M1/M2 | Motor enable (active LOW, 10kΩ pull-up at IC), 220Ω GPIO protection |
 | 14/15 | LIMIT_M1/M2 | Limit switch inputs (internal pull-up) |
 | 19/20 | USB D−/D+ | Fixed USB PHY — no UART bridge chip needed |
-| 35/36/37 | SPI MOSI/CLK/MISO | Shared: AD9833 (Mode 2) + ILI9341 + XPT2046 (Mode 0) |
+| 21/37/42 | HX711_2_DT / SCK (shared) / HX711_1_DT | 2× load cell amplifiers, shared clock |
+| 35/36 | SPI MOSI/CLK | Shared: AD9833 (Mode 2) + ILI9341 + XPT2046 (Mode 0) |
 | 47/48 | RPi TX/RX | UART2 to Raspberry Pi, 921600 baud |
 
 ### Display Breakout Board — 2-layer PCB
@@ -155,6 +165,16 @@ ILI9341 TFT + XPT2046 touch controller on a separate board, connected to the mai
 - USB 2.0 microscope camera frames processed by YOLOv8 model (likely rolling shutter — see `software/cv-pipeline/README.md`)
 - Outputs: median particle diameter (µm) and IQR, sent to ESP32 over UART
 - Diffused LED panel (5V, J8) backlit behind syringe for particle contrast
+
+**Turbidity Sensing (added v3.2, hardened v3.4):**
+- APDS9960 (I2C 0x39) reads ALS clear-channel transmission through the syringe; external LED hardwired on
+- MAX30102 (I2C 0x57) reads backscatter using its own onboard 660/880nm LEDs
+- Shared I2C bus (GPIO3/GPIO43, 400kHz); independent of the UAS acoustic path — a second, optical estimate of slurry turbidity
+
+**Force Sensing (added v3.2):**
+- 2× load cell + HX711 24-bit amplifier at the syringe plunger contact point
+- Shared-clock, per-channel data line — custom bit-bang driver (standard HX711 libraries assume one dedicated clock per chip)
+- Hardware fallback for TMC2209 StallGuard SG_RESULT if the UART-based reading proves unreliable
 
 ---
 
@@ -186,9 +206,10 @@ See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task l
 
 **Critical firmware notes:**
 - SPI2 is shared between AD9833 (Mode 2, ~10MHz), ILI9341 (Mode 0, 20MHz max via ribbon), and XPT2046 (Mode 0, 2MHz). Each library switches mode per transaction via `SPI.beginTransaction()`.
-- TMC2209 uses UART1 (GPIO4, half-duplex). Raspberry Pi uses UART2 (GPIO47/48). These are separate peripherals — do not reassign.
+- TMC2209 uses a half-duplex UART bus (GPIO4 TX / GPIO44 RX as of v3.4). Raspberry Pi uses UART2 (GPIO47/48). These are separate peripherals — do not reassign.
 - ADC1 (GPIO1) is safe while BLE is active. ADC2 cannot be used for analog during BLE — no ADC2 pins are used for analog in this design.
-- SpreadCycle must be written via UART to both TMC2209 modules at every boot (no SPREAD pin on BTT modules). BLE log confirms success.
+- SpreadCycle must be written via UART to both TMC2209 modules at every boot (no SPREAD pin on the MKS V2.0 modules). BLE log confirms success.
+- HX711 reads are pinned to core 1 and short-critical-sectioned — PD_SCK must never sit HIGH past ~60µs or the chip powers itself down mid-read.
 
 ---
 
@@ -240,7 +261,11 @@ python main.py
 
 ### Electrical
 
-PCB files live in `hardware/electrical/` — two boards: the 4-layer main board and the 2-layer display breakout. Open with KiCad 8+. The full design spec including component values, GPIO assignments, layout rules, and the pre-submission checklist is in [`docs/EMBO_PCB_Design_Brief_v2.5.txt`](docs/EMBO_PCB_Design_Brief_v2.5.txt).
+PCB files live in `hardware/electrical/` — two boards: the main board (`embo main MCU PCB v3_4/`, current revision) and the display breakout. Open with KiCad 10. The full design spec including component values, GPIO assignments, layout rules, BOM, and the pre-submission checklist is in [`docs/EMBO_PCB_Design_Brief_v3_4.txt`](docs/EMBO_PCB_Design_Brief_v3_4.txt).
+
+### PCB Bench-Test Firmware + Dashboard
+
+`testing/PCB_Test_Firmware_v3_4/` is a standalone PlatformIO project for bringing up an assembled v3.4 board: reads every sensor (UAS envelope, both load cells, both turbidity channels, both StallGuard results, limit switches), drives the two steppers, and streams it all over BLE to a Web Bluetooth dashboard (`web/index.html`) with live strip-charts alongside the raw numbers.
 
 ---
 
@@ -252,6 +277,9 @@ PCB files live in `hardware/electrical/` — two boards: the 4-layer main board 
 - TMC2209 Datasheet — StallGuard4, SpreadCycle, UART addressing
 - AD9833 Datasheet — DDS signal generator, SPI Mode 2
 - OPA2354 Datasheet — 250MHz GBW dual op-amp, single-supply operation
+- HX711 Datasheet (Avia Semiconductor) — 24-bit ADC, load-cell amplifier
+- APDS-9960 Datasheet (Broadcom) — ALS/gesture/proximity sensor
+- MAX30102 Datasheet (ADI/Maxim) — pulse oximetry / heart-rate, used here in backscatter mode
 
 ---
 
