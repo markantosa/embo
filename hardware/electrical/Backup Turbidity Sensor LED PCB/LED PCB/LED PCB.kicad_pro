@@ -66,7 +66,7 @@
           "pad_connection": 1,
           "remove_islands": 0,
           "thermal_relief_gap": 0.5,
-          "thermal_relief_spoke_width": 0.75
+          "thermal_relief_spoke_width": 0.5
         }
       },
       "diff_pair_dimensions": [],
@@ -488,7 +488,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "APDS9960.kicad_pro",
+    "filename": "LED PCB.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -643,17 +643,17 @@
     "subpart_id_separator": 0,
     "top_level_sheets": [
       {
-        "filename": "APDS9960.kicad_sch",
+        "filename": "LED PCB.kicad_sch",
         "name": "Root",
-        "uuid": "fddd7455-9635-4e75-b235-cf9257001b3b"
+        "uuid": "a5026495-1ad7-4e99-8d3c-8e229d5387e8"
       }
     ],
-    "used_designators": "J1-2",
+    "used_designators": "R1,J1,D1",
     "variants": []
   },
   "sheets": [
     [
-      "fddd7455-9635-4e75-b235-cf9257001b3b",
+      "a5026495-1ad7-4e99-8d3c-8e229d5387e8",
       "Root"
     ]
   ],

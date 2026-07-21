@@ -27,6 +27,14 @@
   button.connect:active { background: var(--accent-active); }
   .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); display: inline-block; }
   .status-dot.connected { background: var(--ok); }
+  .limit-banner {
+    display: none; align-items: center; gap: 10px; background: var(--danger); color: white;
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-weight: 600;
+    font-size: 0.95rem; animation: limit-pulse 1s ease-in-out infinite;
+  }
+  .limit-banner.show { display: flex; }
+  @keyframes limit-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .card.limit-active { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger) inset; }
   .section-title { font-size: 0.95rem; color: var(--muted); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
   .section-title:first-of-type { margin-top: 0; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
@@ -88,6 +96,8 @@
   <span id="statusText">Disconnected</span>
   <button class="connect" id="connectBtn">Connect BLE</button>
 </div>
+
+<div class="limit-banner" id="limitBanner">&#9888;&#65039; <span id="limitBannerText">LIMIT SWITCH TRIGGERED</span></div>
 
 <div class="section-title">UAS Acoustic Chain</div>
 <div class="grid">
@@ -422,8 +432,23 @@ function onTelemetry(event) {
   setBadge(document.getElementById('apdsBadge'), (turbidityFlags & 0x01) ? 'ok' : 'bad');
   setBadge(document.getElementById('maxBadge'), (turbidityFlags & 0x02) ? 'ok' : 'bad');
 
-  setBadge(document.getElementById('limit1Badge'), (limitFlags & 0x01) ? 'active' : 'idle');
-  setBadge(document.getElementById('limit2Badge'), (limitFlags & 0x02) ? 'active' : 'idle');
+  const limit1Active = !!(limitFlags & 0x01);
+  const limit2Active = !!(limitFlags & 0x02);
+  setBadge(document.getElementById('limit1Badge'), limit1Active ? 'active' : 'idle');
+  setBadge(document.getElementById('limit2Badge'), limit2Active ? 'active' : 'idle');
+
+  const motorCardsForLimits = document.querySelectorAll('.card[data-motor]');
+  motorCardsForLimits[0].classList.toggle('limit-active', limit1Active);
+  motorCardsForLimits[1].classList.toggle('limit-active', limit2Active);
+
+  const limitBanner = document.getElementById('limitBanner');
+  if (limit1Active || limit2Active) {
+    const which = limit1Active && limit2Active ? 'MOTOR 1 & MOTOR 2' : (limit1Active ? 'MOTOR 1' : 'MOTOR 2');
+    document.getElementById('limitBannerText').textContent = `LIMIT SWITCH TRIGGERED — ${which}`;
+    limitBanner.classList.add('show');
+  } else {
+    limitBanner.classList.remove('show');
+  }
 
   const cards = document.querySelectorAll('.card[data-motor]');
   cards[0].querySelector('.pos-readout').textContent = pos1;
