@@ -2,12 +2,14 @@
 #include "hal/LGFX_Config.h"          // was: #include <Adafruit_ILI9341.h>
 #include "hal/button_driver.h"
 #include "hal/encoder_driver.h"
+#include "hal/buzzer_driver.h"
 #include "backend/menu_logic.h"
 #include "backend/percentage_logic.h"
 #include "ui/screen_main_menu.cpp"
 #include "ui/screen_percentage.cpp"
 #include "ui/boot_logo.h"
 #include "ui/app_state_machine.h"
+
 
 ButtonDriver btnNext;
 ButtonDriver btnSelect;
@@ -18,6 +20,8 @@ ScreenPercentage percentScreen;
 MenuLogic menu;
 ScreenMenu menuScreen;
 LGFX tft;                              // was: Adafruit_ILI9341 tft(TFT_CS, ...)
+BuzzerDriver buzzer(BUZZER_PIN);
+
 AppStateMachine appState;
 
 void showBootLogo() {
@@ -36,9 +40,12 @@ void setup() {
     btnSelect.begin(BTN_SELECT_PIN);
     encoderBtn.begin(ENC_SW);
     encoder.begin(ENC_CLK, ENC_DT);
+    buzzer.begin();
+  
     percentage.begin(0);
 
     showBootLogo();
+    buzzer.tone(523,150);
 
     menu.begin({
         {"Start Mixing", 1},
@@ -47,12 +54,15 @@ void setup() {
     });
 
     appState.begin(tft, btnNext, btnSelect, encoder, encoderBtn, percentage, menu, menuScreen, percentScreen);
+    
+
 }
 
 const unsigned long FRAME_DELAY = 33; 
 unsigned long lastFrameTime = 0;
 
 void loop() {
+  buzzer.update();
   unsigned long currentMillis = millis();
 
   // 1. Handle background logic here (sensors, math, Wi-Fi)

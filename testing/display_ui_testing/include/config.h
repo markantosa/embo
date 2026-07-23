@@ -17,6 +17,9 @@
 #define ENC_DT    5
 #define ENC_SW    6
 
+// ---- Buzzer ----
+#define BUZZER_PIN   8
+
 // ---- Buttons ----
 #define BTN_NEXT_PIN   7   // currently unused
 #define BTN_SELECT_PIN 15  // global reset
