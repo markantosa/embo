@@ -4,6 +4,7 @@
 #include "turbidity.h"
 #include "force_sensor.h"
 #include "scheduler.h"
+#include "calibration.h"
 #include "rpi_uart.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
@@ -146,16 +147,69 @@ static void _handle_command(const char *cmd) {
         return;
     }
 
-    // FIT — dump the scheduler's current breakage-model fit (k, D0, point count)
+    // FIT — dump the scheduler's diagnostic-only breakage-model fit (k, D0,
+    // point count) plus the current/last run's fused-estimate state. NOTE:
+    // the breakage model does NOT drive the stop condition any more — the
+    // live sensor fusion (FUSION command below) does. This is a cross-check.
     if (strcmp(cmd, "FIT") == 0) {
-        ble_log("FIT: k=%.4f D0=%.1fum n=%u target=%uum",
+        ble_log("FIT (diagnostic): k=%.4f D0=%.1fum n=%u target=%uum strokes=%lu "
+                "last_fused=%.1fum(chans=%u) safety_cap_hit=%s",
                 scheduler_get_fit_k(), scheduler_get_fit_d0_um(),
-                scheduler_get_fit_num_points(), scheduler_get_target_um());
+                scheduler_get_fit_num_points(), scheduler_get_target_um(),
+                (unsigned long)scheduler_get_strokes_done(),
+                scheduler_get_last_fused_size_um(), scheduler_get_last_fused_num_channels(),
+                scheduler_hit_safety_cap() ? "yes" : "no");
+        return;
+    }
+
+    // FIT RESET — discard the accumulated (diagnostic-only) breakage-model
+    // fit. Manual only (nothing calls this automatically, see
+    // calibration.h) — use when the material genuinely changes, per
+    // CALIBRATION.md §7.
+    if (strcmp(cmd, "FIT RESET") == 0) {
+        calib_breakage_reset();
+        ble_log("FIT: reset — back to fallback constants until new verification points arrive");
+        return;
+    }
+
+    // FUSION — dumps the CURRENT live reading of all four sensor-fusion
+    // channels plus the resulting fused estimate, exactly the numbers
+    // needed to fill in one row of SENSOR_CAL_TABLE (calibration.cpp) during
+    // the 9-syringe bench calibration session: hold this exact syringe
+    // steady, run `FUSION`, and copy the printed uas/apds/max/force values
+    // straight into that syringe's row alongside its known size. See
+    // CALIBRATION.md §5.
+    if (strcmp(cmd, "FUSION") == 0) {
+        float uasAtten = 0.0f;
+        uint8_t numFreq = uas_get_num_frequencies();
+        for (uint8_t i = 0; i < numFreq; i++) uasAtten += uas_get_attenuation(i);
+        if (numFreq > 0) uasAtten /= (float)numFreq;
+        float apdsRatio = calib_turbidity_ratio_als(turbidity_get_als_clear());
+        float maxRatio = calib_turbidity_ratio_backscatter_ir(turbidity_get_ir_raw());
+        float forceG = (force_sensor_get_grams_1() + force_sensor_get_grams_2()) / 2.0f;
+
+        FusedSizeEstimate fused = calib_estimate_particle_size_um(uasAtten, apdsRatio, maxRatio, forceG);
+
+        ble_log("FUSION: uas=%.4f apds=%.4f max=%.4f force=%.1fg", uasAtten, apdsRatio, maxRatio, forceG);
+        ble_log("FUSION: estimate=%.1fum channels=%u (uas=%s apds=%s max=%s force=%s)",
+                fused.sizeUm, fused.numChannelsUsed,
+                fused.uasTrusted ? "trusted" : "excluded", fused.turbApdsTrusted ? "trusted" : "excluded",
+                fused.turbMaxTrusted ? "trusted" : "excluded", fused.forceTrusted ? "trusted" : "excluded");
+        return;
+    }
+
+    // CAPTURE — manually trigger the same on-demand RPi capture+CV the UI's
+    // encoder long-press does (see ui.cpp), for bench testing without the
+    // physical knob. Result appears via the next "RPi: median=... iqr=..."
+    // log line once the RPi replies.
+    if (strcmp(cmd, "CAPTURE") == 0) {
+        bool sent = rpi_request_capture();
+        ble_log(sent ? "CAPTURE: requested" : "CAPTURE: already pending, ignored");
         return;
     }
 
     ble_log("CMD unknown: \"%s\"", cmd);
-    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON|OFF | FORCE ON|OFF | TURB ON|OFF | FIT");
+    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON|OFF | FORCE ON|OFF | TURB ON|OFF | FUSION | FIT | FIT RESET | CAPTURE");
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -201,10 +255,13 @@ void ble_debug_update() {
     _stream_last_ms = now;
 
     if (_uas_streaming) {
-        // Per-frequency attenuation alongside live CV size — lets a BLE
-        // terminal log capture the correlation data the technical advisory
-        // requires before UAS can be trusted as anything beyond a raw signal
-        // (see docs/EMBO_UAS_CV_Technical_Advisory.txt, section 1).
+        // Per-frequency attenuation alongside the most recent CV capture (if
+        // any — CV is on-demand now, not continuous, see rpi_uart.h). UAS is
+        // one of the four live sensor-fusion channels (scheduler.cpp) once
+        // SENSOR_CAL_TABLE is filled in and this channel passes its
+        // monotonicity check — trigger captures with `CAPTURE` (or the UI's
+        // encoder long-press) while this is running as an independent
+        // cross-check against CV, per the July 2026 technical advisory.
         char line[128];
         int n = snprintf(line, sizeof(line), "UAS:");
         for (uint8_t i = 0; i < uas_get_num_frequencies() && n < (int)sizeof(line); i++) {
@@ -214,7 +271,7 @@ void ble_debug_update() {
         if (n >= (int)sizeof(line)) n = sizeof(line) - 1;  // snprintf can report more than it wrote
         int16_t median = rpi_get_median_um();
         int16_t iqr     = rpi_get_iqr_um();
-        snprintf(line + n, sizeof(line) - n, " | CV: median=%d iqr=%d",
+        snprintf(line + n, sizeof(line) - n, " | last CV capture: median=%d iqr=%d",
                  median, iqr);
         ble_log("%s", line);
     }

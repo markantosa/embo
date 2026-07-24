@@ -15,6 +15,12 @@ static int16_t _iqr_um    = -1;
 static char _buf[64];
 static uint8_t _buf_pos = 0;
 
+// ── On-demand capture state ──────────────────────────────────────────────────
+static bool _capture_pending   = false;
+static bool _result_ready      = false;
+static bool _timed_out         = false;
+static uint32_t _capture_sent_ms = 0;
+
 void rpi_uart_init() {
     _rpi.begin(BAUD_RPI, SERIAL_8N1, PIN_RPI_RX, PIN_RPI_TX);
 }
@@ -28,6 +34,11 @@ static void _parse_line() {
         _median_um = (int16_t)median;
         _iqr_um    = (int16_t)iqr;
         ble_log("RPi: median=%d iqr=%d um", _median_um, _iqr_um);
+
+        if (_capture_pending) {
+            _capture_pending = false;
+            _result_ready = true;
+        }
     }
     // Unrecognised lines (status strings, errors from RPi) are ignored.
 }
@@ -44,6 +55,12 @@ void rpi_uart_update() {
             _buf[_buf_pos++] = c;
         }
     }
+
+    if (_capture_pending && (millis() - _capture_sent_ms) >= RPI_CAPTURE_TIMEOUT_MS) {
+        _capture_pending = false;
+        _timed_out = true;
+        ble_log("RPi: capture request timed out after %lu ms", (unsigned long)RPI_CAPTURE_TIMEOUT_MS);
+    }
 }
 
 int16_t rpi_get_median_um() { return _median_um; }
@@ -51,4 +68,33 @@ int16_t rpi_get_iqr_um()    { return _iqr_um; }
 
 void rpi_send(const char *msg) {
     _rpi.println(msg);
+}
+
+bool rpi_request_capture() {
+    if (_capture_pending) return false;  // one in flight already
+    _rpi.println("CAPTURE");
+    _capture_pending = true;
+    _result_ready = false;
+    _timed_out = false;
+    _capture_sent_ms = millis();
+    ble_log("RPi: capture requested");
+    return true;
+}
+
+RpiCaptureStatus rpi_capture_status() {
+    if (_result_ready) return RpiCaptureStatus::RESULT_READY;
+    if (_timed_out) return RpiCaptureStatus::TIMED_OUT;
+    if (_capture_pending) return RpiCaptureStatus::PENDING;
+    return RpiCaptureStatus::IDLE;
+}
+
+bool rpi_pop_capture_result(int16_t &medianOut, int16_t &iqrOut) {
+    if (_result_ready) {
+        _result_ready = false;
+        medianOut = _median_um;
+        iqrOut = _iqr_um;
+        return true;
+    }
+    _timed_out = false;  // consumed either way
+    return false;
 }

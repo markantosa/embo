@@ -2,16 +2,22 @@
 #include "config.h"
 #include "scheduler.h"
 #include "motors.h"
+#include "rpi_uart.h"
+#include "calibration.h"
 #include "ble_debug.h"
 #include "LGFX_Config.h"
 #include <Arduino.h>
 
 static LGFX _tft;
 
-enum class UiState { SET_TARGET, RUNNING, DONE, ERROR_SCREEN };
+enum class UiState { SET_TARGET, RUNNING, DONE, VERIFYING, ERROR_SCREEN };
 static UiState _state = UiState::SET_TARGET;
+static UiState _verifyReturnState = UiState::SET_TARGET;
 static bool _needsRedraw = true;
 static char _resultMsg[32] = "";
+static char _verifyResultMsg[40] = "";
+static char _verifySpecMsg[16] = "";
+static bool _verifyInSpec = false;
 static char _errorMsg[48] = "";
 
 // ── EC11 rotary encoder — quadrature decode (Buxton table), ported from
@@ -60,20 +66,36 @@ static int _encReadStep() {
     return step;
 }
 
-// ── EC11 push-switch — confirm/start (short press only) ─────────────────────
+// ── EC11 push-switch — short press = confirm/start/dismiss, long press =
+// request an optional camera size verification. Same short/long pattern as
+// BTN1 below. ─────────────────────────────────────────────────────────────
 
-static bool _encSwLastState = HIGH;
-static uint32_t _encSwLastChangeMs = 0;
+static bool _encSwDown = false;
+static uint32_t _encSwDownAtMs = 0;
+static bool _encSwLongFired = false;
 
-static bool _encSwWasPressed() {
-    bool reading = digitalRead(PIN_EC11_SW);
-    bool pressedEdge = false;
-    if (reading != _encSwLastState && (millis() - _encSwLastChangeMs) > EC11_SW_DEBOUNCE_MS) {
-        _encSwLastChangeMs = millis();
-        if (reading == LOW) pressedEdge = true;
-        _encSwLastState = reading;
+// Returns 1 for a short-press event, 2 for a long-press event (fires once
+// as soon as the hold threshold is crossed), 0 for no event this call.
+static int _encSwPollEvent() {
+    bool down = (digitalRead(PIN_EC11_SW) == LOW);
+
+    if (down) {
+        if (!_encSwDown) {
+            _encSwDown = true;
+            _encSwDownAtMs = millis();
+            _encSwLongFired = false;
+        } else if (!_encSwLongFired && (millis() - _encSwDownAtMs) >= EC11_SW_LONGPRESS_MS) {
+            _encSwLongFired = true;
+            return 2;
+        }
+    } else {
+        if (_encSwDown && !_encSwLongFired && (millis() - _encSwDownAtMs) >= EC11_SW_DEBOUNCE_MS) {
+            _encSwDown = false;
+            return 1;
+        }
+        _encSwDown = false;
     }
-    return pressedEdge;
+    return 0;
 }
 
 // ── BTN1 — dedicated stop/e-stop, short vs. long press ───────────────────────
@@ -129,28 +151,20 @@ static void _drawSetTargetScreen() {
     _drawCentered(buf, 130, TFT_WHITE, 4);
 
     const char *ready = motors_is_homed() ? "Press knob to start" : "NOT HOMED";
-    _drawCentered(ready, 200, motors_is_homed() ? TFT_DARKGREY : TFT_RED, 2);
+    _drawCentered(ready, 195, motors_is_homed() ? TFT_DARKGREY : TFT_RED, 2);
+    _drawCentered("Hold knob to verify with camera", 225, TFT_DARKGREY, 1);
 }
 
-// Simple animated spinner + "Mixing..." — deliberately NOT a live sensor
-// readout. Raw sensor/diagnostic data belongs on the BLE dashboard
-// (testing/PCB_Test_Firmware_v3_4/web), not this screen — see ui.h.
+// Animated spinner dots, shared by the running and verifying screens.
 static uint8_t _spinnerFrame = 0;
 static uint32_t _lastSpinnerMs = 0;
 
-static void _drawRunningScreen(bool forceFull) {
-    if (forceFull) {
-        _tft.fillScreen(TFT_BLACK);
-        _drawCentered("Mixing", 100, TFT_WHITE, 3);
-        _drawCentered("Hold BTN1 for emergency stop", 220, TFT_DARKGREY, 1);
-    }
-
+static void _drawSpinner(int16_t cy) {
     uint32_t now = millis();
     if (now - _lastSpinnerMs >= 150) {
         _lastSpinnerMs = now;
         _spinnerFrame = (_spinnerFrame + 1) % 4;
         int16_t cx = _tft.width() / 2;
-        int16_t cy = 160;
         _tft.fillRect(cx - 40, cy - 10, 80, 20, TFT_BLACK);
         char dots[5] = "";
         for (uint8_t i = 0; i < _spinnerFrame; i++) dots[i] = '.';
@@ -159,10 +173,44 @@ static void _drawRunningScreen(bool forceFull) {
     }
 }
 
+// Deliberately NOT a live sensor readout. Raw sensor/diagnostic data belongs
+// on the BLE dashboard (testing/PCB_Test_Firmware_v3_4/web), not this
+// screen — see ui.h.
+static void _drawRunningScreen(bool forceFull) {
+    if (forceFull) {
+        _tft.fillScreen(TFT_BLACK);
+        _drawCentered("Mixing", 100, TFT_WHITE, 3);
+        _drawCentered("Hold BTN1 for emergency stop", 220, TFT_DARKGREY, 1);
+    }
+    _drawSpinner(160);
+}
+
 static void _drawDoneScreen() {
     _tft.fillScreen(TFT_BLACK);
-    _drawCentered(_resultMsg, 110, TFT_GREEN, 2);
-    _drawCentered("Press knob for new run", 200, TFT_DARKGREY, 2);
+    _drawCentered(_resultMsg, 100, TFT_GREEN, 2);
+    _drawCentered("Press knob for new run", 190, TFT_DARKGREY, 2);
+    _drawCentered("Hold knob to verify with camera", 220, TFT_DARKGREY, 1);
+}
+
+// Optional, operator-triggered, single-shot CV check — NOT part of the
+// mixing loop itself (see scheduler.h). Shows a spinner while the RPi
+// captures+processes one frame, then the result (or a timeout notice).
+static void _drawVerifyingScreen(bool waiting, bool forceFull) {
+    if (forceFull) {
+        _tft.fillScreen(TFT_BLACK);
+        _drawCentered("Camera Verify", 60, TFT_WHITE, 3);
+    }
+    if (waiting) {
+        if (forceFull) _drawCentered("Capturing...", 130, TFT_DARKGREY, 2);
+        _drawSpinner(180);
+    } else {
+        _tft.fillRect(0, 110, _tft.width(), 90, TFT_BLACK);
+        _drawCentered(_verifyResultMsg, 140, TFT_WHITE, 2);
+        if (_verifySpecMsg[0] != '\0') {
+            _drawCentered(_verifySpecMsg, 170, _verifyInSpec ? TFT_GREEN : TFT_RED, 2);
+        }
+        _drawCentered("Press knob to continue", 220, TFT_DARKGREY, 2);
+    }
 }
 
 static void _drawErrorScreen() {
@@ -170,6 +218,17 @@ static void _drawErrorScreen() {
     _drawCentered("HARDWARE FAULT", 100, TFT_RED, 2);
     _drawCentered(_errorMsg, 140, TFT_RED, 2);
     _drawCentered("Reboot required", 200, TFT_DARKGREY, 2);
+}
+
+// ── Verification flow ────────────────────────────────────────────────────────
+
+static void _startVerification(UiState returnState) {
+    _verifyReturnState = returnState;
+    _verifyResultMsg[0] = '\0';
+    _verifySpecMsg[0] = '\0';
+    rpi_request_capture();
+    _state = UiState::VERIFYING;
+    _needsRedraw = true;
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -218,10 +277,13 @@ void ui_update() {
             _needsRedraw = true;
         }
 
-        if (_encSwWasPressed() && motors_is_homed()) {
+        int swEvent = _encSwPollEvent();
+        if (swEvent == 1 && motors_is_homed()) {
             scheduler_start();
             _state = UiState::RUNNING;
             _needsRedraw = true;
+        } else if (swEvent == 2) {
+            _startVerification(UiState::SET_TARGET);
         }
 
         // BTN1 has no function while idle (dedicated stop button, nothing running yet).
@@ -244,7 +306,11 @@ void ui_update() {
         }
 
         if (scheduler_target_reached()) {
-            strncpy(_resultMsg, "Target reached", sizeof(_resultMsg) - 1);
+            if (scheduler_hit_safety_cap()) {
+                strncpy(_resultMsg, "Stopped: safety cap", sizeof(_resultMsg) - 1);
+            } else {
+                strncpy(_resultMsg, "Target size reached", sizeof(_resultMsg) - 1);
+            }
             _state = UiState::DONE;
             _needsRedraw = true;
             break;
@@ -265,11 +331,49 @@ void ui_update() {
 
     case UiState::DONE: {
         _btn1PollEvent();
-        if (_encSwWasPressed()) {
+        int swEvent = _encSwPollEvent();
+        if (swEvent == 1) {
             _state = UiState::SET_TARGET;
             _needsRedraw = true;
+        } else if (swEvent == 2) {
+            _startVerification(UiState::DONE);
         }
         if (_needsRedraw) { _drawDoneScreen(); _needsRedraw = false; }
+        break;
+    }
+
+    case UiState::VERIFYING: {
+        _btn1PollEvent();  // stays live even here, though nothing is running to stop
+
+        RpiCaptureStatus status = rpi_capture_status();
+        if (status == RpiCaptureStatus::RESULT_READY) {
+            int16_t median, iqr;
+            rpi_pop_capture_result(median, iqr);
+            // Feeds the (diagnostic-only) breakage-model fit for cross-
+            // checking against the live sensor-fusion estimate in future
+            // runs — does not alter the run already done, and does not
+            // itself drive the stop condition (see scheduler.h).
+            calib_breakage_add_point(motor_get_stroke_count(), (float)median);
+            snprintf(_verifyResultMsg, sizeof(_verifyResultMsg), "Median %d um   IQR %d um", median, iqr);
+            _verifyInSpec = (abs((int)median - (int)scheduler_get_target_um()) <= TARGET_TOLERANCE_UM);
+            strncpy(_verifySpecMsg, _verifyInSpec ? "IN SPEC" : "OUT OF SPEC", sizeof(_verifySpecMsg) - 1);
+            _needsRedraw = true;
+        } else if (status == RpiCaptureStatus::TIMED_OUT) {
+            int16_t dummyMedian, dummyIqr;
+            rpi_pop_capture_result(dummyMedian, dummyIqr);  // consumes/clears the timeout flag
+            strncpy(_verifyResultMsg, "No response from RPi", sizeof(_verifyResultMsg) - 1);
+            _verifySpecMsg[0] = '\0';
+            _needsRedraw = true;
+        }
+
+        bool waiting = (_verifyResultMsg[0] == '\0');
+        if (_needsRedraw) { _drawVerifyingScreen(waiting, true); _needsRedraw = false; }
+        else if (waiting) { _drawVerifyingScreen(waiting, false); }  // keep animating the spinner
+
+        if (!waiting && _encSwPollEvent() == 1) {
+            _state = _verifyReturnState;
+            _needsRedraw = true;
+        }
         break;
     }
 

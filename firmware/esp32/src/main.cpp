@@ -14,8 +14,8 @@ void setup() {
 
     motors_init();
     uas_init();
-    turbidity_init();     // diagnostic/trend only — not a scheduler input, see scheduler.h
-    force_sensor_init();
+    turbidity_init();     // one of four closed-loop fusion inputs once calibrated, see scheduler.h
+    force_sensor_init();   // fusion input AND independent e-stop safety input, see calibration.h
     ui_init();
     rpi_uart_init();
     ble_debug_init();
@@ -35,9 +35,11 @@ void loop() {
     uas_update();
     turbidity_update();
 
-    // Automatic e-stop: force sensor is a SAFETY input, not a scheduler
-    // input (see calibration.h and scheduler.h) — routed into the exact
-    // same kill path as the button e-stop, not a separate one.
+    // Automatic e-stop: force is ALSO a safety input, independent of its
+    // role as one of the four fusion channels (see calibration.h,
+    // scheduler.h) — this threshold applies regardless of what the fused
+    // size estimate says, routed into the exact same kill path as the
+    // button e-stop, not a separate one.
     if (force_sensor_update() && force_sensor_estop_tripped()) {
         scheduler_emergency_stop();
     }

@@ -13,6 +13,7 @@ static const char *LOG_UUID           = "8f6a1005-3b1a-4e3d-9f2e-6a2c6c9a9a10";
 static NimBLEServer *server = nullptr;
 static NimBLECharacteristic *telemetryChar = nullptr;
 static NimBLECharacteristic *logChar = nullptr;
+static volatile bool connected = false;
 
 static MotorCmd pendingMotorCmd;
 static volatile bool motorCmdPending = false;
@@ -42,9 +43,11 @@ static HomeCmdCallbacks homeCmdCallbacks;
 
 class ServerCallbacks : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer *srv) override {
+		connected = true;
 		NimBLEDevice::startAdvertising(); // allow a second/replacement central to find us
 	}
 	void onDisconnect(NimBLEServer *srv) override {
+		connected = false;
 		NimBLEDevice::startAdvertising();
 	}
 };
@@ -77,6 +80,10 @@ void bleServiceInit() {
 	NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
 	adv->addServiceUUID(SERVICE_UUID);
 	adv->start();
+}
+
+bool bleIsConnected() {
+	return connected;
 }
 
 void bleNotifyTelemetry(const TelemetryPacket &pkt) {

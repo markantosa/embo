@@ -4,38 +4,55 @@
 
 // Mixing control loop — replaces the old PID (pid.h/pid.cpp).
 //
-// WHY NOT PID: the breakage process D(N) = D_min + (D0-D_min)*exp(-k*N) is
-// monotonic and IRREVERSIBLE — mixing can only break particles smaller,
-// never larger. Overshoot isn't "error to correct from the other side," it's
-// a ruined batch, which rules out an integral term (accumulated windup would
-// push MORE strokes on a process that can't undo damage already done). The
-// CV measurement is also slow/quantized/noisy relative to the control
-// action, which makes a derivative term a textbook noise amplifier. See the
-// control-loop discussion referenced from firmware/CALIBRATION.md §5-6.
+// CLOSED LOOP, on four live sensors — NOT on CV. UAS attenuation, APDS9960
+// turbidity, MAX30102 turbidity, and load-cell force are each calibrated
+// against a 9-point bench dataset of known particle sizes (see
+// calibration.h's SensorCalibrationPoint / SENSOR_CAL_TABLE and
+// CALIBRATION.md §5). Each live reading is inverted through its own
+// channel's calibration curve into a size estimate; the channels that pass
+// a monotonicity sanity check are fused (median) into one number
+// (calib_estimate_particle_size_um()) that this scheduler compares against
+// the operator's target every stroke.
 //
-// INSTEAD: a receding-horizon batch/measure/refit scheduler —
-//   1. Run a batch of strokes (size scaled to distance from target).
-//   2. Take a CV measurement.
-//   3. Refit the breakage model (k, D0) from all real data points so far
-//      (calibration.h's calib_breakage_add_point / calib_breakage_get_fit).
-//   4. Predict strokes-remaining from the fitted model, but command less
-//      than the full predicted remainder (calibration.h's
-//      SCHED_UNDERSHOOT_FRACTION) — deliberately re-measure before the
-//      model could possibly authorize an overshoot.
-//   5. Stop the instant a real measurement lands inside tolerance.
+// CV (the RPi camera) is deliberately NOT a fusion input. It's an optional,
+// operator-triggered, single-shot VERIFICATION (rpi_uart.h) the doctor can
+// run before/after a run to double-check the achieved size — slower and
+// historically less trustworthy as a continuous signal (see
+// docs/EMBO_UAS_CV_Technical_Advisory.txt), but a good independent check
+// precisely because it counts real particles rather than inferring from a
+// bulk proxy. A verification result also feeds the (diagnostic-only)
+// breakage-model fit in calibration.h, but never the stop condition itself.
 //
-// StallGuard and UAS/turbidity are NOT scheduler inputs — per
-// docs/EMBO_UAS_CV_Technical_Advisory.txt, the CV pipeline is the sole
-// authoritative size signal until an empirical correlation check justifies
-// promoting anything else. Force sensing (HX711) is a safety input (e-stop),
-// not a scheduler input either — see calibration.h §8.
+// WHY NOT PID: the breakage process is monotonic and IRREVERSIBLE — mixing
+// only breaks particles smaller, never larger. Overshoot isn't "error to
+// correct from the other side," it's a ruined batch. Even with a live,
+// fast, continuous fused estimate now available, this still argues against
+// a PID: the only real "control action" is "keep stroking or stop," not a
+// proportional correction, and an integral term in particular risks
+// pushing past a target that can't be un-passed. Instead:
+//   1. Stroke continuously at a fixed rate once a run starts.
+//   2. After every completed stroke, compute the fused size estimate.
+//   3. Stop once the estimate reads within TARGET_TOLERANCE_UM (config.h)
+//      of the target for FUSION_CONSECUTIVE_CHECKS_REQUIRED checks in a
+//      row (calibration.h) — debounced so a single noisy reading can't
+//      stop an irreversible process early.
+//   4. A hard MIXING_MAX_STROKES_SAFETY_CAP (calibration.h) stops the run
+//      regardless, logging a warning, if the estimate never converges —
+//      guards against a miscalibrated fusion setup running forever.
+//
+// StallGuard is NOT a fusion input (never validated as a size proxy, see
+// the technical advisory). Force sensing (HX711) is BOTH a fusion input
+// AND an independent safety e-stop (calibration.h's
+// calib_force_estop_tripped()) — the e-stop threshold applies regardless
+// of what the fused estimate says.
 
 void scheduler_init();
 void scheduler_update();   // call every loop()
 
 // Start a mixing run targeting the current setpoint (see
-// scheduler_set_target_um). Resets the online breakage-model fit — a fresh
-// syringe/material may have a different k (CALIBRATION.md §5).
+// scheduler_set_target_um()). Resets the consecutive-in-spec debounce
+// counter. Does NOT reset the breakage-model fit (calibration.h) — that
+// accumulates across runs, see calib_breakage_reset().
 void scheduler_start();
 
 // Graceful stop: finishes the in-progress stroke, then holds. Use for a
@@ -49,15 +66,34 @@ void scheduler_stop();
 void scheduler_emergency_stop();
 
 bool scheduler_is_running();
+
+// True once the fused sensor estimate has read within tolerance of target
+// for enough consecutive checks (a real, sensor-confirmed stop) OR the
+// safety-cap stroke count was hit (check scheduler_hit_safety_cap() to
+// distinguish the two).
 bool scheduler_target_reached();
+
+// True if the run stopped because MIXING_MAX_STROKES_SAFETY_CAP was hit
+// rather than the fused estimate actually converging — a sign the
+// calibration or fusion setup needs attention, not a normal completion.
+bool scheduler_hit_safety_cap();
 
 // Setpoint, clamped to [TARGET_SIZE_UM_MIN, TARGET_SIZE_UM_MAX] from
 // config.h. Rejected (no-op) while a run is in progress.
 void     scheduler_set_target_um(uint16_t target_um);
 uint16_t scheduler_get_target_um();
 
-// Latest fitted model, for UI/BLE diagnostics — see calibration.h's
-// BreakageFit for field meanings.
+uint32_t scheduler_get_strokes_done();
+
+// Latest fused sensor estimate and how many channels it's built from — for
+// UI/BLE diagnostics. Only meaningful while running (0 channels used before
+// the first post-stroke check of a run).
+float    scheduler_get_last_fused_size_um();
+uint8_t  scheduler_get_last_fused_num_channels();
+
+// Diagnostic-only breakage-model fit, for UI/BLE cross-check against the
+// live fused estimate — see calibration.h's BreakageFit for field meanings.
+// This does NOT drive the stop condition (see header comment above).
 float    scheduler_get_fit_k();
 float    scheduler_get_fit_d0_um();
 uint8_t  scheduler_get_fit_num_points();

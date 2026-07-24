@@ -8,11 +8,15 @@
 // This is the ONE file to edit when new calibration data comes in — every
 // constant below is a placeholder until measured on real hardware, and
 // nothing else in the firmware should need to change to update a
-// raw-sensor-to-physical mapping or the breakage model. Full measurement
-// procedure for each value: firmware/CALIBRATION.md.
+// raw-sensor-to-physical mapping or the fused size estimate. Full
+// measurement procedure for each value: firmware/CALIBRATION.md.
 //
 // If a value here and firmware/CALIBRATION.md ever disagree, THIS file is
 // the one actually running — go fix the doc, not the other way round.
+//
+// The 9-point sensor-fusion calibration table itself (§ below) lives in
+// calibration.cpp, not here, since it's a data table rather than a scalar
+// constant — see that file's SENSOR_CAL_TABLE.
 // ============================================================================
 
 // ---------------------------------------------------------------------------
@@ -33,7 +37,9 @@
 // Automatic e-stop trigger, independent of the mixing schedule. Set with
 // headroom above the peak force observed across several NORMAL mixing
 // runs — must never trip in routine operation, but must catch a genuine
-// jam/obstruction fast. See CALIBRATION.md §4 and §8.
+// jam/obstruction fast. See CALIBRATION.md §4 and §8. This is a SAFETY
+// threshold, separate from force's role as one of the four fusion inputs
+// below — it applies regardless of what the fused size estimate says.
 #define HX711_ESTOP_GRAMS               5000.0f
 
 float calib_hx711_to_grams(uint8_t channel, int32_t rawCount);
@@ -57,22 +63,104 @@ bool calib_force_estop_tripped(float grams1, float grams2);
 
 // Returns raw/baseline: 1.0 = matches the saline baseline, <1.0 or >1.0 =
 // more/less transmission or backscatter than baseline depending on sensor.
-// NOT yet validated as a particle-size proxy — diagnostic/trend signal only
-// until an empirical CV correlation check passes, same discipline as UAS
-// (see docs/EMBO_UAS_CV_Technical_Advisory.txt and CALIBRATION.md §3).
+// These ratios are two of the four sensor-fusion inputs below (§ Sensor
+// fusion) — see CALIBRATION.md §3 for the baseline re-sampling procedure.
 float calib_turbidity_ratio_als(uint16_t alsClearRaw);
 float calib_turbidity_ratio_backscatter_ir(uint32_t irRaw);
 float calib_turbidity_ratio_backscatter_red(uint32_t redRaw);
 
 // ---------------------------------------------------------------------------
-// Breakage kinetics: D(N) = D_min + (D0 - D_min) * exp(-k * N)
-// See CALIBRATION.md §5. This is the model the mixing scheduler (§6) uses
-// instead of a PID error term — see docs/EMBO_UAS_CV_Technical_Advisory.txt
-// and the scheduler's own header for why.
+// Sensor fusion — closed-loop particle-size estimate driving the mixing
+// stop condition. See CALIBRATION.md §5 for the full bench procedure.
+// ---------------------------------------------------------------------------
+// Four independent live sensor channels — UAS attenuation, APDS9960
+// turbidity, MAX30102 turbidity, load-cell force — are each calibrated
+// against a bench dataset of known particle sizes (nominally 9 syringes of
+// slurry at set sizes spanning the target range). Each channel's own
+// 9-point (sensor reading -> known size) curve is used to invert a LIVE
+// reading into a size estimate; the four per-channel estimates are then
+// fused (median of whichever channels pass a monotonicity sanity check —
+// see calib_estimate_particle_size_um()) into one number the scheduler
+// compares against the operator's target.
+//
+// CV (RPi camera) is deliberately NOT one of these four channels — it's an
+// optional, on-demand, single-shot VERIFICATION the operator can trigger
+// separately (see rpi_uart.h), not a live fusion input. It's slower and
+// historically less trustworthy for a continuous reading (see
+// docs/EMBO_UAS_CV_Technical_Advisory.txt) than these four sensors — but
+// unlike a rushed fusion, it directly counts real particles, which is
+// exactly what makes it a good independent double-check.
+
+struct SensorCalibrationPoint {
+    float knownSizeUm;      // ground truth for this bench syringe
+    float uasAttenuation;   // e.g. mean attenuation across the swept frequencies
+    float turbApdsRatio;    // calib_turbidity_ratio_als() at this size
+    float turbMaxRatio;     // calib_turbidity_ratio_backscatter_ir() at this size
+    float forceGrams;       // mean of both HX711 channels at this size
+};
+
+// The bench dataset itself — see calibration.cpp's SENSOR_CAL_TABLE. This
+// is a placeholder (all zeros) until the 9-syringe bench session runs; see
+// CALIBRATION.md §5 and ble_debug.cpp's `FUSION` command, which prints the
+// exact live values to copy into each row.
+#define SENSOR_CAL_NUM_POINTS 9
+extern const SensorCalibrationPoint SENSOR_CAL_TABLE[SENSOR_CAL_NUM_POINTS];
+
+struct FusedSizeEstimate {
+    float sizeUm;             // fused estimate — meaningless if numChannelsUsed == 0
+    uint8_t numChannelsUsed;  // how many of the 4 channels passed their sanity check and were used
+    bool uasTrusted;
+    bool turbApdsTrusted;
+    bool turbMaxTrusted;
+    bool forceTrusted;
+};
+
+// Takes the CURRENT live reading from each channel (caller reads these from
+// uas.h/turbidity.h/force_sensor.h — this function stays hardware-agnostic,
+// consistent with the rest of this file) and returns a fused size estimate.
+// Each channel is independently checked for monotonicity against
+// SENSOR_CAL_TABLE (see CALIBRATION.md §5) — a channel whose calibration
+// data isn't monotonic is excluded rather than trusted, same discipline the
+// project has held UAS/turbidity to since the very first advisory. The
+// fused value is the median of whichever channels pass.
+FusedSizeEstimate calib_estimate_particle_size_um(float uasAttenuation, float turbApdsRatio,
+                                                   float turbMaxRatio, float forceGrams);
+
+// ---------------------------------------------------------------------------
+// Mixing stop condition — debounce, see CALIBRATION.md §6
 // ---------------------------------------------------------------------------
 
-// Fallback values used only until calib_breakage_get_fit() has at least 2
-// real (stroke, measured_um) data points of its own from the current run.
+// The fused estimate must read within TARGET_TOLERANCE_UM (config.h) of the
+// target for this many CONSECUTIVE post-stroke checks before the scheduler
+// actually stops — protects against a single noisy reading stopping early
+// on an irreversible process. See scheduler.h.
+#define FUSION_CONSECUTIVE_CHECKS_REQUIRED   3
+
+// Refuses to trust a fused estimate built from fewer than this many
+// channels — e.g. if only one sensor currently passes its sanity check,
+// that's too thin a basis to stop an irreversible process on.
+#define FUSION_MIN_CHANNELS_REQUIRED         2
+
+// Safety cap: stops the run after this many strokes regardless of what the
+// fused estimate says, logging a warning — guards against a miscalibrated
+// or degenerate fusion setup running forever. Not a calibration value in
+// itself; a sanity backstop. See CALIBRATION.md §6.
+#define MIXING_MAX_STROKES_SAFETY_CAP        2000
+
+// ---------------------------------------------------------------------------
+// Breakage kinetics: D(N) = D_min + (D0 - D_min) * exp(-k * N)
+// DIAGNOSTIC ONLY as of the sensor-fusion redesign — see CALIBRATION.md §7.
+// This does NOT drive the stop condition any more (calib_estimate_particle_
+// size_um() above does). It's kept because it's still a useful independent
+// cross-check ("the model expects roughly N more strokes; the live sensors
+// say we're already there — do they agree?") and because operator-triggered
+// CV verifications (rpi_uart.h) still feed it, same as before.
+// ---------------------------------------------------------------------------
+
+// Fallback values used until calib_breakage_get_fit() has at least 2 real
+// (stroke, measured_um) data points of its own — which accumulate only
+// when an operator explicitly runs a camera verification (any number of
+// times, across any number of runs; see calib_breakage_add_point below).
 #define BREAKAGE_K_DEFAULT               0.01f    // per stroke, PLACEHOLDER
 #define BREAKAGE_D_MIN_UM                50.0f     // PLACEHOLDER
 #define BREAKAGE_D0_UM_DEFAULT           1000.0f   // PLACEHOLDER — initial/unmixed size
@@ -87,40 +175,23 @@ struct BreakageFit {
     uint8_t numPoints;  // how many real data points the current fit is based on
 };
 
-// Resets the online fit — call at the start of every new mixing run (a
-// fresh syringe/material may have a different k, see CALIBRATION.md §5).
+// Resets the online fit. NOT called automatically at the start of every run
+// (verification data accumulates across runs by default) — call this
+// manually (e.g. the BLE `FIT RESET` command, ble_debug.cpp) when the
+// material genuinely changes, per CALIBRATION.md §7.
 void calib_breakage_reset();
 
-// Feed it every (strokeCount, measured_um) pair as CV packets arrive.
-// Maintains a rolling linear-regression fit of ln(D - D_min) vs N — the
-// linearized form of the exponential model — over the last few points.
-// Points where measuredUm <= BREAKAGE_D_MIN_UM are silently rejected (would
-// require a log of a non-positive number; also physically implausible).
+// Feed it a (strokeCount, measured_um) pair whenever an operator-triggered
+// camera verification returns a result (see rpi_uart.h). Maintains a
+// rolling linear-regression fit of ln(D - D_min) vs N — the linearized form
+// of the exponential model — over the last few points. Points where
+// measuredUm <= BREAKAGE_D_MIN_UM are silently rejected (would require a
+// log of a non-positive number; also physically implausible).
 void calib_breakage_add_point(uint32_t strokeCount, float measuredUm);
 
 BreakageFit calib_breakage_get_fit();
 
-// ---------------------------------------------------------------------------
-// Mixing scheduler tuning — see CALIBRATION.md §6
-// ---------------------------------------------------------------------------
-
-// Deliberately commands fewer strokes than the model predicts are needed,
-// so a fresh CV measurement always happens before the model could possibly
-// overshoot the (irreversible) target. Tighten toward 1.0 only once the
-// fit's run-to-run variance is well characterized.
-#define SCHED_UNDERSHOOT_FRACTION        0.75f
-
-#define SCHED_MIN_BATCH_STROKES          5
-#define SCHED_MAX_BATCH_STROKES          200
-
-// How long to trust a CV reading before treating it as "no data" and
-// holding position rather than scheduling blind.
-#define SCHED_STALE_MEASUREMENT_MS       10000
-
-// Predicts how many strokes to run in the NEXT batch, given the current
-// fitted model (or the fallback constants above if fewer than 2 points are
-// in yet), the most recent (strokeCount, measured_um) data point on file,
-// and targetUm/toleranceUm. Already reduced by SCHED_UNDERSHOOT_FRACTION
-// and clamped to [SCHED_MIN_BATCH_STROKES, SCHED_MAX_BATCH_STROKES].
-// Returns 0 if the most recent measurement is already within tolerance.
-uint32_t calib_predict_next_batch_strokes(float targetUm, float toleranceUm);
+// Diagnostic-only prediction of total strokes (from a fresh D0) to reach
+// targetUm under the current fit — for comparison against the live fused
+// estimate, NOT itself a stop condition. See CALIBRATION.md §7.
+uint32_t calib_predict_total_strokes(float targetUm);

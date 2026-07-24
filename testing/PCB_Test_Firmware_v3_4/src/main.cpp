@@ -30,6 +30,26 @@ static uint32_t lastDebugPrint = 0;
 static uint32_t lastUartCheck = 0;
 static TelemetryPacket telemetry{};
 
+// Status LED: blinks at BLINK_PERIOD_MS while waiting for a BLE dashboard to
+// connect, holds solid once one does — an at-a-glance "is anyone listening"
+// indicator for bench bring-up, no serial monitor needed.
+constexpr uint32_t LED_BLINK_PERIOD_MS = 300;
+static uint32_t lastLedToggleMs = 0;
+static bool ledState = false;
+
+static void updateStatusLed() {
+	if (bleIsConnected()) {
+		digitalWrite(PIN_STATUS_LED, HIGH);
+		return;
+	}
+	uint32_t now = millis();
+	if (now - lastLedToggleMs >= LED_BLINK_PERIOD_MS) {
+		lastLedToggleMs = now;
+		ledState = !ledState;
+		digitalWrite(PIN_STATUS_LED, ledState ? HIGH : LOW);
+	}
+}
+
 static void applyMotorCmd(const MotorCmd &cmd) {
 	uint32_t now = millis();
 	bleLog("[BLE] motor_cmd motorId=%u dir=%d speedPct=%u", cmd.motorId, cmd.dir, cmd.speedPct);
@@ -110,11 +130,14 @@ void setup() {
 	turbidityInit();
 	busProbeInit();
 
-	digitalWrite(PIN_STATUS_LED, HIGH);
 	bleLog("EMBO PCB v3.4 test firmware ready, advertising as 'EMBO-PCB-Test-v3.4'");
+	// Status LED starts blinking here (see updateStatusLed() in loop()) and
+	// goes solid the moment a dashboard connects.
 }
 
 void loop() {
+	updateStatusLed();
+
 	MotorCmd cmd;
 	if (blePopMotorCmd(cmd)) applyMotorCmd(cmd);
 

@@ -6,9 +6,12 @@
 // ALS transmission-mode clear channel, external LED hardwired on) and
 // MAX30102 (0x57, backscatter mode, own onboard 660/880nm LEDs).
 //
-// Diagnostic/trend signal only — see docs/EMBO_UAS_CV_Technical_Advisory.txt
-// and firmware/CALIBRATION.md §3. Not wired into the mixing scheduler until
-// an empirical CV correlation check passes, same discipline as UAS.
+// Two of the four closed-loop sensor-fusion inputs (scheduler.cpp) once
+// SENSOR_CAL_TABLE (calibration.cpp) is populated from the 9-syringe bench
+// session — see firmware/CALIBRATION.md §3 and §5. Each channel is
+// independently gated by a monotonicity check at runtime
+// (calib_estimate_particle_size_um()), so an unfilled or bad calibration
+// table safely excludes a channel rather than trusting it blindly.
 
 void turbidity_init();
 void turbidity_update();  // call every loop() — polls both devices

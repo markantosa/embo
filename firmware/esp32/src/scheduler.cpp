@@ -2,16 +2,17 @@
 #include "config.h"
 #include "calibration.h"
 #include "motors.h"
-#include "rpi_uart.h"
+#include "uas.h"
+#include "turbidity.h"
+#include "force_sensor.h"
 #include "ble_debug.h"
 #include <Arduino.h>
 #include <math.h>
 
-// See scheduler.h for the batch/measure/refit design rationale.
+// See scheduler.h for the closed-loop, four-sensor-fusion design rationale.
 
 enum class RunState {
     IDLE,
-    PLANNING,       // deciding the next batch size from the latest measurement + fit
     STROKE_FORWARD, // executing one stroke's forward phase
     STROKE_RETURN,  // executing one stroke's return phase
     DONE,
@@ -21,9 +22,12 @@ static RunState _state = RunState::IDLE;
 static uint16_t _target_um = TARGET_SIZE_UM_DEFAULT;
 static bool _stopRequested = false;   // graceful stop — finish current stroke, then hold
 
-static uint32_t _batchStrokesRemaining = 0;
+static uint32_t _strokesDone = 0;
 static uint32_t _phaseStartMs = 0;
-static int16_t _lastSeenMedian = -1;  // last rpi_get_median_um() value already fed to the fit
+static uint8_t _consecutiveInSpec = 0;
+static bool _hitSafetyCap = false;
+
+static FusedSizeEstimate _lastFused{};
 
 static void _beginStroke() {
     motor_enable(1, true);
@@ -43,6 +47,21 @@ static void _stopMotorsHold() {
     motor_enable(2, false);
 }
 
+// Reads the current live value of each of the four fusion channels and
+// returns the fused size estimate — see calibration.h.
+static FusedSizeEstimate _readFusedEstimate() {
+    float uasAtten = 0.0f;
+    uint8_t numFreq = uas_get_num_frequencies();
+    for (uint8_t i = 0; i < numFreq; i++) uasAtten += uas_get_attenuation(i);
+    if (numFreq > 0) uasAtten /= (float)numFreq;
+
+    float apdsRatio = calib_turbidity_ratio_als(turbidity_get_als_clear());
+    float maxRatio = calib_turbidity_ratio_backscatter_ir(turbidity_get_ir_raw());
+    float forceG = (force_sensor_get_grams_1() + force_sensor_get_grams_2()) / 2.0f;
+
+    return calib_estimate_particle_size_um(uasAtten, apdsRatio, maxRatio, forceG);
+}
+
 void scheduler_init() {
     _state = RunState::IDLE;
     _stopRequested = false;
@@ -53,12 +72,15 @@ void scheduler_start() {
         ble_log("Scheduler: refusing to start — not homed");
         return;
     }
-    calib_breakage_reset();
-    _lastSeenMedian = -1;
-    _batchStrokesRemaining = 0;
+
+    _strokesDone = 0;
+    _consecutiveInSpec = 0;
+    _hitSafetyCap = false;
     _stopRequested = false;
-    ble_log("Scheduler: run started, target=%u um", _target_um);
-    _state = RunState::PLANNING;
+    _lastFused = FusedSizeEstimate{};
+
+    ble_log("Scheduler: run started, target=%u um (closed-loop, 4-sensor fusion)", _target_um);
+    _beginStroke();
 }
 
 void scheduler_stop() {
@@ -73,12 +95,11 @@ void scheduler_emergency_stop() {
 }
 
 bool scheduler_is_running() {
-    return _state != RunState::IDLE && _state != RunState::DONE;
+    return _state == RunState::STROKE_FORWARD || _state == RunState::STROKE_RETURN;
 }
 
-bool scheduler_target_reached() {
-    return _state == RunState::DONE;
-}
+bool scheduler_target_reached() { return _state == RunState::DONE; }
+bool scheduler_hit_safety_cap()  { return _hitSafetyCap; }
 
 void scheduler_set_target_um(uint16_t target_um) {
     if (scheduler_is_running()) return;  // lock the setpoint for the duration of a run
@@ -87,7 +108,11 @@ void scheduler_set_target_um(uint16_t target_um) {
     _target_um = target_um;
 }
 
-uint16_t scheduler_get_target_um() { return _target_um; }
+uint16_t scheduler_get_target_um()    { return _target_um; }
+uint32_t scheduler_get_strokes_done() { return _strokesDone; }
+
+float   scheduler_get_last_fused_size_um()        { return _lastFused.sizeUm; }
+uint8_t scheduler_get_last_fused_num_channels()    { return _lastFused.numChannelsUsed; }
 
 float   scheduler_get_fit_k()          { return calib_breakage_get_fit().k; }
 float   scheduler_get_fit_d0_um()      { return calib_breakage_get_fit().d0Um; }
@@ -98,38 +123,6 @@ void scheduler_update() {
     case RunState::IDLE:
     case RunState::DONE:
         return;
-
-    case RunState::PLANNING: {
-        if (_stopRequested) {
-            _state = RunState::IDLE;
-            _stopRequested = false;
-            ble_log("Scheduler: stopped (graceful)");
-            return;
-        }
-
-        // Feed any new CV measurement into the fit before (re)planning.
-        int16_t median = rpi_get_median_um();
-        if (median >= 0 && median != _lastSeenMedian) {
-            calib_breakage_add_point(motor_get_stroke_count(), (float)median);
-            _lastSeenMedian = median;
-        }
-
-        uint32_t nextBatch = calib_predict_next_batch_strokes((float)_target_um, (float)TARGET_TOLERANCE_UM);
-        if (nextBatch == 0 && _lastSeenMedian >= 0) {
-            ble_log("Scheduler: target reached (median=%d um, target=%u um, strokes=%lu)",
-                    _lastSeenMedian, _target_um, (unsigned long)motor_get_stroke_count());
-            _stopMotorsHold();
-            _state = RunState::DONE;
-            return;
-        }
-
-        _batchStrokesRemaining = nextBatch;
-        ble_log("Scheduler: batch=%lu strokes (fit k=%.4f D0=%.1f n=%u)",
-                (unsigned long)_batchStrokesRemaining, scheduler_get_fit_k(),
-                scheduler_get_fit_d0_um(), scheduler_get_fit_num_points());
-        _beginStroke();
-        return;
-    }
 
     case RunState::STROKE_FORWARD:
         if (millis() - _phaseStartMs >= STROKE_FORWARD_MS) {
@@ -143,13 +136,35 @@ void scheduler_update() {
     case RunState::STROKE_RETURN:
         if (millis() - _phaseStartMs >= STROKE_RETURN_MS) {
             motor_increment_stroke();
-            if (_batchStrokesRemaining > 0) _batchStrokesRemaining--;
+            _strokesDone++;
 
-            if (_stopRequested || _batchStrokesRemaining == 0) {
+            _lastFused = _readFusedEstimate();
+            bool inSpec = (_lastFused.numChannelsUsed >= FUSION_MIN_CHANNELS_REQUIRED)
+                          && (fabsf(_lastFused.sizeUm - (float)_target_um) <= TARGET_TOLERANCE_UM);
+            _consecutiveInSpec = inSpec ? (_consecutiveInSpec + 1) : 0;
+
+            if (_stopRequested) {
                 _stopMotorsHold();
-                _state = RunState::PLANNING;  // re-measure / re-plan (or stop, checked there)
+                _state = RunState::IDLE;
+                _stopRequested = false;
+                ble_log("Scheduler: stopped (graceful) at %lu strokes, last fused=%.1fum (n=%u)",
+                        (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed);
+            } else if (_consecutiveInSpec >= FUSION_CONSECUTIVE_CHECKS_REQUIRED) {
+                _stopMotorsHold();
+                _hitSafetyCap = false;
+                _state = RunState::DONE;
+                ble_log("Scheduler: target confirmed by sensor fusion at %lu strokes "
+                        "(fused=%.1fum, n=%u channels, target=%uum)",
+                        (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed, _target_um);
+            } else if (_strokesDone >= MIXING_MAX_STROKES_SAFETY_CAP) {
+                _stopMotorsHold();
+                _hitSafetyCap = true;
+                _state = RunState::DONE;
+                ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before sensor fusion "
+                        "confirmed target; last fused=%.1fum (n=%u). Check calibration.",
+                        MIXING_MAX_STROKES_SAFETY_CAP, _lastFused.sizeUm, _lastFused.numChannelsUsed);
             } else {
-                _beginStroke();  // next stroke in the same batch
+                _beginStroke();  // next stroke
             }
         }
         return;

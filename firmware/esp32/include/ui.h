@@ -9,9 +9,19 @@
 // stays operational at all times for exactly that purpose, independent of
 // whatever this screen is showing.
 //
+// Camera size verification is an OPTIONAL, on-demand feature, not part of
+// the mixing loop (see scheduler.h) — the operator can trigger it from the
+// set-target or done screens (encoder long-press) to have the RPi capture
+// one frame, run CV once, and report median/IQR back here for display. It
+// does not run continuously and does not drive the mixing schedule.
+//
 // Button mapping (see config.h for timing constants):
-//   EC11 rotary       — adjust target particle size while idle; confirm/
-//                        start a run when pressed (short press)
+//   EC11 rotary       — adjust target particle size while idle
+//   EC11 push-switch  — short press = confirm/start a run (set-target
+//                        screen) or dismiss and return to set-target (done /
+//                        verify screens)
+//                     — held >= EC11_SW_LONGPRESS_MS = request an optional
+//                        camera size verification (set-target or done screen)
 //   BTN1               — dedicated stop button, no start function:
 //                          short press = graceful stop (finish current
 //                          stroke, then hold)

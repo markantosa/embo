@@ -135,7 +135,7 @@
 #define TARGET_SIZE_UM_DEFAULT  300
 #define TARGET_SIZE_UM_STEP     5    // per encoder detent
 // "In spec" window half-width around the setpoint. Placeholder — see
-// firmware/CALIBRATION.md §7 before trusting for auto-stop.
+// firmware/CALIBRATION.md §8 before trusting for auto-stop.
 #define TARGET_TOLERANCE_UM     25
 
 // ── UI input timing (used by ui.cpp) ────────────────────────────────────────
@@ -145,6 +145,17 @@
 #define BTN1_DEBOUNCE_MS      30
 #define BTN1_LONGPRESS_MS     800   // held this long or more = emergency stop
 #define EC11_SW_DEBOUNCE_MS   30
+// EC11_SW short press = confirm/start (or return-to-menu on the done screen).
+// Held this long or more = request an optional camera size verification
+// instead (see rpi_uart.h / ui.cpp) — CV is opt-in per-check now, not a
+// continuous control input. See CALIBRATION.md and rpi_uart.h for why.
+#define EC11_SW_LONGPRESS_MS  800
+
+// ── RPi camera verification (on-demand, single-shot) ────────────────────────
+// CV is NOT a continuous control input as of this revision — the RPi only
+// captures + runs CV when explicitly asked (rpi_request_capture()), and the
+// result is for display/logging only. See rpi_uart.h and scheduler.h.
+#define RPI_CAPTURE_TIMEOUT_MS  8000   // camera + YOLO inference time budget
 
 // ── Mixing stroke motion (used by scheduler.cpp) ────────────────────────────
 // One "stroke" = one forward + return cycle at this speed/duration. These

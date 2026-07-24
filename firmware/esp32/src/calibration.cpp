@@ -36,6 +36,137 @@ float calib_turbidity_ratio_backscatter_red(uint32_t redRaw) {
 }
 
 // ---------------------------------------------------------------------------
+// Sensor fusion — 9-point bench calibration table + live estimate
+// ---------------------------------------------------------------------------
+// PLACEHOLDER — all zeros. Fill in one row per bench syringe: set knownSizeUm
+// to that syringe's actual particle size, load/mix it, then read the live
+// values via the BLE `FUSION` command (ble_debug.cpp) and copy them in.
+// A channel whose column is all the same value (e.g. all zero) is correctly
+// treated as untrustworthy by the monotonicity check below, so an
+// unfilled-in table safely disables fusion entirely rather than producing a
+// silently-wrong estimate — see CALIBRATION.md §5.
+const SensorCalibrationPoint SENSOR_CAL_TABLE[SENSOR_CAL_NUM_POINTS] = {
+    // knownSizeUm, uasAttenuation, turbApdsRatio, turbMaxRatio, forceGrams
+    {   50.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    {  150.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    {  250.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    {  350.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    {  450.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    {  550.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    {  650.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    {  800.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    { 1000.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+};
+
+static constexpr float FUSION_MONOTONIC_EPS = 1e-6f;
+
+// Sorts a local copy of (size, value) pairs by SIZE ascending, then checks
+// whether value moves in one consistent direction as size increases
+// (allowing exactly one flat/noisy step out of 8, but no direction
+// reversals) — see CALIBRATION.md §5 for why this is the trust gate.
+static bool _isMonotonicVsSize(const float sizesIn[SENSOR_CAL_NUM_POINTS],
+                               const float valuesIn[SENSOR_CAL_NUM_POINTS]) {
+    const int n = SENSOR_CAL_NUM_POINTS;
+    float size[SENSOR_CAL_NUM_POINTS], val[SENSOR_CAL_NUM_POINTS];
+    for (int i = 0; i < n; i++) { size[i] = sizesIn[i]; val[i] = valuesIn[i]; }
+
+    for (int i = 1; i < n; i++) {  // insertion sort by size ascending
+        float s = size[i], v = val[i];
+        int j = i - 1;
+        while (j >= 0 && size[j] > s) { size[j + 1] = size[j]; val[j + 1] = val[j]; j--; }
+        size[j + 1] = s; val[j + 1] = v;
+    }
+
+    int inc = 0, dec = 0;
+    for (int i = 1; i < n; i++) {
+        float d = val[i] - val[i - 1];
+        if (d > FUSION_MONOTONIC_EPS) inc++;
+        else if (d < -FUSION_MONOTONIC_EPS) dec++;
+    }
+    int total = n - 1;
+    return (inc >= total - 1 && dec == 0) || (dec >= total - 1 && inc == 0);
+}
+
+// Sorts a local copy of (size, value) pairs by VALUE ascending (the axis
+// being inverted), then piecewise-linearly interpolates/clamps liveValue
+// against it to estimate size.
+static float _interpolateSizeFromValue(float liveValue,
+                                       const float sizesIn[SENSOR_CAL_NUM_POINTS],
+                                       const float valuesIn[SENSOR_CAL_NUM_POINTS]) {
+    const int n = SENSOR_CAL_NUM_POINTS;
+    float size[SENSOR_CAL_NUM_POINTS], val[SENSOR_CAL_NUM_POINTS];
+    for (int i = 0; i < n; i++) { size[i] = sizesIn[i]; val[i] = valuesIn[i]; }
+
+    for (int i = 1; i < n; i++) {  // insertion sort by value ascending
+        float v = val[i], s = size[i];
+        int j = i - 1;
+        while (j >= 0 && val[j] > v) { val[j + 1] = val[j]; size[j + 1] = size[j]; j--; }
+        val[j + 1] = v; size[j + 1] = s;
+    }
+
+    if (liveValue <= val[0]) return size[0];
+    if (liveValue >= val[n - 1]) return size[n - 1];
+    for (int i = 1; i < n; i++) {
+        if (liveValue <= val[i]) {
+            float t = (val[i] > val[i - 1]) ? (liveValue - val[i - 1]) / (val[i] - val[i - 1]) : 0.0f;
+            return size[i - 1] + t * (size[i] - size[i - 1]);
+        }
+    }
+    return size[n - 1];  // unreachable, satisfies compilers that want a return here
+}
+
+static float _medianOf(float *values, uint8_t n) {
+    for (uint8_t i = 1; i < n; i++) {  // insertion sort, n <= 4
+        float v = values[i];
+        int j = i - 1;
+        while (j >= 0 && values[j] > v) { values[j + 1] = values[j]; j--; }
+        values[j + 1] = v;
+    }
+    if (n % 2 == 1) return values[n / 2];
+    return (values[n / 2 - 1] + values[n / 2]) / 2.0f;
+}
+
+FusedSizeEstimate calib_estimate_particle_size_um(float uasAttenuation, float turbApdsRatio,
+                                                   float turbMaxRatio, float forceGrams) {
+    FusedSizeEstimate result{};
+
+    float sizes[SENSOR_CAL_NUM_POINTS];
+    float uasVals[SENSOR_CAL_NUM_POINTS], apdsVals[SENSOR_CAL_NUM_POINTS];
+    float maxVals[SENSOR_CAL_NUM_POINTS], forceVals[SENSOR_CAL_NUM_POINTS];
+    for (int i = 0; i < SENSOR_CAL_NUM_POINTS; i++) {
+        sizes[i]    = SENSOR_CAL_TABLE[i].knownSizeUm;
+        uasVals[i]  = SENSOR_CAL_TABLE[i].uasAttenuation;
+        apdsVals[i] = SENSOR_CAL_TABLE[i].turbApdsRatio;
+        maxVals[i]  = SENSOR_CAL_TABLE[i].turbMaxRatio;
+        forceVals[i]= SENSOR_CAL_TABLE[i].forceGrams;
+    }
+
+    float estimates[4];
+    uint8_t n = 0;
+
+    if (_isMonotonicVsSize(sizes, uasVals)) {
+        estimates[n++] = _interpolateSizeFromValue(uasAttenuation, sizes, uasVals);
+        result.uasTrusted = true;
+    }
+    if (_isMonotonicVsSize(sizes, apdsVals)) {
+        estimates[n++] = _interpolateSizeFromValue(turbApdsRatio, sizes, apdsVals);
+        result.turbApdsTrusted = true;
+    }
+    if (_isMonotonicVsSize(sizes, maxVals)) {
+        estimates[n++] = _interpolateSizeFromValue(turbMaxRatio, sizes, maxVals);
+        result.turbMaxTrusted = true;
+    }
+    if (_isMonotonicVsSize(sizes, forceVals)) {
+        estimates[n++] = _interpolateSizeFromValue(forceGrams, sizes, forceVals);
+        result.forceTrusted = true;
+    }
+
+    result.numChannelsUsed = n;
+    result.sizeUm = (n > 0) ? _medianOf(estimates, n) : 0.0f;
+    return result;
+}
+
+// ---------------------------------------------------------------------------
 // Breakage kinetics — online linear-regression fit of the linearized model
 // ---------------------------------------------------------------------------
 // D(N) = D_min + (D0 - D_min)*exp(-k*N)
@@ -51,16 +182,9 @@ static float _ptLnD[BREAKAGE_MAX_POINTS];
 static uint8_t _numPoints = 0;
 static uint8_t _nextSlot = 0;
 
-static uint32_t _lastStrokeCount = 0;
-static float _lastMeasuredUm = BREAKAGE_D0_UM_DEFAULT;
-static bool _haveMeasurement = false;
-
 void calib_breakage_reset() {
     _numPoints = 0;
     _nextSlot = 0;
-    _lastStrokeCount = 0;
-    _lastMeasuredUm = BREAKAGE_D0_UM_DEFAULT;
-    _haveMeasurement = false;
 }
 
 void calib_breakage_add_point(uint32_t strokeCount, float measuredUm) {
@@ -70,10 +194,6 @@ void calib_breakage_add_point(uint32_t strokeCount, float measuredUm) {
     _ptLnD[_nextSlot] = logf(measuredUm - BREAKAGE_D_MIN_UM);
     _nextSlot = (_nextSlot + 1) % BREAKAGE_MAX_POINTS;
     if (_numPoints < BREAKAGE_MAX_POINTS) _numPoints++;
-
-    _lastStrokeCount = strokeCount;
-    _lastMeasuredUm = measuredUm;
-    _haveMeasurement = true;
 }
 
 BreakageFit calib_breakage_get_fit() {
@@ -108,34 +228,24 @@ float calib_predict_size_um(uint32_t strokeCount, float k, float d0Um, float dMi
     return dMinUm + (d0Um - dMinUm) * expf(-k * (float)strokeCount);
 }
 
-uint32_t calib_predict_next_batch_strokes(float targetUm, float toleranceUm) {
-    if (!_haveMeasurement) {
-        // No data yet this run — command a conservative first batch and
-        // let the first real measurement drive the fit from here.
-        return SCHED_MIN_BATCH_STROKES;
-    }
+uint32_t calib_predict_total_strokes(float targetUm) {
+    BreakageFit fit = calib_breakage_get_fit();  // fallback constants if <2 verification points on file
 
-    if (fabsf(_lastMeasuredUm - targetUm) <= toleranceUm) return 0;  // already in spec
-
-    BreakageFit fit = calib_breakage_get_fit();
-
-    // Invert the model for the absolute stroke count at which size ==
-    // targetUm, using the fit's own D0 as the model's origin.
+    // Invert the model for the stroke count (from a fresh D0) at which
+    // size == targetUm.
     float dMin = BREAKAGE_D_MIN_UM;
     float numerator = fit.d0Um - dMin;
     float denominator = targetUm - dMin;
     if (numerator <= 0.0f || denominator <= 0.0f) {
-        // Target is at/below D_min, or the fit is nonsensical — refuse to
+        // Target at/below D_min, or a nonsensical fit — refuse to
         // extrapolate into a regime the model can't represent.
-        return SCHED_MIN_BATCH_STROKES;
+        return 0;
     }
 
-    float nTargetAbs = logf(numerator / denominator) / fit.k;
-    float remaining = nTargetAbs - (float)_lastStrokeCount;
-    if (remaining <= 0.0f) return SCHED_MIN_BATCH_STROKES;  // model thinks we're past target but measurement disagrees — take a small step and re-measure
+    float nTarget = logf(numerator / denominator) / fit.k;
+    if (nTarget <= 0.0f) return 0;  // target already at/above the unmixed size — nothing to do
 
-    uint32_t batch = (uint32_t)(remaining * SCHED_UNDERSHOOT_FRACTION);
-    if (batch < SCHED_MIN_BATCH_STROKES) batch = SCHED_MIN_BATCH_STROKES;
-    if (batch > SCHED_MAX_BATCH_STROKES) batch = SCHED_MAX_BATCH_STROKES;
-    return batch;
+    uint32_t strokes = (uint32_t)(nTarget + 0.5f);  // round to nearest
+    if (strokes > MIXING_MAX_STROKES_SAFETY_CAP) strokes = MIXING_MAX_STROKES_SAFETY_CAP;
+    return strokes;
 }

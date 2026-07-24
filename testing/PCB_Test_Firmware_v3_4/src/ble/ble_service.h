@@ -45,6 +45,11 @@ struct MotorCmd {
 void bleServiceInit();
 void bleNotifyTelemetry(const TelemetryPacket &pkt);
 
+// True once a central (the web dashboard) is connected. Used by main.cpp to
+// blink the status LED while waiting for a connection and hold it solid once
+// one is made.
+bool bleIsConnected();
+
 // Formats like printf, sends to Serial AND (if a client is subscribed) as a
 // BLE notification on the LOG characteristic — lets the web dashboard show
 // firmware debug output without a serial monitor.
