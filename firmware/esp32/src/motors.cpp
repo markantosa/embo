@@ -23,14 +23,15 @@ static uint32_t _stroke_count = 0;
 void IRAM_ATTR isr_limit_m1() {
     _limit_m1_hit = true;
     // Immediately silence the step pulse so the motor stops within one step.
-    // ledcWrite with duty=0 keeps the channel alive but outputs a flat LOW —
-    // the driver's STEP pin sees no more edges.
-    ledcWrite(LEDC_CH_STEP_M1, 0);
+    // ledcWrite with duty=0 keeps the pin attached but outputs a flat LOW —
+    // the driver's STEP pin sees no more edges. arduino-esp32 3.x LEDC API is
+    // pin-based, not channel-based (channels are managed internally).
+    ledcWrite(PIN_STEP_M1, 0);
 }
 
 void IRAM_ATTR isr_limit_m2() {
     _limit_m2_hit = true;
-    ledcWrite(LEDC_CH_STEP_M2, 0);
+    ledcWrite(PIN_STEP_M2, 0);
 }
 
 static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
@@ -79,14 +80,14 @@ void motors_init() {
     digitalWrite(PIN_EN_M2, HIGH);
 
     // STEP pins: LEDC at 1 Hz, 50% duty, timer resolution 10-bit.
-    // Frequency is changed by motor_set_speed(); 1 Hz just initialises the channel.
+    // Frequency is changed by motor_set_speed(); 1 Hz just initialises the pin.
     // Duty is fixed at half the timer period so the pulse is always a clean square wave.
-    ledcSetup(LEDC_CH_STEP_M1, 1, 10);
-    ledcSetup(LEDC_CH_STEP_M2, 1, 10);
-    ledcAttachPin(PIN_STEP_M1, LEDC_CH_STEP_M1);
-    ledcAttachPin(PIN_STEP_M2, LEDC_CH_STEP_M2);
-    ledcWrite(LEDC_CH_STEP_M1, 0);  // keep silent until explicitly started
-    ledcWrite(LEDC_CH_STEP_M2, 0);
+    // arduino-esp32 3.x LEDC API is pin-based (ledcAttach), not channel-based
+    // (ledcSetup/ledcAttachPin from the 2.x core, which no longer exist).
+    ledcAttach(PIN_STEP_M1, 1, 10);
+    ledcAttach(PIN_STEP_M2, 1, 10);
+    ledcWrite(PIN_STEP_M1, 0);  // keep silent until explicitly started
+    ledcWrite(PIN_STEP_M2, 0);
 
     // Limit switch ISRs
     pinMode(PIN_LIMIT_M1, INPUT_PULLUP);
@@ -103,17 +104,17 @@ void motors_init() {
 }
 
 void motor_set_speed(uint8_t motor, uint32_t step_hz) {
-    uint8_t ch = (motor == 1) ? LEDC_CH_STEP_M1 : LEDC_CH_STEP_M2;
+    int pin = (motor == 1) ? PIN_STEP_M1 : PIN_STEP_M2;
 
     if (step_hz == 0) {
-        ledcWrite(ch, 0);  // flat LOW — no steps
+        ledcWrite(pin, 0);  // flat LOW — no steps
         return;
     }
 
     // Change frequency while keeping 50% duty cycle.
     // Timer resolution stays at 10 bits; duty = 512 = half of 1024.
-    ledcSetup(ch, step_hz, 10);
-    ledcWrite(ch, 512);
+    ledcChangeFrequency(pin, step_hz, 10);
+    ledcWrite(pin, 512);
 }
 
 void motor_set_dir(uint8_t motor, bool forward) {

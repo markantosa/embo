@@ -6,9 +6,12 @@
 #include "calibration.h"
 #include "ble_debug.h"
 #include "LGFX_Config.h"
+#include "ui/boot_logo.h"
+#include "hal/buzzer_driver.h"
 #include <Arduino.h>
 
 static LGFX _tft;
+static BuzzerDriver _buzzer(PIN_BUZ_PWM);
 
 enum class UiState { SET_TARGET, RUNNING, DONE, VERIFYING, ERROR_SCREEN };
 static UiState _state = UiState::SET_TARGET;
@@ -244,9 +247,15 @@ void ui_init() {
     attachInterrupt(digitalPinToInterrupt(PIN_EC11_A), _isrEncoder, CHANGE);
     attachInterrupt(digitalPinToInterrupt(PIN_EC11_B), _isrEncoder, CHANGE);
 
-    _tft.fillScreen(TFT_BLACK);
-    _drawCentered("EMBO", 110, TFT_WHITE, 4);
-    _drawCentered("initializing...", 160, TFT_DARKGREY, 2);
+    _buzzer.begin();
+
+    // Boot splash — bitmap logo instead of a plain text splash, validated on
+    // the bench (testing/display_ui_testing) before folding in here.
+    int16_t x = (_tft.width()  - LOGO_WIDTH)  / 2;
+    int16_t y = (_tft.height() - LOGO_HEIGHT) / 2;
+    _tft.pushImage(x, y, LOGO_WIDTH, LOGO_HEIGHT, epd_bitmap_embo_logoembologo320240);
+    _buzzer.tone(523, 150);
+    delay(1500);  // brief splash hold — not the full 5s bench-test delay, boot has real init work to do after
 
     _state = UiState::SET_TARGET;
     _needsRedraw = true;
@@ -261,6 +270,8 @@ void ui_show_error(const char *msg) {
 }
 
 void ui_update() {
+    _buzzer.update();  // services the boot chirp's auto-stop timing
+
     if (_state == UiState::ERROR_SCREEN) {
         if (_needsRedraw) { _drawErrorScreen(); _needsRedraw = false; }
         return;  // no way out short of reboot

@@ -92,11 +92,6 @@
 #define TMC_ADDR_M1         0   // MS1=GND, MS2=GND
 #define TMC_ADDR_M2         1   // MS1=3.3V via 10k, MS2=GND
 
-// ── LEDC channels ────────────────────────────────────────────────────────────
-#define LEDC_CH_STEP_M1     0
-#define LEDC_CH_STEP_M2     1
-#define LEDC_CH_BUZ         2
-
 // ── ADC ──────────────────────────────────────────────────────────────────────
 // GPIO1 = ADC1_CH0. Use ADC_ATTEN_DB_12 (0–3.1V range, ~0.757 mV/LSB).
 // Wait ≥500µs after each AD9833 frequency step before reading.

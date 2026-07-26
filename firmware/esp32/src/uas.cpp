@@ -8,11 +8,12 @@
 #include <esp_adc_cal.h>
 
 // AD9833 on GPIO38 (FSYNC). SPI bus is shared with ILI9341 and XPT2046.
-// AD9833 uses Mode 2; ILI9341/XPT2046 use Mode 0. The bill2462 library calls
-// SPI.beginTransaction(SPISettings(freq, MSBFIRST, SPI_MODE2)) on each access,
-// so the mode switches correctly around every transaction.
-// HARDWARE NOTE: MCLK source for AD9833 is assumed 25MHz. Verify on first bring-up.
-static AD9833 _dds(PIN_AD9833_CS, 25000000UL);
+// Uses robtillaart/AD9833 (see platformio.ini) — hardware-SPI constructor,
+// defaults to the global SPI object and its own SPISettings per transaction.
+// HARDWARE NOTE: MCLK source for AD9833 is assumed 25MHz, which matches this
+// library's own default crystal frequency (see setCrystalFrequency()) — no
+// explicit call needed unless bench measurement finds it's actually different.
+static AD9833 _dds(PIN_AD9833_CS);
 
 static esp_adc_cal_characteristics_t _adc_chars;
 
@@ -33,7 +34,7 @@ static uint32_t _adc_read_mv() {
 // Retune the DDS to a given frequency and wait for the signal chain
 // (Tx amp, envelope detector, RC filter τ=100µs) to settle before reading.
 static uint32_t _read_at_frequency(float freq_hz) {
-    _dds.setFrequency(REG0, freq_hz);
+    _dds.setFrequency(freq_hz, 0);  // channel 0
     delayMicroseconds(UAS_SETTLE_US);
     return _adc_read_mv();
 }
@@ -59,16 +60,14 @@ void uas_init() {
     // AD9833 to its own host (SPI3_HOST) if any contention shows up on scope.
     SPI.begin(PIN_SPI_CLK, -1, PIN_SPI_MOSI, -1);
 
-    // AD9833 init sequence:
+    // AD9833 init sequence (robtillaart/AD9833 API):
     //   begin() — full reset, zero freq/phase registers
-    //   setFrequency / setPhase — program REG0 while still in reset
-    //   setOutputSource — select REG0 as active register
-    //   setMode(SINE_WAVE) — writes control word with RESET=0, output starts
+    //   setFrequency/setPhase(value, channel) — program channel 0
+    //   setWave(AD9833_SINE) — writes control word with RESET=0, output starts
     _dds.begin();
-    _dds.setFrequency(REG0, _freq_hz[0]);
-    _dds.setPhase(REG0, 0);
-    _dds.setOutputSource(REG0);
-    _dds.setMode(SINE_WAVE);
+    _dds.setFrequency(_freq_hz[0], 0);
+    _dds.setPhase(0, 0);
+    _dds.setWave(AD9833_SINE);
 
     // Allow signal chain to settle before reading baseline. 10ms >> 5x tau —
     // well beyond any transient. Frequency retunes later only need UAS_SETTLE_US
