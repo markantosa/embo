@@ -16,12 +16,11 @@ enum AppState {
 
 class AppStateMachine {
 public:
-    void begin(LGFX& tftRef, ButtonDriver& btn1, ButtonDriver& btn2Reset,     // was: Adafruit_ILI9341&
+    void begin(LGFX& tftRef, ButtonDriver& btn1,     // was: Adafruit_ILI9341&
                EncoderDriver& enc, ButtonDriver& encBtn, PercentageLogic& percent,
                MenuLogic& menuRef, ScreenMenu& menuScreenRef, ScreenPercentage& percentScreenRef) {
         tft = &tftRef;
-        button1 = &btn1;
-        btnReset = &btn2Reset;
+        btn = &btn1;
         encoder = &enc;
         encoderButton = &encBtn;
         percentage = &percent;
@@ -33,7 +32,7 @@ public:
     }
 
     void update() {
-        if (btnReset->wasPressed()) {
+        if (btn->wasPressed()) {
             resetAll();
             return;
         }
@@ -48,8 +47,7 @@ public:
 
 private:
     LGFX* tft;    // was: Adafruit_ILI9341*
-    ButtonDriver* button1;
-    ButtonDriver* btnReset;
+    ButtonDriver* btn;
     EncoderDriver* encoder;
     ButtonDriver* encoderButton;
     PercentageLogic* percentage;

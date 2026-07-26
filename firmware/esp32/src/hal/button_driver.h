@@ -13,7 +13,7 @@ public:
         bool reading = digitalRead(_pin);
         bool pressedEdge = false;
 
-        if (reading!=_lastState && (millis() - _lastChangeTime)> BUTTON_DEBOUNCE_MS) {
+        if (reading!=_lastState && (millis() - _lastChangeTime)> BTN1_DEBOUNCE_MS) {
             _lastChangeTime = millis();
             if (reading == LOW) {
                 pressedEdge = true;

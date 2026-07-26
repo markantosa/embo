@@ -21,8 +21,7 @@
 #include "ui/boot_logo.h"
 #include "ui/app_state_machine.h"
 
-ButtonDriver btnNext;
-ButtonDriver btnSelect;
+ButtonDriver btn1;
 ButtonDriver encoderBtn;
 EncoderDriver encoder;
 PercentageLogic percentage;
@@ -30,7 +29,7 @@ ScreenPercentage percentScreen;
 MenuLogic menu;
 ScreenMenu menuScreen;
 LGFX tft;                              // was: Adafruit_ILI9341 tft(TFT_CS, ...)
-BuzzerDriver buzzer(BUZZER_PIN);
+BuzzerDriver buzzer(PIN_BUZ_PWM);
 
 AppStateMachine appState;
 
@@ -47,10 +46,9 @@ void setup() {
     tft.init();              // was: tft.begin(20000000)
     tft.setRotation(3);      // same API, no change
 
-    btnNext.begin(BTN_NEXT_PIN);
-    btnSelect.begin(BTN_SELECT_PIN);
-    encoderBtn.begin(ENC_SW);
-    encoder.begin(ENC_CLK, ENC_DT);
+    btn1.begin(PIN_BTN1);
+    encoderBtn.begin(PIN_EC11_SW);
+    encoder.begin(PIN_EC11_A, PIN_EC11_B);
     buzzer.begin();
   
     percentage.begin(0);
@@ -64,7 +62,7 @@ void setup() {
         {"Settings",     3}
     });
 
-    appState.begin(tft, btnNext, btnSelect, encoder, encoderBtn, percentage, menu, menuScreen, percentScreen);
+    appState.begin(tft, btn1, encoder, encoderBtn, percentage, menu, menuScreen, percentScreen);
 
     motors_init();
     uas_init();
