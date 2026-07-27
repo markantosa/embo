@@ -8,6 +8,7 @@
 #include "hal/bus_probe.h"
 #include "hal/tmc_uart_stream.h"
 #include "ble/ble_service.h"
+#include "ui.h"
 
 // Shared single-wire UART bus for both TMC2209 modules (§7.3, GPIO4/44).
 static TmcUartStream tmcSerial;
@@ -129,6 +130,7 @@ void setup() {
 	forceSensorInit();
 	turbidityInit();
 	busProbeInit();
+	ui_init();
 
 	bleLog("EMBO PCB v3.4 test firmware ready, advertising as 'EMBO-PCB-Test-v3.4'");
 	// Status LED starts blinking here (see updateStatusLed() in loop()) and
@@ -137,6 +139,7 @@ void setup() {
 
 void loop() {
 	updateStatusLed();
+	ui_update();
 
 	MotorCmd cmd;
 	if (blePopMotorCmd(cmd)) applyMotorCmd(cmd);

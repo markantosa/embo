@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Pin map — EMBO main board v3.4, ESP32-S3-WROOM-1-N4.
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt.
 // Unchanged from earlier board revisions for STEP/DIR/EN/limits/UAS ADC —
@@ -30,6 +32,27 @@ constexpr int PIN_LIMIT_M2  = 15;
 
 // Status LED (onboard)
 constexpr int PIN_STATUS_LED = 2;
+
+// TFT (ILI9341, via IDC ribbon) — write-only bus, no MISO (§8, §6.6)
+constexpr int PIN_SPI_MOSI = 35;
+constexpr int PIN_SPI_CLK  = 36;
+constexpr int PIN_TFT_CS   = 39;
+constexpr int PIN_TFT_DC   = 40;
+constexpr int PIN_TFT_RST  = 41;
+constexpr uint32_t SPI_CLK_TFT = 20000000; // 20MHz max via the 20-pin IDC ribbon
+
+// AD9833 DDS (drives the UAS ultrasonic transducer), shares the TFT's MOSI/CLK
+// pins with its own CS line (§8, §6.6) — write-only, no MISO/readback register.
+constexpr int PIN_AD9833_CS = 38;          // FSYNC, SPI Mode 2
+constexpr uint32_t SPI_CLK_AD9833 = 10000000; // ~10MHz, short direct trace
+constexpr float UAS_DDS_FREQ_HZ = 1000000.0f; // fixed 1MHz bring-up tone
+constexpr uint32_t UAS_DDS_SETTLE_MS = 10;    // after enabling output, before first read
+
+// EC11 rotary encoder + buzzer (via IDC ribbon)
+constexpr int PIN_EC11_A   = 16;
+constexpr int PIN_EC11_B   = 17;
+constexpr int PIN_EC11_SW  = 18;
+constexpr int PIN_BUZ_PWM  = 13;
 
 // I2C turbidity bus (§9, §6.6): APDS9960 0x39 (ALS), MAX30102 0x57 (backscatter)
 constexpr int PIN_I2C_SDA = 3;
@@ -66,6 +89,15 @@ constexpr uint32_t JOG_MAX_SPS = 36000;
 // Ramp rate (steps/sec, per second) used to glide from JOG_MIN_SPS up to the
 // commanded target instead of snapping straight there.
 constexpr uint32_t JOG_ACCEL_SPS2 = 20000;
+
+// On-device UI (TFT + encoder + buzzer) jog control, separate from the BLE
+// jog path — see ui.h. Fixed jog speed (0-100%, same scale as the BLE
+// speed slider) and an idle timeout: if the encoder stops turning for this
+// long, the motor auto-stops (mirrors the BLE jog watchdog's role, but is
+// tracked independently since this is a separate control path on the same
+// hardware).
+constexpr uint8_t ENCODER_JOG_SPEED_PCT = 50;
+constexpr uint32_t ENCODER_JOG_WATCHDOG_MS = 250;
 
 // Sensor polling
 constexpr uint32_t UAS_SAMPLE_PERIOD_MS   = 40;   // ~25 Hz
