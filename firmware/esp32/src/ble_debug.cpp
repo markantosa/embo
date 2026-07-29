@@ -6,6 +6,7 @@
 #include "scheduler.h"
 #include "calibration.h"
 #include "rpi_uart.h"
+#include "ui.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <stdio.h>
@@ -83,6 +84,10 @@ class RxCB : public NimBLECharacteristicCallbacks {
 static void _handle_command(const char *cmd) {
     // HOME
     if (strcmp(cmd, "HOME") == 0) {
+        if (scheduler_is_running()) {
+            ble_log("HOME: refused — a run is in progress (stop it first)");
+            return;
+        }
         ble_log("CMD: homing...");
         bool ok = motors_home();
         ble_log(ok ? "HOME: done" : "HOME: FAILED — check limit switches");
@@ -93,6 +98,10 @@ static void _handle_command(const char *cmd) {
     int motor, steps;
     if (sscanf(cmd, "MOVE %d %d", &motor, &steps) == 2
             && (motor == 1 || motor == 2) && steps != 0) {
+        if (scheduler_is_running()) {
+            ble_log("MOVE: refused — a run is in progress (stop it first)");
+            return;
+        }
         if (_move_active) {
             motor_set_speed(_move_motor, 0);
             motor_enable(_move_motor, false);
@@ -208,8 +217,16 @@ static void _handle_command(const char *cmd) {
         return;
     }
 
+    // MENU — open the TFT settings/diagnostics menu, for bench testing
+    // before a physical trigger is wired up (see ui.h / settings_menu.h).
+    if (strcmp(cmd, "MENU") == 0) {
+        ui_open_settings_menu();
+        ble_log("MENU: opened");
+        return;
+    }
+
     ble_log("CMD unknown: \"%s\"", cmd);
-    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON|OFF | FORCE ON|OFF | TURB ON|OFF | FUSION | FIT | FIT RESET | CAPTURE");
+    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON|OFF | FORCE ON|OFF | TURB ON|OFF | FUSION | FIT | FIT RESET | CAPTURE | MENU");
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

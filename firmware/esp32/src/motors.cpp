@@ -138,7 +138,9 @@ void motor_clear_limit(uint8_t motor) {
 
 uint16_t motor_sg_result(uint8_t motor) {
     // StallGuard result — valid only with SpreadCycle enabled and motor moving.
-    // Higher value = less load. Used by PID as viscosity proxy.
+    // Higher value = less load. Currently diagnostic-only (read via BLE
+    // debug's MOVE/SG output, see ble_debug.cpp) — not consumed by the
+    // scheduler, which deliberately isn't a PID (see scheduler.h).
     return (motor == 1) ? _driver_m1.SG_RESULT() : _driver_m2.SG_RESULT();
 }
 
@@ -207,7 +209,7 @@ bool motors_is_homed() {
 
 // ── Stroke counter ────────────────────────────────────────────────────────────
 // A stroke is one complete forward+return syringe cycle.
-// The PID layer calls motor_increment_stroke() after each full cycle.
+// The scheduler calls motor_increment_stroke() after each full cycle.
 
 void motor_increment_stroke() {
     _stroke_count++;

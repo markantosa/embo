@@ -1,5 +1,7 @@
 #include "turbidity.h"
 #include "config.h"
+#include "ble_debug.h"
+#include <Arduino.h>
 #include <Wire.h>
 
 // ---- APDS9960 registers (ALS transmission-mode use only) ----
@@ -41,38 +43,72 @@ static bool _maxOk = false;
 static uint16_t _alsClear = 0;
 static uint32_t _irRaw = 0, _redRaw = 0;
 
+// Retry cadence for a device that's currently marked not-ok — a single
+// transient I2C glitch (or a device that just wasn't powered up yet)
+// shouldn't permanently drop a fusion channel for the rest of the run;
+// see config.h.
+static uint32_t _lastApdsRetryMs = 0;
+static uint32_t _lastMaxRetryMs  = 0;
+
+static bool _apdsTryInit() {
+    uint8_t apdsId = 0;
+    if (!i2cReadRegs(APDS9960_ADDR, APDS_ID, &apdsId, 1)) return false;
+    i2cWriteReg(APDS9960_ADDR, APDS_ATIME, 0xC0);   // ~103ms integration
+    i2cWriteReg(APDS9960_ADDR, APDS_CONTROL, 0x01); // ALS gain 4x
+    i2cWriteReg(APDS9960_ADDR, APDS_ENABLE, 0x03);  // PON | AEN
+    return true;
+}
+
+static bool _maxTryInit() {
+    uint8_t partId = 0;
+    if (!i2cReadRegs(MAX30102_ADDR, MAX_PART_ID, &partId, 1)) return false;
+    i2cWriteReg(MAX30102_ADDR, MAX_MODE_CONFIG, 0x40); // reset
+    delay(10);
+    i2cWriteReg(MAX30102_ADDR, MAX_FIFO_WR_PTR, 0x00);
+    i2cWriteReg(MAX30102_ADDR, MAX_FIFO_RD_PTR, 0x00);
+    i2cWriteReg(MAX30102_ADDR, MAX_SPO2_CONFIG, 0x27); // 4096nA FS, 100Hz, 18-bit
+    i2cWriteReg(MAX30102_ADDR, MAX_LED1_PA, 0x24);     // RED ~7mA
+    i2cWriteReg(MAX30102_ADDR, MAX_LED2_PA, 0x24);     // IR ~7mA
+    i2cWriteReg(MAX30102_ADDR, MAX_MODE_CONFIG, 0x03); // SpO2 mode
+    return true;
+}
+
 void turbidity_init() {
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, I2C_CLOCK_HZ);
 
-    uint8_t apdsId = 0;
-    _apdsOk = i2cReadRegs(APDS9960_ADDR, APDS_ID, &apdsId, 1);
-    if (_apdsOk) {
-        i2cWriteReg(APDS9960_ADDR, APDS_ATIME, 0xC0);   // ~103ms integration
-        i2cWriteReg(APDS9960_ADDR, APDS_CONTROL, 0x01); // ALS gain 4x
-        i2cWriteReg(APDS9960_ADDR, APDS_ENABLE, 0x03);  // PON | AEN
-    }
+    _apdsOk = _apdsTryInit();
+    if (!_apdsOk) ble_log("Turbidity: APDS9960 not found at init — will keep retrying");
 
-    uint8_t partId = 0;
-    _maxOk = i2cReadRegs(MAX30102_ADDR, MAX_PART_ID, &partId, 1);
-    if (_maxOk) {
-        i2cWriteReg(MAX30102_ADDR, MAX_MODE_CONFIG, 0x40); // reset
-        delay(10);
-        i2cWriteReg(MAX30102_ADDR, MAX_FIFO_WR_PTR, 0x00);
-        i2cWriteReg(MAX30102_ADDR, MAX_FIFO_RD_PTR, 0x00);
-        i2cWriteReg(MAX30102_ADDR, MAX_SPO2_CONFIG, 0x27); // 4096nA FS, 100Hz, 18-bit
-        i2cWriteReg(MAX30102_ADDR, MAX_LED1_PA, 0x24);     // RED ~7mA
-        i2cWriteReg(MAX30102_ADDR, MAX_LED2_PA, 0x24);     // IR ~7mA
-        i2cWriteReg(MAX30102_ADDR, MAX_MODE_CONFIG, 0x03); // SpO2 mode
-    }
+    _maxOk = _maxTryInit();
+    if (!_maxOk) ble_log("Turbidity: MAX30102 not found at init — will keep retrying");
 }
 
 void turbidity_update() {
+    uint32_t now = millis();
+
+    if (!_apdsOk && (now - _lastApdsRetryMs) >= TURBIDITY_REINIT_INTERVAL_MS) {
+        _lastApdsRetryMs = now;
+        if (_apdsTryInit()) {
+            _apdsOk = true;
+            ble_log("Turbidity: APDS9960 recovered");
+        }
+    }
+    if (!_maxOk && (now - _lastMaxRetryMs) >= TURBIDITY_REINIT_INTERVAL_MS) {
+        _lastMaxRetryMs = now;
+        if (_maxTryInit()) {
+            _maxOk = true;
+            ble_log("Turbidity: MAX30102 recovered");
+        }
+    }
+
     if (_apdsOk) {
         uint8_t buf[2] = {0, 0};
         if (i2cReadRegs(APDS9960_ADDR, APDS_CDATAL, buf, 2)) {
             _alsClear = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
         } else {
             _apdsOk = false;
+            _lastApdsRetryMs = now;  // start the retry clock from the moment it dropped
+            ble_log("Turbidity: APDS9960 read failed — marked not-ok, will retry");
         }
     }
 
@@ -83,6 +119,8 @@ void turbidity_update() {
             _irRaw  = (((uint32_t)buf[3] << 16) | ((uint32_t)buf[4] << 8) | buf[5]) & 0x3FFFF;
         } else {
             _maxOk = false;
+            _lastMaxRetryMs = now;
+            ble_log("Turbidity: MAX30102 read failed — marked not-ok, will retry");
         }
     }
 }

@@ -35,3 +35,10 @@ void ui_update();   // call every loop()
 // There is no way back from this screen short of a reboot — a hardware
 // fault serious enough to fail homing needs investigation, not a retry.
 void ui_show_error(const char *msg);
+
+// Opens the settings/diagnostics menu on top of whatever screen is
+// currently showing (it returns there afterwards on "Back"). Currently
+// only called from the BLE debug "MENU" command (see ble_debug.cpp) as a
+// bench hook — wire a real physical trigger once one is chosen; see
+// src/ui/screens/settings_menu.h for the menu itself.
+void ui_open_settings_menu();

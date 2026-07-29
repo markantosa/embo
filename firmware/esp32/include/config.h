@@ -18,6 +18,10 @@
 #define I2C_CLOCK_HZ        400000
 #define APDS9960_ADDR       0x39
 #define MAX30102_ADDR       0x57
+// A transient I2C glitch shouldn't permanently drop a channel out of
+// fusion for the rest of a run — retry re-init at this cadence while a
+// device is marked not-ok. See turbidity.cpp.
+#define TURBIDITY_REINIT_INTERVAL_MS  2000
 
 // Motor driver — shared PDN_UART bus, genuinely separate TX/RX pins
 #define PIN_TMC_UART_TX     4
@@ -34,7 +38,7 @@
 #define PIN_EN_M2           10
 
 // UI buttons (via IDC ribbon)
-#define PIN_BTN1            11  // start
+#define PIN_BTN1            11  // dedicated stop/e-stop button — see ui.h
 // GPIO12 = T_CS (touch), not a button as of v3.3 — see below
 #define PIN_BUZ_PWM         13  // LEDC PWM → buzzer
 

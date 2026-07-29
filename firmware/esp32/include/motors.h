@@ -19,12 +19,12 @@ void motor_clear_limit(uint8_t motor);
 uint16_t motor_sg_result(uint8_t motor);
 
 // Drive both motors to their limit switches and back off.
-// Blocking. Returns true on success. PID must not start until this returns true.
+// Blocking. Returns true on success. The scheduler must not start a run until this returns true.
 bool motors_home();
 bool motors_is_homed();
 
 // Stroke counter — one stroke = one complete forward+return syringe cycle.
-// PID layer calls motor_increment_stroke() after each full cycle.
+// The scheduler calls motor_increment_stroke() after each full cycle.
 void     motor_increment_stroke();
 uint32_t motor_get_stroke_count();
 void     motor_reset_stroke_count();
