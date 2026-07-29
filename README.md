@@ -1,6 +1,6 @@
 # EMBO — Embolization Particle Sizing System
 
-> SUTD 30.007 Engineering Design Innovation | Team EMBO | Week 7 of 13
+> SUTD 30.007 Engineering Design Innovation | Team EMBO | Week 11 of 13
 
 EMBO is a closed-loop medical device that automates and quality-controls the preparation of gelatin foam embolic agents for interventional radiology procedures. It is the first device of its kind to measure and control particle size during embolic agent preparation in real time.
 
