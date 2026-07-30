@@ -1,4 +1,5 @@
 #pragma once
+#include "ble/ble_service.h"
 
 // Physical bench-test UI — TFT + encoder + buzzer, alongside (not instead
 // of) the BLE web dashboard. Two selectable boxes, one per motor:
@@ -17,3 +18,7 @@
 
 void ui_init();
 void ui_update();  // call every loop()
+
+// Read-only access to main.cpp's telemetry snapshot, for the on-device
+// sensor panel — same data the BLE TELEMETRY characteristic sends.
+const TelemetryPacket &currentTelemetry();

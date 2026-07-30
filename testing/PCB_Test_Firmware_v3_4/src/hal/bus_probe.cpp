@@ -86,6 +86,12 @@ void busProbeCaptureAndLog() {
 
 	rmt_rx_done_event_data_t rxData;
 	if (xQueueReceive(rxQueue, &rxData, pdMS_TO_TICKS(100)) != pdTRUE) {
+		// No edges at all means the RMT peripheral never got a reference edge
+		// to start its idle-timeout from, so it never fires the done callback
+		// and the channel is left armed. Cycle it so the next capture can
+		// re-arm instead of failing with ESP_ERR_INVALID_STATE.
+		rmt_disable(rxChannel);
+		rmt_enable(rxChannel);
 		bleLog("[PROBE] no edges captured within 100ms (line totally idle)");
 		return;
 	}

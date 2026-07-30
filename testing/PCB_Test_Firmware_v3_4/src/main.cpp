@@ -31,6 +31,8 @@ static uint32_t lastDebugPrint = 0;
 static uint32_t lastUartCheck = 0;
 static TelemetryPacket telemetry{};
 
+const TelemetryPacket &currentTelemetry() { return telemetry; }
+
 // Status LED: blinks at BLINK_PERIOD_MS while waiting for a BLE dashboard to
 // connect, holds solid once one does — an at-a-glance "is anyone listening"
 // indicator for bench bring-up, no serial monitor needed.
