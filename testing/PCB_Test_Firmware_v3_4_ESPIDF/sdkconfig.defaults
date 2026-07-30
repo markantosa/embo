@@ -1,0 +1,30 @@
+# EMBO PCB Test Firmware v3.4 — ESP-IDF native build
+# BLE/NimBLE enablement for the GATT server in src/ble/ble_service.cpp.
+# Names verified/adjusted against whatever ESP-IDF version this PlatformIO
+# espressif32 platform pulls in (see README for the version actually used).
+
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_CONTROLLER_ONLY=n
+
+# We are a GATT server only — no central/observer/broadcaster role needed.
+CONFIG_BT_NIMBLE_ROLE_CENTRAL_DISABLED=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER_DISABLED=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER_DISABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_BONDS=0
+CONFIG_BT_NIMBLE_MAX_CCCDS=8
+
+# MTU 247 (matches the Arduino build's NimBLEDevice::setMTU(247)).
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+
+# Use IDF's own logging for boot/debug output (no Serial.println in this build).
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# Board is a 4MB-flash ESP32-S3-WROOM-1-N4 (config.h/board brief) — match
+# platformio.ini's board_build.flash_size, and use a simple single-app
+# partition table (no OTA needed for bench-test firmware).
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP=y

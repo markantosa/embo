@@ -126,8 +126,13 @@ v3.4 is a hardware-hardening pass: 12× 220Ω GPIO protection resistors on every
 
 | | | |
 |:---:|:---:|:---:|
-| ![v3.4 PCB front](assets/EMBO%20Controller%20v3.4%20PCB%20Front.jpg) | ![v3.4 PCB back](assets/EMBO%20Controller%20v3.4%20PCB%20Back.jpg) | ![v3.4 PCB editor view](assets/EMBO%20Controller%20v3.4%20PCB%20Editor%20View.jpg) |
-| *Assembled board, front* | *Assembled board, back* | *KiCad PCB editor view* |
+| ![v3.4 PCB front render](assets/EMBO%20Controller%20v3.4%20PCB%20Front.jpg) | ![v3.4 PCB back render](assets/EMBO%20Controller%20v3.4%20PCB%20Back.jpg) | ![v3.4 PCB editor view](assets/EMBO%20Controller%20v3.4%20PCB%20Editor%20View.jpg) |
+| *3D render, front* | *3D render, back* | *KiCad PCB editor view* |
+
+| | |
+|:---:|:---:|
+| ![v3.4 PCB bring-up](assets/PCB%20v3.4%20bring%20up.jpg) | ![v3.4 PCB wired up](assets/PCB%20v3.4%20wired%20up.jpg) |
+| *Fabricated board — bring-up* | *Fabricated board — wired up* |
 
 ### GPIO Assignments (key signals)
 
