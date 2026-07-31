@@ -66,6 +66,12 @@ constexpr int PIN_HX711_SCK   = 37; // shared between both modules
 constexpr int PIN_HX711_1_DT  = 42;
 constexpr int PIN_HX711_2_DT  = 21;
 
+// Tare offsets — raw HX711 counts subtracted so an unloaded cell reads ~0.
+// Bench-calibrated values; re-tare (read the raw count with nothing on the
+// plunger and drop it in here) if a cell is swapped or physically reseated.
+constexpr int32_t FORCE1_TARE_OFFSET = -124484;
+constexpr int32_t FORCE2_TARE_OFFSET = 40346;
+
 // TMC2209 UART addresses (set via MS1/MS2 straps on board, §7.2)
 constexpr uint8_t TMC_ADDR_M1 = 0;
 constexpr uint8_t TMC_ADDR_M2 = 1;

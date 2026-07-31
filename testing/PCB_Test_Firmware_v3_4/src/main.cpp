@@ -172,8 +172,8 @@ void loop() {
 		lastForceSample = now;
 		int32_t f1, f2;
 		if (forceSensorRead(f1, f2)) {
-			telemetry.forceRaw1 = f1;
-			telemetry.forceRaw2 = f2;
+			telemetry.forceRaw1 = f1 - FORCE1_TARE_OFFSET;
+			telemetry.forceRaw2 = f2 - FORCE2_TARE_OFFSET;
 		}
 	}
 
