@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EMBO PCB v3.4 — Sensor Filter Preview</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1c20; --muted: #6b7280;
+    --accent: #2563eb; --accent-active: #1d4ed8; --raw: #9aa1ab; --border: #e2e4e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15171a; --card:#1e2126; --text:#e8e9eb; --muted:#9aa1ab; --raw:#5a6068; --border:#2c3036; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 20px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; max-width: 780px; }
+  .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  button.connect {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 0.95rem; cursor: pointer;
+  }
+  button.connect:active { background: var(--accent-active); }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #dc2626; display: inline-block; }
+  .status-dot.connected { background: #16a34a; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card h2 { font-size: 1rem; margin: 0 0 2px; }
+  .card .unit { font-size: 0.75rem; color: var(--muted); margin: 0 0 10px; }
+  .readings { display: flex; gap: 18px; margin-bottom: 8px; }
+  .readings .col .label { color: var(--muted); font-size: 0.75rem; }
+  .readings .col .value { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+  .readings .col.filtered .value { color: var(--accent); }
+  .legend { display: flex; gap: 14px; font-size: 0.72rem; color: var(--muted); margin-bottom: 6px; }
+  .legend span::before { content: ''; display: inline-block; width: 10px; height: 2px; margin-right: 5px; vertical-align: middle; }
+  .legend .raw::before { background: var(--raw); }
+  .legend .filt::before { background: var(--accent); }
+  canvas.chart { width: 100%; height: 90px; display: block; margin-bottom: 10px; }
+  .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  select, input[type=range] { accent-color: var(--accent); }
+  select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 8px; font-size: 0.85rem;
+  }
+  .param-row { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 140px; }
+  .param-row input[type=range] { flex: 1; }
+  .param-val { font-size: 0.8rem; color: var(--muted); width: 3.6em; text-align: right; font-variant-numeric: tabular-nums; }
+  .noise-badge {
+    font-size: 0.72rem; padding: 3px 9px; border-radius: 999px; background: var(--border); color: var(--muted);
+  }
+  .noise-badge.good { background: #16a34a; color: white; }
+  .recommend { font-size: 0.75rem; color: var(--muted); margin-top: 8px; line-height: 1.4; border-top: 1px solid var(--border); padding-top: 8px; }
+  .footer-note { color: var(--muted); font-size: 0.75rem; margin-top: 24px; max-width: 780px; }
+  a.back { color: var(--accent); text-decoration: none; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<h1>EMBO PCB v3.4 — Sensor Filter Preview</h1>
+<div class="sub">
+  Raw vs. filtered side-by-side, same live telemetry as the main dashboard. This page doesn't touch the
+  firmware — it's here so you can eyeball how a candidate filter (and its parameter) behaves on real bench
+  noise before deciding what's worth porting into the production PID loop. See the note under each card for
+  which filter shape tends to fit that sensor's noise character.
+</div>
+
+<div class="top-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusText">Disconnected</span>
+  <button class="connect" id="connectBtn">Connect BLE</button>
+  <a class="back" href="index.html">&larr; back to main dashboard</a>
+</div>
+
+<div class="grid" id="cardGrid"></div>
+
+<div class="footer-note">
+  <b>Moving average</b> — cheapest to reason about, adds ~window/2 samples of lag. Good default.<br>
+  <b>EMA (exponential moving average)</b> — one multiply-add per sample, no buffer needed at all — the
+  cheapest option to actually run in the firmware's control loop, and tunable from "barely smoothed" to
+  "heavy" with a single alpha constant.<br>
+  <b>Median</b> — the only one of the three that rejects sharp single-sample spikes (e.g. a mechanical knock
+  on a load cell, or an occasional bad ADC read) instead of just averaging them in. Costs a small sort every
+  sample, still trivial on an ESP32-S3.<br>
+  "Noise reduction" below each chart is raw stddev &divide; filtered stddev over the last ~60 samples on
+  screen — a rough, session-local number to help compare parameter choices, not a calibrated metric.
+</div>
+
+<script>
+const SERVICE_UUID   = '8f6a1001-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const TELEMETRY_UUID = '8f6a1002-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const connectBtn = document.getElementById('connectBtn');
+let device, connected = false;
+
+function setConnected(isConnected) {
+  connected = isConnected;
+  statusDot.classList.toggle('connected', isConnected);
+  statusText.textContent = isConnected ? 'Connected' : 'Disconnected';
+  connectBtn.textContent = isConnected ? 'Disconnect' : 'Connect BLE';
+}
+
+async function connect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+    device.addEventListener('gattserverdisconnected', () => setConnected(false));
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    const telemetryChar = await service.getCharacteristic(TELEMETRY_UUID);
+    await telemetryChar.startNotifications();
+    telemetryChar.addEventListener('characteristicvaluechanged', onTelemetry);
+    setConnected(true);
+  } catch (err) {
+    console.error('BLE connect failed:', err);
+    setConnected(false);
+  }
+}
+function disconnect() { if (device && device.gatt.connected) device.gatt.disconnect(); setConnected(false); }
+connectBtn.addEventListener('click', () => { if (connected) disconnect(); else connect(); });
+
+// ---- Filters — deliberately written the way you'd port them to C: a tiny
+// struct's worth of state and an apply(sample) -> output step. ----
+function makeMovingAverage(window) {
+  const buf = [];
+  return (v) => {
+    buf.push(v);
+    if (buf.length > window) buf.shift();
+    return buf.reduce((a, b) => a + b, 0) / buf.length;
+  };
+}
+function makeEma(alpha) {
+  let y = null;
+  return (v) => { y = (y === null) ? v : alpha * v + (1 - alpha) * y; return y; };
+}
+function makeMedian(window) {
+  const buf = [];
+  return (v) => {
+    buf.push(v);
+    if (buf.length > window) buf.shift();
+    const sorted = [...buf].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+}
+function makeFilter(type, param) {
+  if (type === 'movingavg') return makeMovingAverage(Math.max(1, Math.round(param)));
+  if (type === 'ema') return makeEma(param);
+  if (type === 'median') return makeMedian(Math.max(1, Math.round(param) | 1)); // force odd window
+  return (v) => v; // 'none'
+}
+function stddev(arr) {
+  if (arr.length < 2) return 0;
+  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+  const variance = arr.reduce((a, b) => a + (b - mean) ** 2, 0) / arr.length;
+  return Math.sqrt(variance);
+}
+
+// ---- Dual-line chart: raw (grey) + filtered (accent), shared autoscale ----
+class DualChart {
+  constructor(canvas, maxPoints = 150) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.maxPoints = maxPoints;
+    this.raw = [];
+    this.filtered = [];
+    this.dpr = window.devicePixelRatio || 1;
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+  }
+  _resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.canvas.width = Math.max(1, rect.width * this.dpr);
+    this.canvas.height = Math.max(1, rect.height * this.dpr);
+    this._draw();
+  }
+  push(rawVal, filtVal) {
+    this.raw.push(rawVal); this.filtered.push(filtVal);
+    if (this.raw.length > this.maxPoints) { this.raw.shift(); this.filtered.shift(); }
+    this._draw();
+  }
+  reset() { this.raw = []; this.filtered = []; this._draw(); }
+  _draw() {
+    const { ctx, canvas, raw, filtered } = this;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (raw.length < 2) return;
+
+    const all = raw.concat(filtered);
+    let min = Math.min(...all), max = Math.max(...all);
+    if (min === max) { min -= 1; max += 1; }
+    const pad = h * 0.12;
+    const scaleY = (v) => h - pad - ((v - min) / (max - min)) * (h - pad * 2);
+    const stepX = w / (this.maxPoints - 1);
+    const offset = this.maxPoints - raw.length;
+
+    const drawLine = (data, color, width) => {
+      ctx.beginPath();
+      data.forEach((v, i) => {
+        const x = (offset + i) * stepX, y = scaleY(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.lineWidth = width * this.dpr;
+      ctx.strokeStyle = color;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.stroke();
+    };
+    const rawColor = getComputedStyle(document.body).getPropertyValue('--raw').trim() || '#9aa1ab';
+    const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#2563eb';
+    drawLine(raw, rawColor, 1.5);
+    drawLine(filtered, accent, 2.2);
+  }
+}
+
+// ---- Channel definitions — one card per TelemetryPacket field worth filtering ----
+const CHANNELS = [
+  { key: 'uas', label: 'UAS Envelope', unit: 'Volts, GPIO1 ADC1_CH0', decimals: 3,
+    defaultFilter: 'ema', defaultParam: 0.2,
+    note: 'EMA recommended. The envelope is already hardware-smoothed by the RC peak detector (~1.6kHz corner) — a light EMA (&alpha; &asymp; 0.1&ndash;0.3) in firmware cleans up ADC quantization noise for basically free, without adding meaningful lag to a value that changes slowly relative to the mixing cycle.' },
+  { key: 'force1', label: 'Force — Ch1', unit: 'raw 24-bit counts, HX711', decimals: 0,
+    defaultFilter: 'median', defaultParam: 5,
+    note: 'Median first, then EMA if needed. Load cells on a mechanical rig are prone to sharp single-sample spikes (motor vibration, plunger contact) that a moving average or EMA would smear across several samples instead of rejecting. A short median window (3&ndash;5) knocks those out cleanly before any further smoothing.' },
+  { key: 'force2', label: 'Force — Ch2', unit: 'raw 24-bit counts, HX711', decimals: 0,
+    defaultFilter: 'median', defaultParam: 5,
+    note: 'Same reasoning as Ch1 — keep both channels\' filtering identical so left/right force comparisons stay meaningful.' },
+  { key: 'als', label: 'APDS9960 ALS', unit: 'counts, transmission', decimals: 0,
+    defaultFilter: 'ema', defaultParam: 0.15,
+    note: 'EMA recommended. Turbidity changes slowly relative to the sample rate, so a heavier EMA (&alpha; &asymp; 0.1&ndash;0.2) costs essentially no real latency while meaningfully cleaning up ambient-light/ADC noise.' },
+  { key: 'ir', label: 'MAX30102 IR', unit: 'counts, backscatter', decimals: 0,
+    defaultFilter: 'ema', defaultParam: 0.15,
+    note: 'Same as ALS — slow-changing signal, heavy EMA is essentially free.' },
+  { key: 'red', label: 'MAX30102 RED', unit: 'counts, backscatter', decimals: 0,
+    defaultFilter: 'ema', defaultParam: 0.15,
+    note: 'Same as ALS/IR.' },
+  { key: 'sg1', label: 'StallGuard M1', unit: 'SG_RESULT', decimals: 0,
+    defaultFilter: 'movingavg', defaultParam: 5,
+    note: 'Light moving average only. SG_RESULT is already a coarse, hardware-computed load metric — it needs to react quickly to a real stall, so avoid heavy smoothing (especially EMA with a slow &alpha;, which would add real detection lag) even though it looks noisy on screen.' },
+  { key: 'sg2', label: 'StallGuard M2', unit: 'SG_RESULT', decimals: 0,
+    defaultFilter: 'movingavg', defaultParam: 5,
+    note: 'Same as M1.' },
+];
+
+const PARAM_CFG = {
+  none:      { label: '',        min: 0,    max: 1,   step: 1,    fmt: () => '' },
+  movingavg: { label: 'Window',  min: 2,    max: 30,  step: 1,    fmt: (v) => Math.round(v) + ' samples' },
+  ema:       { label: 'Alpha',   min: 0.02, max: 0.9, step: 0.01, fmt: (v) => v.toFixed(2) },
+  median:    { label: 'Window',  min: 3,    max: 15,  step: 2,    fmt: (v) => Math.round(v) + ' samples' },
+};
+
+const grid = document.getElementById('cardGrid');
+const channelState = {}; // key -> { filterFn, chart, filtBuf, rawBuf, decimals }
+
+CHANNELS.forEach(ch => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <h2>${ch.label}</h2>
+    <div class="unit">${ch.unit}</div>
+    <div class="legend"><span class="raw">raw</span><span class="filt">filtered</span></div>
+    <div class="readings">
+      <div class="col"><div class="label">raw</div><div class="value" data-role="rawVal">--</div></div>
+      <div class="col filtered"><div class="label">filtered</div><div class="value" data-role="filtVal">--</div></div>
+      <div class="col" style="margin-left:auto; align-self:center"><span class="noise-badge" data-role="noiseBadge">--</span></div>
+    </div>
+    <canvas class="chart" data-role="chart"></canvas>
+    <div class="controls">
+      <select data-role="filterSelect">
+        <option value="none">No filter</option>
+        <option value="movingavg">Moving average</option>
+        <option value="ema">EMA</option>
+        <option value="median">Median</option>
+      </select>
+      <div class="param-row">
+        <span class="param-val" data-role="paramLabel">Window</span>
+        <input type="range" data-role="paramSlider">
+        <span class="param-val" data-role="paramVal">--</span>
+      </div>
+    </div>
+    <div class="recommend">${ch.note}</div>
+  `;
+  grid.appendChild(card);
+
+  const chart = new DualChart(card.querySelector('[data-role=chart]'));
+  const filterSelect = card.querySelector('[data-role=filterSelect]');
+  const paramSlider = card.querySelector('[data-role=paramSlider]');
+  const paramLabel = card.querySelector('[data-role=paramLabel]');
+  const paramVal = card.querySelector('[data-role=paramVal]');
+
+  const state = {
+    filterFn: null, chart, decimals: ch.decimals,
+    rawVal: card.querySelector('[data-role=rawVal]'),
+    filtVal: card.querySelector('[data-role=filtVal]'),
+    noiseBadge: card.querySelector('[data-role=noiseBadge]'),
+  };
+  channelState[ch.key] = state;
+
+  function applyConfig(type, param) {
+    const cfg = PARAM_CFG[type];
+    paramSlider.min = cfg.min; paramSlider.max = cfg.max; paramSlider.step = cfg.step;
+    paramSlider.value = param;
+    paramSlider.disabled = (type === 'none');
+    paramLabel.textContent = cfg.label || '—';
+    paramVal.textContent = cfg.fmt(param);
+    state.filterFn = makeFilter(type, param);
+    chart.reset();
+    state.rawVal.textContent = '--'; state.filtVal.textContent = '--';
+    state.noiseBadge.textContent = '--'; state.noiseBadge.className = 'noise-badge';
+  }
+
+  filterSelect.value = ch.defaultFilter;
+  applyConfig(ch.defaultFilter, ch.defaultParam);
+
+  filterSelect.addEventListener('change', () => {
+    const cfg = PARAM_CFG[filterSelect.value];
+    applyConfig(filterSelect.value, (cfg.min + cfg.max) / 2);
+  });
+  paramSlider.addEventListener('input', () => {
+    applyConfig(filterSelect.value, parseFloat(paramSlider.value));
+  });
+});
+
+function updateChannel(key, rawValue) {
+  const st = channelState[key];
+  const filtered = st.filterFn(rawValue);
+  st.rawVal.textContent = rawValue.toFixed(st.decimals);
+  st.filtVal.textContent = filtered.toFixed(st.decimals);
+  st.chart.push(rawValue, filtered);
+
+  const rawSd = stddev(st.chart.raw);
+  const filtSd = stddev(st.chart.filtered);
+  if (st.chart.raw.length >= 10) {
+    const ratio = filtSd > 0.0001 ? (rawSd / filtSd) : (rawSd < 0.0001 ? 1 : 99);
+    st.noiseBadge.textContent = ratio.toFixed(1) + 'x smoother';
+    st.noiseBadge.className = 'noise-badge' + (ratio >= 1.5 ? ' good' : '');
+  }
+}
+
+// TelemetryPacket layout (little-endian, matches ble_service.h, pack(1)) —
+// same struct as the main dashboard, see index.html for field comments.
+function onTelemetry(event) {
+  const dv = event.target.value;
+  updateChannel('uas', dv.getFloat32(0, true));
+  updateChannel('sg1', dv.getUint16(4, true));
+  updateChannel('sg2', dv.getUint16(6, true));
+  // positionM1/M2 @8/@12, homingFlags @16, limitFlags @17 — not filter candidates, skipped here
+  updateChannel('force1', dv.getInt32(18, true));
+  updateChannel('force2', dv.getInt32(22, true));
+  updateChannel('als', dv.getUint16(26, true));
+  updateChannel('ir', dv.getUint32(28, true));
+  updateChannel('red', dv.getUint32(32, true));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EMBO PCB v3.4 Test Dashboard</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1c20; --muted: #6b7280;
+    --accent: #2563eb; --accent-active: #1d4ed8; --danger: #dc2626; --ok: #16a34a; --warn: #f59e0b; --border: #e2e4e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15171a; --card:#1e2126; --text:#e8e9eb; --muted:#9aa1ab; --border:#2c3036; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 20px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; }
+  .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  button.connect {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 0.95rem; cursor: pointer;
+  }
+  button.connect:active { background: var(--accent-active); }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); display: inline-block; }
+  .status-dot.connected { background: var(--ok); }
+  .limit-banner {
+    display: none; align-items: center; gap: 10px; background: var(--danger); color: white;
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-weight: 600;
+    font-size: 0.95rem; animation: limit-pulse 1s ease-in-out infinite;
+  }
+  .limit-banner.show { display: flex; }
+  @keyframes limit-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .card.limit-active { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger) inset; }
+  .section-title { font-size: 0.95rem; color: var(--muted); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .section-title:first-of-type { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 4px; }
+  .card .unit { font-size: 0.75rem; color: var(--muted); margin: 0 0 10px; }
+  .reading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .reading .label { color: var(--muted); font-size: 0.85rem; }
+  .reading .value { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: var(--border); color: var(--muted); }
+  .badge.ok { background: var(--ok); color: white; }
+  .badge.bad { background: var(--danger); color: white; }
+  .badge.active { background: var(--warn); color: white; }
+  .spark-wrap { margin-top: 8px; }
+  canvas.spark { width: 100%; height: 56px; display: block; }
+  .bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s linear; }
+  .switch-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .motor-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .jog-btn {
+    flex: 1; padding: 18px 0; font-size: 1.4rem; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; user-select: none; touch-action: manipulation;
+  }
+  .jog-btn:active, .jog-btn.pressed { background: var(--accent); color: white; }
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .slider-row input[type=range] { flex: 1; }
+  .slider-row .pct { width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
+  .home-btn {
+    margin-top: 12px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; font-size: 0.9rem;
+  }
+  .home-btn.homing { background: var(--warn); color: white; }
+  .step-count { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
+  .step-count b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .footer-note { color: var(--muted); font-size: 0.75rem; margin-top: 24px; }
+  .log-card { grid-column: 1 / -1; }
+  .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .log-header button {
+    background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted);
+    padding: 4px 10px; font-size: 0.8rem; cursor: pointer;
+  }
+  #logView {
+    background: #0d0f12; color: #c9f7c9; font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.8rem; height: 220px; overflow-y: auto; border-radius: 8px; padding: 10px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  #logView .line.warn { color: #f59e0b; }
+</style>
+</head>
+<body>
+
+<h1>EMBO PCB v3.4 Test Dashboard</h1>
+<div class="sub">Bench-test interface for the v3.4 main board firmware — every sensor's raw reading with a live rolling plot, plus manual motor jog/home.</div>
+
+<div class="top-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusText">Disconnected</span>
+  <button class="connect" id="connectBtn">Connect BLE</button>
+  <a href="filter_preview.html" style="color: var(--accent); text-decoration: none; font-size: 0.85rem;">Sensor filter preview &rarr;</a>
+</div>
+
+<div class="limit-banner" id="limitBanner">&#9888;&#65039; <span id="limitBannerText">LIMIT SWITCH TRIGGERED</span></div>
+
+<div class="section-title">UAS Acoustic Chain</div>
+<div class="grid">
+  <div class="card">
+    <h2>UAS Envelope (GPIO1)</h2>
+    <div class="unit">Rectified envelope, ADC1_CH0</div>
+    <div class="reading">
+      <span class="label">Volts</span>
+      <span class="value" id="uasValue">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="uasBar"></div></div>
+    <div class="spark-wrap"><canvas class="spark" id="uasSpark"></canvas></div>
+  </div>
+</div>
+
+<div class="section-title">Load Cells (HX711, §10)</div>
+<div class="grid">
+  <div class="card">
+    <h2>Force — Channel 1</h2>
+    <div class="unit">Raw 24-bit signed counts, ch.A gain 128</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="force1Value">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="force1Spark"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Force — Channel 2</h2>
+    <div class="unit">Raw 24-bit signed counts, ch.A gain 128</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="force2Value">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="force2Spark"></canvas></div>
+  </div>
+</div>
+
+<div class="section-title">Turbidity Pair (§9)</div>
+<div class="grid">
+  <div class="card">
+    <h2>APDS9960 ALS <span class="badge" id="apdsBadge">--</span></h2>
+    <div class="unit">Clear channel, transmission mode, 0x39</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="alsValue">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="alsSpark"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>MAX30102 IR <span class="badge" id="maxBadge">--</span></h2>
+    <div class="unit">Backscatter, 18-bit, 0x57</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="irValue">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="irSpark"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>MAX30102 RED</h2>
+    <div class="unit">Backscatter, 18-bit, 0x57</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="redValue">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="redSpark"></canvas></div>
+  </div>
+</div>
+
+<div class="section-title">Motors &amp; StallGuard</div>
+<div class="grid">
+
+  <div class="card" data-motor="0">
+    <h2>Motor 1</h2>
+    <div class="reading">
+      <span class="label">SG_RESULT</span>
+      <span class="value" id="sg1Value">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="sg1Bar"></div></div>
+    <div class="spark-wrap"><canvas class="spark" id="sg1Spark"></canvas></div>
+    <div class="switch-row" style="margin-top:10px">
+      <span class="label">Limit switch</span>
+      <span class="badge" id="limit1Badge">--</span>
+    </div>
+    <div class="motor-controls">
+      <button class="jog-btn" data-dir="-1">&#9664;</button>
+      <button class="jog-btn" data-dir="1">&#9654;</button>
+    </div>
+    <div class="slider-row">
+      <span class="label">Speed</span>
+      <input type="range" min="0" max="100" value="40" class="speed-slider">
+      <span class="pct">40%</span>
+    </div>
+    <button class="home-btn" data-home="0">Home Motor 1</button>
+    <div class="step-count">Position: <b class="pos-readout">0</b> steps <span class="homed-tag" style="display:none"> — homed &#10003;</span></div>
+  </div>
+
+  <div class="card" data-motor="1">
+    <h2>Motor 2</h2>
+    <div class="reading">
+      <span class="label">SG_RESULT</span>
+      <span class="value" id="sg2Value">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="sg2Bar"></div></div>
+    <div class="spark-wrap"><canvas class="spark" id="sg2Spark"></canvas></div>
+    <div class="switch-row" style="margin-top:10px">
+      <span class="label">Limit switch</span>
+      <span class="badge" id="limit2Badge">--</span>
+    </div>
+    <div class="motor-controls">
+      <button class="jog-btn" data-dir="-1">&#9664;</button>
+      <button class="jog-btn" data-dir="1">&#9654;</button>
+    </div>
+    <div class="slider-row">
+      <span class="label">Speed</span>
+      <input type="range" min="0" max="100" value="40" class="speed-slider">
+      <span class="pct">40%</span>
+    </div>
+    <button class="home-btn" data-home="1">Home Motor 2</button>
+    <div class="step-count">Position: <b class="pos-readout">0</b> steps <span class="homed-tag" style="display:none"> — homed &#10003;</span></div>
+  </div>
+
+</div>
+
+<button class="home-btn" id="homeBothBtn" style="max-width:320px; margin-top:16px">Home Both</button>
+
+<div class="card log-card" style="margin-top:16px">
+  <div class="log-header">
+    <h2 style="margin:0">Firmware Log</h2>
+    <button id="clearLogBtn">Clear</button>
+  </div>
+  <div id="logView"></div>
+</div>
+
+<div class="footer-note">
+  Requires Chrome or Edge with Web Bluetooth enabled. Every strip chart shows the
+  last ~30s of samples, auto-scaled to the data currently on screen — read the
+  numeric value for an exact figure. Jog buttons are press-and-hold — releasing
+  (mouse up / touch end / pointer leaving the button) immediately sends a stop
+  command. The firmware also auto-stops a jogging motor if no command is received
+  for 300ms, in case the BLE link drops mid-press.
+</div>
+
+<script>
+const SERVICE_UUID     = '8f6a1001-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const TELEMETRY_UUID   = '8f6a1002-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const MOTOR_CMD_UUID   = '8f6a1003-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const HOME_CMD_UUID    = '8f6a1004-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const LOG_UUID         = '8f6a1005-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+
+let device, motorCmdChar, homeCmdChar;
+let connected = false;
+
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const connectBtn = document.getElementById('connectBtn');
+
+function setConnected(isConnected) {
+  connected = isConnected;
+  statusDot.classList.toggle('connected', isConnected);
+  statusText.textContent = isConnected ? 'Connected' : 'Disconnected';
+  connectBtn.textContent = isConnected ? 'Disconnect' : 'Connect BLE';
+}
+
+// ---- Rolling strip-chart, one series per sensor (no legend needed — the
+// card heading + value readout already name the series). Auto-scales to
+// the min/max currently in the buffer so a bench-test reading is always
+// legible regardless of sensor units. ----
+class Sparkline {
+  constructor(canvas, maxPoints = 150) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.maxPoints = maxPoints;
+    this.data = [];
+    this.dpr = window.devicePixelRatio || 1;
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+  }
+  _resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.canvas.width = Math.max(1, rect.width * this.dpr);
+    this.canvas.height = Math.max(1, rect.height * this.dpr);
+    this._draw();
+  }
+  push(value) {
+    this.data.push(value);
+    if (this.data.length > this.maxPoints) this.data.shift();
+    this._draw();
+  }
+  _draw() {
+    const { ctx, canvas, data } = this;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (data.length < 2) return;
+
+    let min = Math.min(...data), max = Math.max(...data);
+    if (min === max) { min -= 1; max += 1; }
+    const pad = h * 0.12;
+    const scaleY = (v) => h - pad - ((v - min) / (max - min)) * (h - pad * 2);
+    const stepX = w / (this.maxPoints - 1);
+    const offset = this.maxPoints - data.length;
+
+    const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#2563eb';
+
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = (offset + i) * stepX;
+      const y = scaleY(v);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineWidth = 2 * this.dpr;
+    ctx.strokeStyle = accent;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // Light fill under the line for readability at a glance.
+    ctx.lineTo((offset + data.length - 1) * stepX, h);
+    ctx.lineTo(offset * stepX, h);
+    ctx.closePath();
+    ctx.fillStyle = accent + '22';
+    ctx.fill();
+  }
+}
+
+const sparks = {
+  uas: new Sparkline(document.getElementById('uasSpark')),
+  force1: new Sparkline(document.getElementById('force1Spark')),
+  force2: new Sparkline(document.getElementById('force2Spark')),
+  als: new Sparkline(document.getElementById('alsSpark')),
+  ir: new Sparkline(document.getElementById('irSpark')),
+  red: new Sparkline(document.getElementById('redSpark')),
+  sg1: new Sparkline(document.getElementById('sg1Spark')),
+  sg2: new Sparkline(document.getElementById('sg2Spark')),
+};
+
+async function connect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }]
+    });
+    device.addEventListener('gattserverdisconnected', () => setConnected(false));
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const telemetryChar = await service.getCharacteristic(TELEMETRY_UUID);
+    motorCmdChar = await service.getCharacteristic(MOTOR_CMD_UUID);
+    homeCmdChar = await service.getCharacteristic(HOME_CMD_UUID);
+    const logCharacteristic = await service.getCharacteristic(LOG_UUID);
+
+    await telemetryChar.startNotifications();
+    telemetryChar.addEventListener('characteristicvaluechanged', onTelemetry);
+
+    await logCharacteristic.startNotifications();
+    logCharacteristic.addEventListener('characteristicvaluechanged', onLogLine);
+
+    setConnected(true);
+    appendLog('-- connected --');
+  } catch (err) {
+    console.error('BLE connect failed:', err);
+    appendLog('ERROR: connect failed — ' + (err && err.message ? err.message : err));
+    setConnected(false);
+  }
+}
+
+function disconnect() {
+  if (device && device.gatt.connected) device.gatt.disconnect();
+  setConnected(false);
+}
+
+connectBtn.addEventListener('click', () => {
+  if (connected) disconnect(); else connect();
+});
+
+function setBadge(el, state) {
+  // state: 'ok' | 'bad' | 'active' | 'idle'
+  el.className = 'badge' + (state === 'ok' ? ' ok' : state === 'bad' ? ' bad' : state === 'active' ? ' active' : '');
+  el.textContent = state === 'ok' ? 'OK' : state === 'bad' ? 'NOT FOUND' : state === 'active' ? 'TRIGGERED' : 'clear';
+}
+
+// TelemetryPacket layout (little-endian, matches ble_service.h, pack(1)):
+// float    uasVolts        @0
+// uint16   sgResultM1      @4
+// uint16   sgResultM2      @6
+// int32    positionM1      @8
+// int32    positionM2      @12
+// uint8    homingFlags     @16
+// uint8    limitFlags      @17
+// int32    forceRaw1       @18
+// int32    forceRaw2       @22
+// uint16   alsClear        @26
+// uint32   irRaw           @28
+// uint32   redRaw          @32
+// uint8    turbidityFlags  @36
+function onTelemetry(event) {
+  const dv = event.target.value;
+  const uas = dv.getFloat32(0, true);
+  const sg1 = dv.getUint16(4, true);
+  const sg2 = dv.getUint16(6, true);
+  const pos1 = dv.getInt32(8, true);
+  const pos2 = dv.getInt32(12, true);
+  const homingFlags = dv.getUint8(16);
+  const limitFlags = dv.getUint8(17);
+  const force1 = dv.getInt32(18, true);
+  const force2 = dv.getInt32(22, true);
+  const als = dv.getUint16(26, true);
+  const ir = dv.getUint32(28, true);
+  const red = dv.getUint32(32, true);
+  const turbidityFlags = dv.getUint8(36);
+
+  document.getElementById('uasValue').textContent = uas.toFixed(3);
+  document.getElementById('uasBar').style.width = Math.min(100, (uas / 3.3) * 100) + '%';
+  sparks.uas.push(uas);
+
+  document.getElementById('sg1Value').textContent = sg1;
+  document.getElementById('sg1Bar').style.width = Math.min(100, (sg1 / 1023) * 100) + '%';
+  sparks.sg1.push(sg1);
+  document.getElementById('sg2Value').textContent = sg2;
+  document.getElementById('sg2Bar').style.width = Math.min(100, (sg2 / 1023) * 100) + '%';
+  sparks.sg2.push(sg2);
+
+  document.getElementById('force1Value').textContent = force1;
+  sparks.force1.push(force1);
+  document.getElementById('force2Value').textContent = force2;
+  sparks.force2.push(force2);
+
+  document.getElementById('alsValue').textContent = als;
+  sparks.als.push(als);
+  document.getElementById('irValue').textContent = ir;
+  sparks.ir.push(ir);
+  document.getElementById('redValue').textContent = red;
+  sparks.red.push(red);
+  setBadge(document.getElementById('apdsBadge'), (turbidityFlags & 0x01) ? 'ok' : 'bad');
+  setBadge(document.getElementById('maxBadge'), (turbidityFlags & 0x02) ? 'ok' : 'bad');
+
+  const limit1Active = !!(limitFlags & 0x01);
+  const limit2Active = !!(limitFlags & 0x02);
+  setBadge(document.getElementById('limit1Badge'), limit1Active ? 'active' : 'idle');
+  setBadge(document.getElementById('limit2Badge'), limit2Active ? 'active' : 'idle');
+
+  const motorCardsForLimits = document.querySelectorAll('.card[data-motor]');
+  motorCardsForLimits[0].classList.toggle('limit-active', limit1Active);
+  motorCardsForLimits[1].classList.toggle('limit-active', limit2Active);
+
+  const limitBanner = document.getElementById('limitBanner');
+  if (limit1Active || limit2Active) {
+    const which = limit1Active && limit2Active ? 'MOTOR 1 & MOTOR 2' : (limit1Active ? 'MOTOR 1' : 'MOTOR 2');
+    document.getElementById('limitBannerText').textContent = `LIMIT SWITCH TRIGGERED — ${which}`;
+    limitBanner.classList.add('show');
+  } else {
+    limitBanner.classList.remove('show');
+  }
+
+  const cards = document.querySelectorAll('.card[data-motor]');
+  cards[0].querySelector('.pos-readout').textContent = pos1;
+  cards[1].querySelector('.pos-readout').textContent = pos2;
+
+  const homingM1 = !!(homingFlags & 0x01), homingM2 = !!(homingFlags & 0x02);
+  cards[0].querySelector('.home-btn').classList.toggle('homing', homingM1);
+  cards[1].querySelector('.home-btn').classList.toggle('homing', homingM2);
+  if (homingFlags & 0x04) cards[0].querySelector('.homed-tag').style.display = 'inline';
+  if (homingFlags & 0x08) cards[1].querySelector('.homed-tag').style.display = 'inline';
+}
+
+const logView = document.getElementById('logView');
+const textDecoder = new TextDecoder('utf-8');
+
+function appendLog(text) {
+  const line = document.createElement('div');
+  line.className = 'line' + (/warn/i.test(text) ? ' warn' : '');
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = `[${ts}] ${text}`;
+  logView.appendChild(line);
+  logView.scrollTop = logView.scrollHeight;
+}
+
+function onLogLine(event) {
+  const text = textDecoder.decode(event.target.value);
+  appendLog(text);
+}
+
+document.getElementById('clearLogBtn').addEventListener('click', () => {
+  logView.innerHTML = '';
+});
+
+async function sendMotorCmd(motorId, dir, speedPct) {
+  if (!motorCmdChar) return;
+  const buf = new ArrayBuffer(3);
+  const dv = new DataView(buf);
+  dv.setUint8(0, motorId);
+  dv.setInt8(1, dir);
+  dv.setUint8(2, speedPct);
+  try { await motorCmdChar.writeValueWithoutResponse(buf); } catch (e) { console.warn(e); }
+}
+
+async function sendHomeCmd(motorId) {
+  if (!homeCmdChar) return;
+  const buf = new Uint8Array([motorId]);
+  try { await homeCmdChar.writeValueWithResponse(buf); } catch (e) { console.warn(e); }
+}
+
+// Press-and-hold jog: send the dir+speed command on press, repeat it
+// periodically (matches the firmware's 300ms watchdog window) while held,
+// and send a stop (dir=0) on release / pointer leaving the button.
+document.querySelectorAll('.card[data-motor]').forEach(card => {
+  const motorId = parseInt(card.dataset.motor, 10);
+  const slider = card.querySelector('.speed-slider');
+  const pctLabel = card.querySelector('.pct');
+  slider.addEventListener('input', () => { pctLabel.textContent = slider.value + '%'; });
+
+  card.querySelectorAll('.jog-btn').forEach(btn => {
+    const dir = parseInt(btn.dataset.dir, 10);
+    let holdInterval = null;
+
+    const press = () => {
+      if (!connected) return;
+      btn.classList.add('pressed');
+      const speed = parseInt(slider.value, 10);
+      sendMotorCmd(motorId, dir, speed);
+      holdInterval = setInterval(() => sendMotorCmd(motorId, dir, parseInt(slider.value, 10)), 150);
+    };
+    const release = () => {
+      btn.classList.remove('pressed');
+      if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
+      if (connected) sendMotorCmd(motorId, 0, 0);
+    };
+
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointerleave', release);
+    btn.addEventListener('pointercancel', release);
+  });
+
+  card.querySelector('.home-btn').addEventListener('click', () => sendHomeCmd(motorId));
+});
+
+document.getElementById('homeBothBtn').addEventListener('click', () => sendHomeCmd(2));
+
+// Initialize badges to a known "not yet connected" idle state.
+['apdsBadge', 'maxBadge'].forEach(id => setBadge(document.getElementById(id), 'idle'));
+['limit1Badge', 'limit2Badge'].forEach(id => setBadge(document.getElementById(id), 'idle'));
+</script>
+</body>
+</html>
