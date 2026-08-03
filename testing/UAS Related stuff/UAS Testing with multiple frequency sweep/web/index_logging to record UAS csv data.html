@@ -89,14 +89,15 @@
 <body>
 
 <h1>EMBO UAS Frequency Sweep Dashboard</h1>
-<div class="sub">Standalone UAS bench-test rig — set the AD9833 drive frequency live, run an automated sweep, and record everything to CSV. Other v3.4 sensors are also shown for reference.</div>
+<div class="sub">Standalone UAS bench-test rig — run an automated frequency sweep and get both a pre-averaged summary and the full raw labelled data. Other v3.4 sensors are also shown for reference.</div>
 
 <div class="top-bar">
   <span class="status-dot" id="statusDot"></span>
   <span id="statusText">Disconnected</span>
   <button class="connect" id="connectBtn">Connect BLE</button>
-  <button class="connect" id="recordBtn" style="background:var(--ok)">Start Recording</button>
-  <button class="connect" id="downloadBtn" style="background:var(--muted)" disabled>Download CSV (0)</button>
+  <button class="connect" id="downloadRawBtn" style="background:var(--muted)" disabled>Download Raw Data (0)</button>
+  <button class="connect" id="downloadAvgBtn" style="background:var(--muted)" disabled>Download Averaged Summary (0)</button>
+  <button class="connect" id="resetBtn" style="background:var(--danger)">Reset</button>
   <a href="filter_preview.html" style="color: var(--accent); text-decoration: none; font-size: 0.85rem;">Sensor filter preview &rarr;</a>
 </div>
 
@@ -120,41 +121,30 @@
   </div>
 
   <div class="card">
-    <h2>Manual Frequency Set</h2>
-    <div class="unit">Writes FREQ_CMD immediately, applied on next loop() pass</div>
-    <div class="slider-row">
-      <input type="number" id="manualFreqInput" value="1000000" step="1000" style="flex:1; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
-      <span class="label">Hz</span>
-    </div>
-    <button class="home-btn" id="setFreqBtn" style="margin-top:12px">Set Frequency</button>
-  </div>
-
-  <div class="card">
     <h2>Automated Frequency Sweep</h2>
     <div class="unit">Steps through a frequency range, settles, averages the envelope reading at each step</div>
     <div class="slider-row">
       <span class="label" style="width:4em">Start</span>
-      <input type="number" id="sweepStart" value="900000" step="1000" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
-      <span class="label">Hz</span>
+      <input type="number" id="sweepStart" value="0.900" step="0.001" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <span class="label">MHz</span>
     </div>
     <div class="slider-row">
       <span class="label" style="width:4em">End</span>
-      <input type="number" id="sweepEnd" value="1100000" step="1000" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
-      <span class="label">Hz</span>
+      <input type="number" id="sweepEnd" value="1.100" step="0.001" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <span class="label">MHz</span>
     </div>
     <div class="slider-row">
       <span class="label" style="width:4em">Step</span>
-      <input type="number" id="sweepStep" value="10000" step="1000" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
-      <span class="label">Hz</span>
+      <input type="number" id="sweepStep" value="0.010" step="0.001" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <span class="label">MHz — increment between points</span>
     </div>
     <div class="slider-row">
       <span class="label" style="width:4em">Dwell</span>
       <input type="number" id="sweepDwell" value="300" step="50" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
-      <span class="label">ms/step</span>
+      <span class="label">ms/step — settle + average time</span>
     </div>
     <button class="home-btn" id="runSweepBtn" style="margin-top:12px">Run Sweep</button>
     <div class="step-count" id="sweepStatus">Idle</div>
-    <button class="connect" id="downloadSweepBtn" style="background:var(--muted); margin-top:10px; width:100%" disabled>Download Sweep CSV (0)</button>
   </div>
 </div>
 
@@ -301,60 +291,57 @@ const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const connectBtn = document.getElementById('connectBtn');
 
-// ---- Recording: capture every telemetry packet with a timestamp, and
-// let the user export it as a CSV whenever they want, instead of
-// manually screenshotting each reading. ----
-const recordBtn = document.getElementById('recordBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-let recording = false;
-let recordedRows = [];
-const CSV_HEADER = [
-  'timestamp_iso', 'elapsed_ms', 'uas_volts', 'uas_freq_hz', 'sg1', 'sg2', 'pos1', 'pos2',
-  'force1', 'force2', 'als', 'ir', 'red', 'limit1_active', 'limit2_active',
-];
-let recordStartMs = null;
+// ---- Raw data logging: only active WHILE a sweep is running (gated on
+// sweepRunning, set further down) — starts the instant Run Sweep is
+// clicked, stops when the sweep finishes. Both this raw log and the
+// sweep's averaged summary accumulate across multiple sweep runs until
+// Reset is clicked, so you can build up one file across several stroke
+// tests if you want, or reset between each. ----
+const downloadRawBtn = document.getElementById('downloadRawBtn');
+const downloadAvgBtn = document.getElementById('downloadAvgBtn');
+const resetBtn = document.getElementById('resetBtn');
+let rawRows = [];
+const RAW_CSV_HEADER = ['timestamp_iso', 'elapsed_ms', 'uas_volts', 'uas_freq_hz', 'force1', 'force2', 'als', 'ir', 'red'];
+let sessionStartMs = Date.now();
 
-recordBtn.addEventListener('click', () => {
-  recording = !recording;
-  if (recording) {
-    recordStartMs = Date.now();
-    recordBtn.textContent = 'Stop Recording';
-    recordBtn.style.background = 'var(--danger)';
-  } else {
-    recordBtn.textContent = 'Start Recording';
-    recordBtn.style.background = 'var(--ok)';
-  }
-});
-
-function recordRow(fields) {
-  if (!recording) return;
+function logRawRow(fields) {
+  if (!sweepRunning) return;
   const now = Date.now();
-  recordedRows.push([
-    new Date(now).toISOString(),
-    now - recordStartMs,
-    ...fields,
-  ]);
-  downloadBtn.textContent = `Download CSV (${recordedRows.length})`;
-  downloadBtn.disabled = false;
+  rawRows.push([new Date(now).toISOString(), now - sessionStartMs, ...fields]);
+  downloadRawBtn.textContent = `Download Raw Data (${rawRows.length})`;
+  downloadRawBtn.disabled = false;
 }
 
-function downloadCsv() {
-  if (recordedRows.length === 0) return;
-  const lines = [CSV_HEADER.join(',')];
-  for (const row of recordedRows) lines.push(row.join(','));
+function downloadCsvFile(filenamePrefix, header, rows) {
+  const lines = [header.join(','), ...rows.map(r => r.join(','))];
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   a.href = url;
-  a.download = `uas_telemetry_${stamp}.csv`;
+  a.download = `${filenamePrefix}_${stamp}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
 }
 
-downloadBtn.addEventListener('click', downloadCsv);
+downloadRawBtn.addEventListener('click', () => {
+  if (rawRows.length === 0) return;
+  downloadCsvFile('uas_raw_data', RAW_CSV_HEADER, rawRows);
+});
+
+resetBtn.addEventListener('click', () => {
+  rawRows = [];
+  sweepRows = [];
+  sessionStartMs = Date.now();
+  downloadRawBtn.textContent = 'Download Raw Data (0)';
+  downloadRawBtn.disabled = true;
+  downloadAvgBtn.textContent = 'Download Averaged Summary (0)';
+  downloadAvgBtn.disabled = true;
+  sweepStatus.textContent = 'Idle';
+  appendLog('-- data reset --');
+});
 
 function setConnected(isConnected) {
   connected = isConnected;
@@ -515,7 +502,7 @@ function onTelemetry(event) {
   latestUasVolts = uas;
 
   document.getElementById('uasValue').textContent = uas.toFixed(3);
-  document.getElementById('uasFreqValue').textContent = (uasFreq / 1000).toFixed(1) + ' kHz';
+  document.getElementById('uasFreqValue').textContent = (uasFreq / 1e6).toFixed(4) + ' MHz';
   document.getElementById('uasBar').style.width = Math.min(100, (uas / 3.3) * 100) + '%';
   sparks.uas.push(uas);
 
@@ -568,10 +555,7 @@ function onTelemetry(event) {
   if (homingFlags & 0x04) cards[0].querySelector('.homed-tag').style.display = 'inline';
   if (homingFlags & 0x08) cards[1].querySelector('.homed-tag').style.display = 'inline';
 
-  recordRow([
-    uas.toFixed(4), uasFreq.toFixed(0), sg1, sg2, pos1, pos2, force1, force2, als, ir, red,
-    limit1Active ? 1 : 0, limit2Active ? 1 : 0,
-  ]);
+  logRawRow([uas.toFixed(4), uasFreq.toFixed(0), force1, force2, als, ir, red]);
 }
 
 const logView = document.getElementById('logView');
@@ -619,19 +603,13 @@ async function setFrequency(hz) {
   await freqCmdChar.writeValueWithResponse(buf);
 }
 
-document.getElementById('setFreqBtn').addEventListener('click', () => {
-  if (!connected) return;
-  const hz = parseFloat(document.getElementById('manualFreqInput').value);
-  if (!isNaN(hz)) setFrequency(hz);
-});
-
-// ---- Automated sweep: step through [start, end] by `step` Hz, settle for
-// `dwellMs`, then average whatever telemetry samples arrive during a short
-// capture window (telemetry updates every ~40ms) before moving to the next
-// step. Each averaged point goes into its own CSV, separate from the raw
-// continuous recorder above. ----
-const sweepRows = [];
-const downloadSweepBtn = document.getElementById('downloadSweepBtn');
+// ---- Automated sweep: step through [start, end] by `step` (all entered in
+// MHz on the page, converted to Hz here since that's what FREQ_CMD expects),
+// settle for `dwellMs`, then average whatever telemetry samples arrive
+// during a short capture window (telemetry updates every ~40ms) before
+// moving to the next step. Each averaged point goes into its own CSV,
+// separate from the raw continuous recorder above. ----
+let sweepRows = [];
 const sweepStatus = document.getElementById('sweepStatus');
 let sweepRunning = false;
 
@@ -639,15 +617,21 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function runSweep() {
   if (!connected || sweepRunning) return;
-  const start = parseFloat(document.getElementById('sweepStart').value);
-  const end = parseFloat(document.getElementById('sweepEnd').value);
-  const step = parseFloat(document.getElementById('sweepStep').value);
+  const startMhz = parseFloat(document.getElementById('sweepStart').value);
+  const endMhz = parseFloat(document.getElementById('sweepEnd').value);
+  const stepMhz = parseFloat(document.getElementById('sweepStep').value);
   const dwellMs = parseFloat(document.getElementById('sweepDwell').value);
-  if ([start, end, step, dwellMs].some(isNaN) || step <= 0 || dwellMs <= 0) {
+  if ([startMhz, endMhz, stepMhz, dwellMs].some(isNaN) || stepMhz <= 0 || dwellMs <= 0) {
     sweepStatus.textContent = 'Invalid sweep parameters';
     return;
   }
+  // Always sweep low -> high regardless of which box has the smaller number,
+  // so a start/end typo (or a stale browser-autofilled value) can't produce
+  // a descending sweep.
+  const loMhz = Math.min(startMhz, endMhz), hiMhz = Math.max(startMhz, endMhz);
+  const start = loMhz * 1e6, end = hiMhz * 1e6, step = stepMhz * 1e6;
 
+  sessionStartMs = Date.now();
   sweepRunning = true;
   const runBtn = document.getElementById('runSweepBtn');
   runBtn.disabled = true;
@@ -658,7 +642,7 @@ async function runSweep() {
 
   for (let i = 0; i < freqs.length; i++) {
     const hz = freqs[i];
-    sweepStatus.textContent = `Step ${i + 1}/${freqs.length}: ${(hz / 1000).toFixed(1)} kHz`;
+    sweepStatus.textContent = `Step ${i + 1}/${freqs.length}: ${(hz / 1e6).toFixed(4)} MHz`;
     await setFrequency(hz);
 
     // Let it settle, then collect samples arriving during a capture window.
@@ -679,8 +663,8 @@ async function runSweep() {
     const std = Math.sqrt(variance);
 
     sweepRows.push([new Date().toISOString(), hz, mean.toFixed(4), std.toFixed(4), samples.length]);
-    downloadSweepBtn.textContent = `Download Sweep CSV (${sweepRows.length})`;
-    downloadSweepBtn.disabled = false;
+    downloadAvgBtn.textContent = `Download Averaged Summary (${sweepRows.length})`;
+    downloadAvgBtn.disabled = false;
   }
 
   sweepStatus.textContent = `Done — ${freqs.length} points swept`;
@@ -691,20 +675,10 @@ async function runSweep() {
 
 document.getElementById('runSweepBtn').addEventListener('click', runSweep);
 
-downloadSweepBtn.addEventListener('click', () => {
+downloadAvgBtn.addEventListener('click', () => {
   if (sweepRows.length === 0) return;
   const header = ['timestamp_iso', 'freq_hz', 'mean_uas_volts', 'std_uas_volts', 'n_samples'];
-  const lines = [header.join(','), ...sweepRows.map(r => r.join(','))];
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  a.href = url;
-  a.download = `uas_freq_sweep_${stamp}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  downloadCsvFile('uas_averaged_summary', header, sweepRows);
 });
 
 // Press-and-hold jog: send the dir+speed command on press, repeat it
