@@ -30,7 +30,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-**Camera:** Off-the-shelf USB 2.0 microscope camera (UVC), connected via a Pi USB port and read through OpenCV/`v4l2` rather than `picamera2`/`libcamera`. Note: unlike the previously planned Raspberry Pi Global Shutter Camera, this is very likely a **rolling shutter** sensor — this matters for the strobed-illumination stopcock imaging work in `SOFTWARE_TODO.md` task 12, where motion blur/smear risk is higher than originally assumed. USB 2.0 bandwidth (~35–40MB/s effective) also caps achievable resolution × frame rate — check the camera's actual supported modes (`v4l2-ctl --list-formats-ext`) before assuming a given resolution/fps combo is deliverable. LED backlight panel (powered from PCB J10 at 5V) illuminates the syringe from behind for particle contrast.
+**Camera:** Raspberry Pi Global Shutter Camera (IMX296, CSI), read through `picamera2`/`libcamera`. Reverted back from an off-the-shelf USB 2.0 UVC microscope camera tried earlier — the UVC camera's rolling shutter produced confirmed motion blur/skew on fast particle movement (see `SOFTWARE_TODO.md` task 12, 3 July 2026 stopcock aperture test notes). Global shutter + a short manual exposure freezes motion instead of relying on strobed illumination. LED backlight panel (powered from PCB J10 at 5V) illuminates the syringe from behind for particle contrast.
 
 **UART:** RPi GPIO14 (TX) → ESP32-S3 GPIO48 (RX), RPi GPIO15 (RX) → ESP32-S3 GPIO47 (TX). Both sides 3.3V — no level shifter required.
 
