@@ -65,6 +65,23 @@ void scheduler_stop();
 // there is exactly one "kill everything now" path, not two.
 void scheduler_emergency_stop();
 
+// Pause: holds the motors mid-stroke (like emergency stop, motor-power-wise)
+// but remembers exactly where in the stroke it was, so scheduler_resume()
+// can pick back up instead of the run being over — this is the mixing
+// screen's "Pause" touch button, distinct from Stop/e-stop, which end the
+// run. No-op if not currently running a stroke. See scheduler_is_paused().
+void scheduler_pause();
+
+// Resumes a paused run from exactly where scheduler_pause() left off
+// (same phase, same remaining time in that phase). No-op if not paused.
+void scheduler_resume();
+
+bool scheduler_is_paused();
+
+// True while actively stroking OR paused — a paused run is still "in
+// progress" for the purposes of every guard that checks this (BLE bench
+// commands, starting a second run, etc.), even though the motors are
+// currently held.
 bool scheduler_is_running();
 
 // True once the fused sensor estimate has read within tolerance of target

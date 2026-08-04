@@ -166,6 +166,18 @@ static void _backoff_single(uint8_t motor) {
 }
 
 bool motors_home() {
+#ifdef BENCH_NO_HOMING
+    // BENCH-ONLY (embo_bench env, platformio.ini): skips real homing so the
+    // UI/BLE console can be exercised with nothing connected. This must
+    // never be true in a build that goes anywhere near real hardware — see
+    // the banner this drives on the Mixing Menu screen (mixing_menu_screen.cpp)
+    // and the loud log line below.
+    ble_log("Homing: SKIPPED — BENCH_NO_HOMING build, motors/limit switches not required");
+    ble_log("Homing: *** THIS IS A BENCH-ONLY BUILD — DO NOT USE WITH REAL HARDWARE ***");
+    _homed = true;
+    _stroke_count = 0;
+    return true;
+#else
     ble_log("Homing: starting");
     _homed = false;
 
@@ -201,6 +213,7 @@ bool motors_home() {
     _stroke_count = 0;
     ble_log("Homing: complete");
     return true;
+#endif
 }
 
 bool motors_is_homed() {

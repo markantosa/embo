@@ -2,6 +2,7 @@
 #include "ui_screen_manager.h"
 #include "ui_input.h"
 #include "ui_display.h"
+#include "scheduler.h"
 
 MenuScreen::MenuScreen(const char *title, const MenuItem *items, uint8_t count)
     : _title(title), _items(items), _count(count) {}
@@ -14,17 +15,24 @@ void MenuScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
     if (forceFull) {
         tft.fillScreen(TFT_BLACK);
-        ui_display_draw_centered(_title, 30, TFT_WHITE, 3);
+        tft.setFont(&fonts::FreeSansBold12pt7b);
+        ui_display_draw_centered(_title, 24, TFT_WHITE, 1);
+        tft.drawFastHLine(30, 62, tft.width() - 60, TFT_DARKGREY);
     }
 
     // Redraw just the item list — cheap enough to do every time something
     // changes, and avoids a full-screen flicker on every encoder detent.
-    int16_t top = 80;
-    int16_t rowH = 30;
+    int16_t top  = 90;
+    int16_t rowH = 40;
     tft.fillRect(0, top, tft.width(), rowH * _count, TFT_BLACK);
+    tft.setFont(&fonts::FreeSans9pt7b);
     for (uint8_t i = 0; i < _count; i++) {
         bool sel = (i == _selected);
-        ui_display_draw_centered(_items[i].label, top + i * rowH, sel ? TFT_GREEN : TFT_DARKGREY, 2);
+        int16_t rowY = top + i * rowH;
+        if (sel) {
+            tft.fillRoundRect(20, rowY, tft.width() - 40, rowH - 8, 8, TFT_DARKGREY);
+        }
+        ui_display_draw_centered(_items[i].label, rowY + 10, sel ? TFT_WHITE : TFT_DARKGREY, 1);
     }
 }
 
@@ -44,9 +52,16 @@ void MenuScreen::update(ScreenManager &mgr, bool forceFull) {
         _items[_selected].onSelect(mgr);
     }
 
-    // BTN1 stays the dedicated stop button everywhere, including here —
-    // it's not read by this screen at all, so if a run is ever active
-    // behind a menu, screens above it never swallow the e-stop input.
-    // (Today nothing pushes a menu while a run is active, but this keeps
-    // that guarantee even if a future screen does.)
+    // BTN1 = Back here — but ONLY when nothing is running. This screen
+    // isn't currently reachable while a run is active (nothing pushes a
+    // menu from the running screen), but gating on scheduler_is_running()
+    // rather than relying on that structural guarantee means BTN1 still
+    // can't be mistaken for "back" instead of "stop" even if that ever
+    // changes — see mixing_running_screen.h, where BTN1's stop/e-stop
+    // function is untouched and remains the only thing it does there.
+    // mgr.pop() itself is a safe no-op on the root screen (Start Menu),
+    // so this doesn't need a separate "is this the root" check.
+    if (!scheduler_is_running() && ui_input_poll_btn1() == ButtonEvent::SHORT_PRESS) {
+        mgr.pop();
+    }
 }

@@ -16,29 +16,39 @@
 // does not run continuously and does not drive the mixing schedule.
 //
 // Button mapping (see config.h for timing constants):
-//   EC11 rotary       — adjust target particle size while idle
-//   EC11 push-switch  — short press = confirm/start a run (set-target
-//                        screen) or dismiss and return to set-target (done /
-//                        verify screens)
+//   EC11 rotary       — adjust target particle size (Mixing Menu)
+//   EC11 push-switch  — context-dependent: home/continue, confirm/start,
+//                        menu-select, toggle — see each screen
 //                     — held >= EC11_SW_LONGPRESS_MS = request an optional
-//                        camera size verification (set-target or done screen)
-//   BTN1               — dedicated stop button, no start function:
-//                          short press = graceful stop (finish current
-//                          stroke, then hold)
-//                          held >= BTN1_LONGPRESS_MS = emergency stop
-//                          (kills motor power immediately)
+//                        camera size verification (Mixing Menu or End screen)
+//   BTN1               — two roles, never both at once because they're on
+//                        different screens:
+//                          On the Mixing Running screen ONLY: dedicated
+//                          stop button, no other function —
+//                            short press = graceful stop (finish current
+//                            stroke, then hold)
+//                            held >= BTN1_LONGPRESS_MS = emergency stop
+//                            (kills motor power immediately)
+//                          On every other (non-running) screen: short
+//                          press = Back — same as that screen's touch Back
+//                          button / encoder long-press fallback. This is
+//                          deliberately scoped to screens where nothing is
+//                          moving, so there's never a moment where BTN1's
+//                          meaning is ambiguous or could be mistaken for
+//                          the stop function — see mixing_running_screen.h.
 
 void ui_init();
 void ui_update();   // call every loop()
 
-// Switches to a persistent error screen (e.g. homing failed at boot).
+// Switches to a persistent error screen (e.g. a failed homing attempt).
 // There is no way back from this screen short of a reboot — a hardware
 // fault serious enough to fail homing needs investigation, not a retry.
 void ui_show_error(const char *msg);
 
-// Opens the settings/diagnostics menu on top of whatever screen is
-// currently showing (it returns there afterwards on "Back"). Currently
-// only called from the BLE debug "MENU" command (see ble_debug.cpp) as a
-// bench hook — wire a real physical trigger once one is chosen; see
-// src/ui/screens/settings_menu.h for the menu itself.
-void ui_open_settings_menu();
+// Opens the bench/engineering diagnostics menu (recalibration, fit reset)
+// on top of whatever screen is currently showing — NOT the operator-facing
+// Settings screen (Start Menu > Settings), which is reached normally
+// through the menu tree. Only called from the BLE debug "MENU" command
+// (see ble_debug.cpp) as a bench hook; see
+// src/ui/screens/bench_diagnostics_menu.h for the menu itself.
+void ui_open_bench_diagnostics_menu();

@@ -25,3 +25,21 @@ ButtonEvent ui_input_poll_enc_sw();
 // job everywhere in the UI (see ui.h's rationale) — screens should call
 // this to know if it was pressed, not repurpose it for navigation.
 ButtonEvent ui_input_poll_btn1();
+
+// ── Touch (XPT2046) ──────────────────────────────────────────────────────────
+// T_IRQ isn't wired (see config.h), so touch is polled via LGFX's own
+// getTouch() every frame, same as everything else here. NOTE — not yet
+// calibrated against this panel's actual mounted orientation (see the TODO
+// in LGFX_Config.h); treat exact tap coordinates as approximate until a
+// bring-up pass confirms them.
+
+struct TouchButton {
+    int16_t x, y, w, h;
+    const char *label;
+};
+
+// Returns the index into `buttons` of whichever one was just newly tapped
+// (the touch-down transition landed inside its rect), or -1 if nothing was
+// tapped this call. Fires once per physical tap — callers don't need their
+// own debounce.
+int ui_input_poll_touch_tap(const TouchButton *buttons, uint8_t count);

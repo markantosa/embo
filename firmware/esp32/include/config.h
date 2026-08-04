@@ -72,8 +72,10 @@
 
 // Touch (XPT2046), restored v3.3 on the two remaining strapping pins with
 // headroom — see design brief §8.3 for the rationale. T_IRQ is NOT wired on
-// the main board; touch is polled instead. Currently unused by ui.cpp (v3.4
-// UI is encoder/button-driven only, per project decision — no touch screens).
+// the main board; touch is polled instead. A touch integration attempt was
+// made and reverted after it caused a boot hang — see LGFX_Config.h's
+// TOUCH_TODO comment for what to restore once that's debugged on real
+// hardware. Currently unused.
 #define PIN_TOUCH_CS        12  // T_CS
 #define PIN_TOUCH_DO        46  // T_DO (MISO)
 
@@ -83,7 +85,7 @@
 
 // ── SPI clock speeds ─────────────────────────────────────────────────────────
 #define SPI_CLK_TFT         20000000   // 20 MHz max via IDC ribbon
-#define SPI_CLK_TOUCH        2000000   // 2 MHz (XPT2046 max) — unused, no touch UI
+#define SPI_CLK_TOUCH        2000000   // 2 MHz (XPT2046 max) — currently unused, see PIN_TOUCH_CS above
 #define SPI_CLK_AD9833      10000000   // ~10 MHz — short direct trace
 
 // ── UART speeds ───────────────────────────────────────────────────────────────

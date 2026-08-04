@@ -15,6 +15,7 @@ enum class RunState {
     IDLE,
     STROKE_FORWARD, // executing one stroke's forward phase
     STROKE_RETURN,  // executing one stroke's return phase
+    PAUSED,         // holding mid-stroke, resumable — see scheduler_pause()
     DONE,
 };
 
@@ -26,6 +27,11 @@ static uint32_t _strokesDone = 0;
 static uint32_t _phaseStartMs = 0;
 static uint8_t _consecutiveInSpec = 0;
 static bool _hitSafetyCap = false;
+
+// Set by scheduler_pause(), consumed by scheduler_resume() — which phase to
+// resume into, and how far into it we already were.
+static RunState _pausedFromState = RunState::IDLE;
+static uint32_t _pausedElapsedMs = 0;
 
 static FusedSizeEstimate _lastFused{};
 
@@ -73,6 +79,14 @@ void scheduler_start() {
         return;
     }
 
+    if (uas_has_manual_override()) {
+        // Safety net: a run must never read attenuation at a leftover bench
+        // frequency instead of the calibrated production set — regardless
+        // of whether the BLE console's own guard already caught this.
+        uas_clear_manual_override();
+        ble_log("Scheduler: cleared leftover UAS frequency override before starting");
+    }
+
     _strokesDone = 0;
     _consecutiveInSpec = 0;
     _hitSafetyCap = false;
@@ -84,6 +98,14 @@ void scheduler_start() {
 }
 
 void scheduler_stop() {
+    if (_state == RunState::PAUSED) {
+        // Nothing in progress to finish — stop right away rather than
+        // waiting on a stroke that isn't happening.
+        _state = RunState::IDLE;
+        _stopRequested = false;
+        ble_log("Scheduler: stopped (was paused) at %lu strokes", (unsigned long)_strokesDone);
+        return;
+    }
     _stopRequested = true;  // takes effect once the in-progress stroke finishes
 }
 
@@ -94,8 +116,35 @@ void scheduler_emergency_stop() {
     ble_log("Scheduler: EMERGENCY STOP");
 }
 
+void scheduler_pause() {
+    if (_state != RunState::STROKE_FORWARD && _state != RunState::STROKE_RETURN) return;
+    _pausedFromState = _state;
+    _pausedElapsedMs = millis() - _phaseStartMs;
+    _stopMotorsHold();
+    _state = RunState::PAUSED;
+    ble_log("Scheduler: paused (phase=%s, %lums into it)",
+            _pausedFromState == RunState::STROKE_FORWARD ? "forward" : "return",
+            (unsigned long)_pausedElapsedMs);
+}
+
+void scheduler_resume() {
+    if (_state != RunState::PAUSED) return;
+    bool forward = (_pausedFromState == RunState::STROKE_FORWARD);
+    motor_enable(1, true);
+    motor_enable(2, true);
+    motor_set_dir(1, forward);
+    motor_set_dir(2, forward);
+    motor_set_speed(1, STROKE_RUN_HZ);
+    motor_set_speed(2, STROKE_RUN_HZ);
+    _phaseStartMs = millis() - _pausedElapsedMs;  // preserve remaining time in this phase
+    _state = _pausedFromState;
+    ble_log("Scheduler: resumed");
+}
+
+bool scheduler_is_paused() { return _state == RunState::PAUSED; }
+
 bool scheduler_is_running() {
-    return _state == RunState::STROKE_FORWARD || _state == RunState::STROKE_RETURN;
+    return _state == RunState::STROKE_FORWARD || _state == RunState::STROKE_RETURN || _state == RunState::PAUSED;
 }
 
 bool scheduler_target_reached() { return _state == RunState::DONE; }
@@ -122,6 +171,7 @@ void scheduler_update() {
     switch (_state) {
     case RunState::IDLE:
     case RunState::DONE:
+    case RunState::PAUSED:  // motors already held by scheduler_pause(); nothing to advance
         return;
 
     case RunState::STROKE_FORWARD:

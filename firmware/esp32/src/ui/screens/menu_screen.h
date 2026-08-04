@@ -13,7 +13,7 @@
 //   static MenuScreen myMenu("My Menu", kMyItems, 2);
 //
 // then mgr.push(&myMenu) from wherever it should open. No new Screen
-// subclass needed for a simple list — see settings_menu.cpp for a worked
+// subclass needed for a simple list — see bench_diagnostics_menu.cpp for a worked
 // example wired to real backend calls.
 
 class ScreenManager;

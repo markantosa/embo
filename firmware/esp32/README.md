@@ -31,35 +31,60 @@ See [FIRMWARE_TODO.md](../FIRMWARE_TODO.md) for the full build-up task list and 
 
 ## Operational workflow
 
-How a doctor moves through a run, and which hardware/firmware drives each stage. The TFT is deliberately minimal — a set-target screen and a loading screen, nothing else — by project decision; live sensor data is a BLE-only, diagnostics-only concern (see BLE debug commands below), not something displayed on the device itself.
+The UI is now a menu tree, driven by both the EC11 knob (rotate + press) and the XPT2046 touchscreen — a redesign from the earlier two-screen (set-target/loading) UI, per a new UX flowchart. Live sensor data is still a BLE-only, diagnostics-only concern for the mixing loop itself (`FORCE ON`/`TURB ON`/`UAS ON`/`FIT`, see below) — the one exception is Developer Mode, which does show a live telemetry readout on-screen (see below).
+
+**Screen tree:**
+
+```
+Insert syringe (boot)
+ └─ Start Menu
+     ├─ Start ─────────► Mixing Menu ───► Warning (mount check) ───► Mixing Running ───► End ──► (back to Start Menu)
+     │                                                                                            
+     ├─ Settings
+     │   ├─ Presets ──────────► (stub — "feature idea developing in progress")
+     │   └─ Developer mode ───► UAS debug mode (BLE on/off toggle)
+     │
+     └─ Camera feature ──► mount-check prompt ──► (stub — "feature idea developing in progress")
+```
+
+**Touchscreen currently unavailable — see "SPI bus" section below (reverted after a boot hang).** No screen is a dead end without it: every "Back" also works via **BTN1** (short press — see "BTN1's second job" below) on every non-running screen, and via encoder long-press on the screens where that's free (everywhere except Mixing Menu and End, where long-press is already "verify with camera").
 
 | Stage | Trigger | What happens | Hardware involved |
 |---|---|---|---|
-| **1. Boot / self-test** | Power on | TMC2209 UART init + SpreadCycle write/readback, AD9833 + UAS baseline sample, turbidity I2C scan, HX711 pin init. Any `BLOCKING` check failing (see `FIRMWARE_TODO.md`) should halt — no silent bad-data path into the scheduler. | Both TMC2209 modules, AD9833, turbidity sensors, status LED |
-| **2. Homing** | Automatic after boot | `motors_home()` drives both motors to their limit switches and backs off; stroke counter resets to 0. On failure, `ui_show_error()` puts the TFT into a persistent fault screen — no way to start a run until the board is rebooted and the fault investigated. | M1/M2 steppers, limit switches (J6/J7), TFT |
-| **3. Set target** | — | TFT shows the current target size; doctor loads the syringe (interlock handled by mech team, not sensed by this firmware). | TFT |
-| **4. Setpoint adjust** | Turn EC11 encoder | Adjusts target particle size in 5µm steps, clamped to 50–1000µm (`config.h`). Only active on the set-target screen. | EC11 encoder |
-| **4b. Optional: verify current size** | **Hold EC11 knob** (set-target or done screen) | Requests one RPi capture+CV pass (`rpi_request_capture()`) and shows the median/IQR result on-screen once it replies, color-coded IN SPEC / OUT OF SPEC against the target — an independent double-check, not something that runs automatically. See §"Camera verification" below. | EC11 push-switch, RPi camera, TFT |
-| **5. Start run** | **Press EC11 knob** | Only takes effect when homed. Calls `scheduler_set_target_um()` + `scheduler_start()`. | EC11 push-switch, both motors |
-| **6. Running** | — | Closed loop: the scheduler strokes continuously, and after every stroke reads UAS + both turbidity channels + force, converts each through its own 9-point calibration curve, and fuses the trustworthy ones (median) into one size estimate — see `calibration.h`'s `calib_estimate_particle_size_um()`. TFT shows only a "Mixing…" loading screen regardless; raw sensor values and the live fused estimate are available over BLE (`FORCE ON`/`TURB ON`/`UAS ON`/`FIT`, see below) for diagnostics, not on-screen. | Both motors, UAS chain, turbidity sensors, HX711 x2, TMC2209 UART, TFT |
-| **7. Stop** | **BTN1 (short press)** | Graceful stop — finishes the in-progress stroke, then holds. | BTN1, both motors |
-| **7b. Emergency stop** | **BTN1 (held ≥800ms) OR automatic HX711 over-force** | Immediate — kills motor power mid-step, same code path (`scheduler_emergency_stop()`) regardless of trigger source. This is a hard safety threshold, separate from force's role as a fusion input — see `CALIBRATION.md` §4 and §8. | BTN1 or HX711 x2, both motors |
-| **8. Target reached** | Automatic | The fused sensor estimate reads within `TARGET_TOLERANCE_UM` of the target for `FUSION_CONSECUTIVE_CHECKS_REQUIRED` consecutive stroke-checks in a row (debounced against a single noisy reading), and the scheduler stops itself. If the fusion never converges, a hard `MIXING_MAX_STROKES_SAFETY_CAP` stops the run anyway and flags it as a safety-cap stop, not a confirmed one (`scheduler_hit_safety_cap()`) — a sign to check calibration, not a normal completion. Either way, press-and-hold the encoder knob on the done screen (stage 4b) to independently confirm the achieved size with a camera capture. | — |
+| **1. Boot / self-test** | Power on | TMC2209 UART init + SpreadCycle write/readback, AD9833 + UAS baseline sample, turbidity I2C scan, HX711 pin init, then straight to the "Put in syringe?" screen — **no homing happens automatically at boot, and BLE is off by default** (see Developer Mode below). Any `BLOCKING` check failing (see `FIRMWARE_TODO.md`) should halt — no silent bad-data path into the scheduler. | Both TMC2209 modules, AD9833, turbidity sensors, status LED |
+| **2. Homing** | **Press EC11 knob** on the Mixing Menu while it reads "NOT HOMED" (or the BLE `HOME` command) | `motors_home()` drives both motors to their limit switches and backs off; stroke counter resets to 0. Blocking for the duration of the attempt (same tradeoff already accepted for BLE `HOME`) — nothing can be running yet, since a run itself requires being homed first. On failure, `ui_show_error()` puts the TFT into a persistent fault screen — no way to start a run until the board is rebooted and the fault investigated. | M1/M2 steppers, limit switches (J6/J7), TFT |
+| **3. Mixing Menu** | Start Menu > Start | Adjust target size (encoder rotation, 5µm steps, 50–1000µm) and the syringe preset (touch — Terumo/Nipro, **cosmetic only for now**, no calibration effect yet). Touch Back returns to Start Menu. | TFT, touchscreen, EC11 |
+| **3b. Optional: verify current size** | **Hold EC11 knob** (Mixing Menu or End screen) | Requests one RPi capture+CV pass (`rpi_request_capture()`) and shows the median/IQR result on-screen once it replies, color-coded IN SPEC / OUT OF SPEC against the target — an independent double-check, not something that runs automatically, and unrelated to the separate (stub) "Camera feature" menu item. See §"Camera verification" below. | EC11 push-switch, RPi camera, TFT |
+| **4. Warning / mount check** | Encoder press on Mixing Menu (once homed) | "Ensure syringe is properly mounted inside" — confirm (encoder press) starts the run; touch Back returns to the Mixing Menu without starting anything. | TFT, touchscreen |
+| **5. Running** | Encoder confirm on the Warning screen | Closed loop: the scheduler strokes continuously, and after every stroke reads UAS + both turbidity channels + force, converts each through its own 9-point calibration curve, and fuses the trustworthy ones (median) into one size estimate — see `calibration.h`'s `calib_estimate_particle_size_um()`. Touch **Pause** holds the run mid-stroke, resumable (`scheduler_pause()`/`scheduler_resume()`) — distinct from Stop, which ends it. Touch **Stop** calls the same `scheduler_stop()` as BTN1's short-press. | Both motors, UAS chain, turbidity sensors, HX711 x2, TMC2209 UART, TFT, touchscreen |
+| **6. Stop** | **BTN1 (short press) or touch Stop** | Graceful stop — finishes the in-progress stroke (or, if paused, stops immediately since nothing's in progress), then holds. | BTN1 or touchscreen, both motors |
+| **6b. Emergency stop** | **BTN1 (held ≥800ms) OR automatic HX711 over-force** | Immediate — kills motor power mid-step, same code path (`scheduler_emergency_stop()`) regardless of trigger source. This is a hard safety threshold, separate from force's role as a fusion input, and BTN1's emergency-stop function is unchanged by anything in this redesign — see `CALIBRATION.md` §4 and §8. | BTN1 or HX711 x2, both motors |
+| **7. Target reached / End screen** | Automatic | The fused sensor estimate reads within `TARGET_TOLERANCE_UM` of the target for `FUSION_CONSECUTIVE_CHECKS_REQUIRED` consecutive stroke-checks in a row (debounced against a single noisy reading), and the scheduler stops itself. If the fusion never converges, a hard `MIXING_MAX_STROKES_SAFETY_CAP` stops the run anyway and flags it as a safety-cap stop, not a confirmed one (`scheduler_hit_safety_cap()`) — a sign to check calibration, not a normal completion. Either way, press-and-hold the encoder knob on the End screen to independently confirm the achieved size with a camera capture, or touch "Back to menu" to return to the Start Menu. | TFT, touchscreen |
 
-**Button/encoder summary** (current assignment, see `include/config.h` and `src/ui.cpp`):
+**Button/encoder/touch summary** (see `include/config.h` and `src/ui.cpp`):
 
 | Control | Function |
 |---|---|
-| EC11 rotary | Adjust target particle size (50–1000µm), set-target screen only |
-| EC11 push-switch (short press) | Confirm/start a run; return to set-target from the done/verify screens |
-| EC11 push-switch (held ≥800ms) | Request an optional camera size verification (set-target or done screen) |
-| BTN1 | **Dedicated stop button, no start function** — short press = graceful stop, held ≥800ms = emergency stop |
+| EC11 rotary | Adjust target particle size (50–1000µm), Mixing Menu only |
+| EC11 push-switch (short press) | Context-dependent: home (if not yet homed) or continue to Warning (Mixing Menu); confirm and start (Warning); select a menu item (Start/Settings Menu, Developer Mode); toggle (UAS debug mode) |
+| EC11 push-switch (held ≥800ms) | Request an optional camera size verification (Mixing Menu or End screen) |
+| Touchscreen (XPT2046) | Menu navigation (Back buttons throughout), syringe preset cycling, Pause/Stop on the running screen, the UAS debug mode toggle — see the screen tree above |
+| BTN1 (short press) | **Two roles, on mutually exclusive screens** — see "BTN1's second job" below |
+| BTN1 (held ≥800ms) | Emergency stop — **only does anything on the Mixing Running screen**; a no-op everywhere else |
 
-BTN1 was previously overloaded (v2.4/v2.5 firmware used it for start, and a second button for stop). As of this build it has exactly one job — this was a deliberate simplification once the encoder's own switch took over start/confirm, since a safety-critical button is easier to trust with one unambiguous function.
+### BTN1's second job
+
+BTN1 was previously overloaded (v2.4/v2.5 firmware used it for start, and a second button for stop), then simplified to exactly one job (stop/e-stop) once the encoder's own switch took over start/confirm — a safety-critical button is easier to trust with one unambiguous function. That principle is preserved, not abandoned: BTN1's short press is now **Back** on every non-running menu/screen, and **remains exactly graceful-stop** on the Mixing Running screen — never both at once, because those are different screens and only one is ever active. Every screen that grants BTN1 the Back behavior gates it behind `!scheduler_is_running()` in code (not just "this screen happens not to be reachable during a run" — see `menu_screen.cpp`'s comment for the reasoning), so even if a future change ever made a menu screen reachable mid-run, BTN1 still couldn't be mistaken for "back" instead of "stop" there. `mixing_running_screen.cpp` itself is untouched by this — its BTN1 handling is exactly what it was before.
+
+The new touch Pause/Stop buttons on the running screen are additional ways to reach `scheduler_pause()`/`scheduler_stop()`, not replacements for BTN1's existing stop/e-stop role there.
+
+### Developer Mode / BLE
+
+BLE is **off by default** — `ble_debug_init()` sets up the NimBLE stack but does not advertise. Turn it on from Start Menu > Settings > Developer mode > UAS debug mode (shown on-screen: "turning this mode on will enable Bluetooth"); the same screen shows the current on/off state and lets you toggle it back off. Developer Mode itself shows a live telemetry readout (load cells, turbidity, UAS reading) directly on the TFT — the only screen in this design where raw sensor values are shown on-device rather than BLE-only.
 
 ### Camera verification (optional, on-demand — independent of the fusion loop)
 
-CV is **never a fusion input** (see above) — it's an **operator-triggered, single-shot check** the doctor can run any time from the set-target or done screens (encoder long-press), to independently confirm what the four onboard sensors already decided:
+CV is **never a fusion input** (see above) — it's an **operator-triggered, single-shot check** the doctor can run any time from the Mixing Menu or End screen (encoder long-press), to independently confirm what the four onboard sensors already decided. This is unrelated to the Start Menu's separate "Camera feature" item, which is a stub per the current UX design (not yet developed):
 
 1. ESP32 sends `CAPTURE` to the RPi over UART (`rpi_request_capture()`).
 2. RPi captures one frame, runs CV once, and replies with `SIZE <median_um> <iqr_um>`.
@@ -122,11 +147,23 @@ Or click the **plug Monitor** button. Baud rate is set to 115200 in `platformio.
 
 For wireless debug output during a run, connect a BLE terminal app (e.g. **nRF Toolbox** or **Serial Bluetooth Terminal**) to the device named `EMBO-Debug` and subscribe to the Nordic UART TX characteristic.
 
+### Bench testing with no motors/limit switches connected
+
+Homing is never automatic at boot in either build — `setup()` always goes straight to the UI (see "Operational workflow" above), and homing only happens when the operator presses the knob on the Mixing Menu (or sends the BLE `HOME` command). With `[env:embo]` (the real env) and no limit switches connected, that homing attempt will time out after `HOMING_TIMEOUT_MS` (30s) and show a HARDWARE FAULT screen — expected, not a bug.
+
+If you want the knob-press homing attempt to succeed instantly with nothing connected (e.g. to get past "NOT HOMED" and exercise the rest of the UI/BLE console), there's a separate bench-only environment that skips the real limit-switch wait:
+
+```bash
+pio run -e embo_bench -t upload
+```
+
+This is a genuinely different build (`BENCH_NO_HOMING`, see `motors.cpp`), not a runtime flag — **never flash it to a board that has real hardware attached or that a patient/operator might use.** The only on-hardware sign it's running is a red "BENCH BUILD - NO HOMING" banner across the top of the Mixing Menu (plus a loud BLE/serial log line once you press the knob to home) — if you ever see that banner, a "homed" board hasn't actually checked anything, and starting a "run" will drive the motors with no homed reference position. Re-flash the normal `embo` env before any real use.
+
 ---
 
 ## BLE debug commands
 
-Connect to `EMBO-Debug` over BLE and write commands to the Nordic UART RX characteristic. Responses appear on the TX characteristic (the same stream as `ble_log()` output).
+**BLE is off by default** (see "Developer Mode / BLE" above) — turn it on from Start Menu > Settings > Developer mode > UAS debug mode before trying to connect. Once enabled, connect to `EMBO-Debug` over BLE and write commands to the Nordic UART RX characteristic. Responses appear on the TX characteristic (the same stream as `ble_log()` output).
 
 **This is the one place raw sensor data can be pulled off the board** — the TFT deliberately doesn't show it (see Operational Workflow above), so calibration data collection (`../CALIBRATION.md`) happens through this link, not the screen.
 
@@ -147,6 +184,9 @@ Note: this is a separate BLE service (`EMBO-Debug`, Nordic UART Service) from `t
 | `CAPTURE` | `CAPTURE` | Manually triggers the same on-demand RPi capture+CV the UI's encoder long-press does — for bench testing without the physical knob. Result arrives as an `RPi: median=... iqr=...` log line once the RPi replies (or a timeout log after `RPI_CAPTURE_TIMEOUT_MS`). |
 | `FIT` | `FIT` | Dumps the DIAGNOSTIC-ONLY breakage-model fit (`k`, `D0`, verification point count) plus the current run's stroke count, last fused estimate, and whether the safety cap was hit. Does not reflect what's actually driving the stop condition — that's `FUSION`. |
 | `FIT RESET` | `FIT RESET` | Discards the accumulated breakage-model fit. Nothing calls this automatically — use when the material genuinely changes (`CALIBRATION.md` §5). |
+| `MENU` | `MENU` | Opens the bench/engineering diagnostics menu (recalibration, fit reset) — separate from the operator-facing Settings screen reachable from the Start Menu (see `ui.h`). |
+| `UASFREQ <hz>` / `UASFREQ CLEAR` | `UASFREQ 950000` | Manual UAS frequency override for bench characterization — see "Manual frequency control + sweep" below. |
+| `UASSWEEP <start> <end> <step> <dwell_ms>` / `UASSWEEP STOP` | `UASSWEEP 900000 1100000 10000 200` | Automated frequency sweep — see "Manual frequency control + sweep" below. |
 
 Sending an unrecognised command prints the command list back.
 
@@ -193,14 +233,18 @@ Wait ~30 seconds. Squiggles will clear. This only needs to be done once after fi
 
 ## SPI bus — device summary
 
-GPIO35 (MOSI) / GPIO36 (CLK) are shared between the TFT and the AD9833. There is no MISO on this bus as of v3.3 — touch's data-out (T_DO) moved to its own pin (GPIO46) and this UI doesn't use touch at all (encoder + one button only, see `ui.cpp`); the AD9833 has no readback register either.
+GPIO35 (MOSI) / GPIO36 (CLK) are shared between the TFT and the AD9833. There is no MISO on this bus — a touch (XPT2046) integration was attempted and **reverted** after it caused a boot hang (board stopped mid-`setup()`, buzzer stuck on) — see the `TOUCH_TODO` comment in `LGFX_Config.h` for what to restore once that's debugged on real hardware with a scope on GPIO12/46. Until then, touch is unused and `ui_input_poll_touch_tap()` always returns -1 (no tap) since `LGFX::getTouch()` safely returns false with no touch panel attached.
 
 | Device | CS | Mode | Max clock | Notes |
 |---|---|---|---|---|
 | ILI9341 TFT | GPIO39 | Mode 0 | 20 MHz | Via 20-pin IDC ribbon, driven by LovyanGFX (`LGFX_Config.h`) |
 | AD9833 DDS | GPIO38 | **Mode 2** | ~10 MHz | Direct trace, no ribbon |
 
-**Integration note (verify on first bring-up):** the TFT is driven by LovyanGFX, which owns `SPI2_HOST` directly via its own `Bus_SPI` instance — it does not go through the Arduino `SPI` (SPIClass) object the way the old TFT_eSPI setup implicitly did. `uas.cpp` still calls `SPI.begin()` for the AD9833 on the same physical MOSI/CLK GPIOs with a different CS. This is fine electrically, but the two software drivers haven't been confirmed not to contend over the same underlying SPI peripheral — see the comment in `uas.cpp`'s `uas_init()`. Move the AD9833 to `SPI3_HOST` if anything looks wrong on a scope.
+**Integration note (verify on first bring-up):** the TFT is driven by LovyanGFX, which owns `SPI2_HOST` directly via its own `Bus_SPI` instance — it does not go through the Arduino `SPI` (SPIClass) object the way the old TFT_eSPI setup implicitly did. `uas.cpp` still calls `SPI.begin()` for the AD9833 on the same physical MOSI/CLK GPIOs with a different CS. This is fine electrically, but the two software drivers haven't been confirmed not to contend over the same underlying SPI peripheral — see the comment in `uas.cpp`'s `uas_init()`.
+
+**A dedicated-HSPI-host variant of this was tried and reverted** (see `uas.cpp`) after a board hung at the boot splash following that change — moving the AD9833 to its own SPI *host* while it stayed wired to the *same physical MOSI/CLK pads* as the TFT doesn't obviously avoid contention (only one peripheral's signal can drive a given pad at a time), and can't be verified without a scope. Don't re-attempt this without hardware to check it on — if contention shows up, the fix needs verifying against an actual capture of GPIO35/36 during boot, not just reasoning about it.
+
+**Touch (XPT2046) was also tried and reverted, for the same reason.** A `bus_shared=true` config was added, which is LovyanGFX's own supported way to share a bus between a panel and touch (and architecturally different from the AD9833 problem above — it stays inside one framework's bus arbitration rather than mixing two). That should, in principle, avoid the same class of contention — but "should in principle" isn't verified on this board, and a boot hang appeared immediately after adding it, in the same place (`tft.init()`, since that's what brings the touch bus up too). Don't re-add this without a scope confirming GPIO12 (T_CS) and GPIO46 (T_DO) actually behave as expected during `tft.init()`.
 
 ## UAS multi-frequency sweep (July 2026)
 
@@ -209,6 +253,21 @@ GPIO35 (MOSI) / GPIO36 (CLK) are shared between the TFT and the AD9833. There is
 **UAS is one of the four closed-loop fusion inputs (`scheduler.cpp`), gated by its own monotonicity check.** Once `SENSOR_CAL_TABLE` (`calibration.cpp`) has real bench data, `calib_estimate_particle_size_um()` independently verifies UAS's 9-point calibration curve is actually monotonic before trusting it — if it isn't, that channel is silently excluded from the fusion rather than trusted anyway (see `FusedSizeEstimate.uasTrusted`, readable via the BLE `FUSION` command). CV remains a good *independent* cross-check regardless: connect over BLE, send `UAS ON`, trigger a few `CAPTURE`s across a real mixing run, and compare the per-frequency attenuation against each CV result (both printed on the same log line) — see `FIRMWARE_TODO.md` for the full gate.
 
 Each library calls `SPI.beginTransaction()` with its own settings before every access — mode and clock switch automatically. Never hold one device's CS asserted while accessing another.
+
+### Manual frequency control + sweep (merged from `testing/UAS_Testing_with_multiple_frequency_sweep`)
+
+That bench rig's headline feature — retuning the AD9833 to an arbitrary frequency at runtime, and an automated sweep across a range — is now available on the production BLE debug console (it's not a separate GATT service; see the `EMBO-Debug`/`EMBO-UAS-Sweep` distinction above, which is unchanged):
+
+| Command | Example | Description |
+|---|---|---|
+| `UASFREQ <hz>` | `UASFREQ 950000` | Retunes the AD9833 and holds it there, bypassing the production 3-tone cycle. `uas_get_attenuation()` keeps reporting its last production reading unchanged the whole time. Refused while a run is in progress. |
+| `UASFREQ CLEAR` | `UASFREQ CLEAR` | Resumes the normal `UAS_NUM_FREQUENCIES` production cycle. |
+| `UASSWEEP <start_hz> <end_hz> <step_hz> <dwell_ms>` | `UASSWEEP 900000 1100000 10000 200` | Walks the range, dwelling `dwell_ms` at each step, and logs a `SWEEP: freq_hz=... mean_mv=... std_mv=... n=...` line per step. Non-blocking — advances one step per `ble_debug_update()` call, same pattern as `MOVE`'s timed completion, so the safety loop (e-stop, etc.) is never stalled for the sweep's duration. Refused while a run is in progress. |
+| `UASSWEEP STOP` | `UASSWEEP STOP` | Cancels an in-progress sweep and restores the production cycle. |
+
+**Safety:** a sweep or manual override is also auto-cancelled if a run somehow starts while one is active (belt-and-braces — `scheduler_start()` already clears any override itself before a run begins, so attenuation fusion during an actual mix can never read a leftover bench frequency), and on BLE disconnect, same as an in-progress `MOVE`.
+
+**Dashboard:** `web/uas_debug_dashboard.html` — open in Chrome/Edge (Web Bluetooth), connect to `EMBO-Debug`, and it gives you quick-command buttons, a manual-frequency card, and a sweep card with a live results table + CSV download (`freq_hz, mean_mv, std_mv, n`) — the same workflow as the bench rig's dashboard, adapted to this project's plain-text NUS console instead of a custom binary telemetry characteristic.
 
 ## UART assignment
 

@@ -32,3 +32,16 @@ void ui_display_draw_spinner(int16_t cy) {
     dots[_spinnerFrame] = '\0';
     ui_display_draw_centered(dots, cy - 8, TFT_WHITE, 2);
 }
+
+void ui_display_draw_touch_button(int16_t x, int16_t y, int16_t w, int16_t h,
+                                   const char *label, uint16_t bgColor, uint16_t textColor) {
+    LGFX &tft = ui_display_tft();
+    tft.fillRoundRect(x, y, w, h, 8, bgColor);
+    tft.setFont(&fonts::FreeSansBold9pt7b);
+    tft.setTextSize(1);
+    tft.setTextColor(textColor);
+    int16_t tw = tft.textWidth(label);
+    int16_t th = tft.fontHeight();
+    tft.setCursor(x + (w - tw) / 2, y + (h - th) / 2);
+    tft.print(label);
+}

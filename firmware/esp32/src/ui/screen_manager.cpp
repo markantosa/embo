@@ -9,8 +9,10 @@ void ScreenManager::begin(Screen *initial) {
 
 void ScreenManager::update() {
     if (_depth == 0) return;
-    _stack[_depth - 1]->update(*this, _forceFull);
+    Screen *current = _stack[_depth - 1];
+    bool full = _forceFull;
     _forceFull = false;
+    current->update(*this, full);
 }
 
 void ScreenManager::goTo(Screen *next) {

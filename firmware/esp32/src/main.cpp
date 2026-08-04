@@ -11,23 +11,32 @@
 
 void setup() {
     Serial.begin(115200);
+    Serial.println("BOOT: starting");
 
     motors_init();
+    Serial.println("BOOT: motors_init done");
     uas_init();
+    Serial.println("BOOT: uas_init done");
     turbidity_init();     // one of four closed-loop fusion inputs once calibrated, see scheduler.h
+    Serial.println("BOOT: turbidity_init done");
     force_sensor_init();   // fusion input AND independent e-stop safety input, see calibration.h
+    Serial.println("BOOT: force_sensor_init done");
     ui_init();
+    Serial.println("BOOT: ui_init done");
     rpi_uart_init();
+    Serial.println("BOOT: rpi_uart_init done");
     ble_debug_init();
+    Serial.println("BOOT: ble_debug_init done (BLE off by default — enable via Settings > Developer mode > UAS debug mode)");
     scheduler_init();
+    Serial.println("BOOT: scheduler_init done");
 
-    // Homing must complete before the main loop. If it fails, halt on the UI
-    // error screen rather than silently letting the doctor try to start a
-    // run with an un-homed, un-trustworthy stroke position — scheduler_start()
-    // also independently refuses to start while !motors_is_homed().
-    if (!motors_home()) {
-        ui_show_error("HOMING FAILED - check limit switches");
-    }
+    // Deliberately NOT homing here. Startup only brings hardware/UI up —
+    // homing is an explicit operator action from the set-target screen
+    // (short-press the knob while it reads "NOT HOMED", see
+    // mixing_menu_screen.cpp) or the BLE `HOME` command. scheduler_start()
+    // independently refuses to start a run while !motors_is_homed(), so
+    // there's no path to running un-homed regardless of when homing happens.
+    Serial.println("BOOT: setup() complete, entering loop() (not homed yet — home from the UI or BLE)");
 }
 
 void loop() {

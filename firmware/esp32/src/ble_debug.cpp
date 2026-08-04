@@ -13,6 +13,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 // Standard Nordic UART Service UUIDs
 #define NUS_SERVICE_UUID  "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -23,6 +24,7 @@
 
 static NimBLECharacteristic *_tx_char = nullptr;
 static bool _connected = false;
+static bool _ble_enabled = false;  // advertising on/off — see ble_debug_set_enabled()
 
 // ── Streaming state ───────────────────────────────────────────────────────────
 // All diagnostic streams stay available over this link regardless of what
@@ -40,11 +42,35 @@ static bool     _move_active      = false;
 static uint8_t  _move_motor       = 0;
 static uint32_t _move_end_ms      = 0;
 
+// ── UAS bench frequency-sweep state (see UASFREQ/UASSWEEP below) ─────────────
+// A sweep steps the AD9833 through a frequency range and reports mean/stddev
+// envelope voltage at each step — for finding/verifying attenuation-vs-
+// frequency behavior on the bench, e.g. before choosing production
+// frequencies in config.h. Advanced from ble_debug_update() every loop
+// iteration, never blocking, same rationale as the MOVE timer above: this
+// board has a real-time e-stop path (force_sensor) that must never stall.
+static bool     _uas_sweep_active        = false;
+static float    _uas_sweep_cur_hz        = 0.0f;
+static float    _uas_sweep_end_hz        = 0.0f;
+static float    _uas_sweep_step_hz       = 0.0f;
+static uint32_t _uas_sweep_dwell_ms      = 0;
+static uint32_t _uas_sweep_step_start_ms = 0;
+static float    _uas_sweep_sum           = 0.0f;
+static float    _uas_sweep_sum_sq        = 0.0f;
+static uint32_t _uas_sweep_n             = 0;
+
 // ── Incoming command buffer ───────────────────────────────────────────────────
 static char     _cmd_buf[64]  = {};
 static bool     _cmd_pending  = false;
 
 // ── BLE callbacks ─────────────────────────────────────────────────────────────
+
+static void _uas_sweep_abort(const char *reason) {
+    if (!_uas_sweep_active) return;
+    _uas_sweep_active = false;
+    uas_clear_manual_override();
+    ble_log("UASSWEEP: aborted (%s)", reason);
+}
 
 class ServerCB : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer *) override {
@@ -59,7 +85,9 @@ class ServerCB : public NimBLEServerCallbacks {
             _move_active = false;
         }
         _uas_streaming = false;
-        s->startAdvertising();
+        _uas_sweep_abort("BLE disconnected");
+        uas_clear_manual_override();
+        if (_ble_enabled) s->startAdvertising();
     }
 };
 
@@ -218,15 +246,77 @@ static void _handle_command(const char *cmd) {
     }
 
     // MENU — open the TFT settings/diagnostics menu, for bench testing
-    // before a physical trigger is wired up (see ui.h / settings_menu.h).
+    // before a physical trigger is wired up (see ui.h / bench_diagnostics_menu.h).
     if (strcmp(cmd, "MENU") == 0) {
-        ui_open_settings_menu();
+        ui_open_bench_diagnostics_menu();
         ble_log("MENU: opened");
         return;
     }
 
+    // UASFREQ <hz> — manually retune the AD9833 and hold it there, bypassing
+    // the production UAS_NUM_FREQUENCIES cycle. For finding/verifying
+    // attenuation-vs-frequency behavior on the bench (see
+    // testing/UAS_Testing_with_multiple_frequency_sweep). uas_get_attenuation()
+    // keeps reporting its last production reading, unchanged, the whole
+    // time — this only affects uas_read_mv() / the UAS streaming line below.
+    float freqHz;
+    if (sscanf(cmd, "UASFREQ %f", &freqHz) == 1) {
+        if (scheduler_is_running()) {
+            ble_log("UASFREQ: refused — a run is in progress (stop it first)");
+            return;
+        }
+        if (freqHz <= 0.0f) {
+            ble_log("UASFREQ: invalid frequency");
+            return;
+        }
+        _uas_sweep_abort("manual UASFREQ issued");
+        uas_set_manual_override_hz(freqHz);
+        ble_log("UASFREQ: set %.0f Hz, reading=%lu mV", freqHz, (unsigned long)uas_read_mv());
+        return;
+    }
+    if (strcmp(cmd, "UASFREQ CLEAR") == 0) {
+        _uas_sweep_abort("UASFREQ CLEAR issued");
+        uas_clear_manual_override();
+        ble_log("UASFREQ: cleared, back to production %u-freq cycle", uas_get_num_frequencies());
+        return;
+    }
+
+    // UASSWEEP <start_hz> <end_hz> <step_hz> <dwell_ms> — walks the range,
+    // settles, and reports mean/stddev envelope voltage at each step. See
+    // UASSWEEP STOP to cancel early. Non-blocking — advances a step at a
+    // time from ble_debug_update(), same as MOVE above.
+    float startHz, endHz, stepHz;
+    unsigned long dwellMs;
+    if (sscanf(cmd, "UASSWEEP %f %f %f %lu", &startHz, &endHz, &stepHz, &dwellMs) == 4) {
+        if (scheduler_is_running()) {
+            ble_log("UASSWEEP: refused — a run is in progress (stop it first)");
+            return;
+        }
+        if (startHz <= 0.0f || endHz < startHz || stepHz <= 0.0f || dwellMs == 0) {
+            ble_log("UASSWEEP: invalid range");
+            return;
+        }
+        _uas_sweep_active        = true;
+        _uas_sweep_cur_hz        = startHz;
+        _uas_sweep_end_hz        = endHz;
+        _uas_sweep_step_hz       = stepHz;
+        _uas_sweep_dwell_ms      = (uint32_t)dwellMs;
+        _uas_sweep_sum           = 0.0f;
+        _uas_sweep_sum_sq        = 0.0f;
+        _uas_sweep_n             = 0;
+        uas_set_manual_override_hz(_uas_sweep_cur_hz);
+        _uas_sweep_step_start_ms = millis();
+        ble_log("UASSWEEP: started %.0f-%.0f Hz, step %.0f Hz, dwell %lu ms",
+                startHz, endHz, stepHz, dwellMs);
+        return;
+    }
+    if (strcmp(cmd, "UASSWEEP STOP") == 0) {
+        _uas_sweep_abort("stopped by command");
+        return;
+    }
+
     ble_log("CMD unknown: \"%s\"", cmd);
-    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON|OFF | FORCE ON|OFF | TURB ON|OFF | FUSION | FIT | FIT RESET | CAPTURE | MENU");
+    ble_log("Commands: HOME | MOVE <1|2> <steps> | UAS ON|OFF | FORCE ON|OFF | TURB ON|OFF | FUSION | FIT | FIT RESET | CAPTURE | MENU | UASFREQ <hz>|CLEAR | UASSWEEP <start> <end> <step> <dwell_ms>|STOP");
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -246,8 +336,23 @@ void ble_debug_init() {
     rx_char->setCallbacks(new RxCB());
 
     svc->start();
-    NimBLEDevice::startAdvertising();
+    // Deliberately NOT starting advertising here — BLE is off by default,
+    // only switched on via ble_debug_set_enabled(true) (wired to the UI's
+    // Developer Mode > UAS debug mode toggle, see uas_debug_toggle_screen.cpp).
 }
+
+void ble_debug_set_enabled(bool enabled) {
+    if (enabled == _ble_enabled) return;
+    _ble_enabled = enabled;
+    if (enabled) {
+        NimBLEDevice::startAdvertising();
+    } else {
+        NimBLEDevice::stopAdvertising();
+    }
+    ble_log("BLE: %s", enabled ? "advertising enabled (EMBO-Debug)" : "advertising disabled");
+}
+
+bool ble_debug_is_enabled() { return _ble_enabled; }
 
 void ble_debug_update() {
     // Process any pending command from the BLE RX callback.
@@ -266,6 +371,46 @@ void ble_debug_update() {
         }
     }
 
+    // Belt-and-braces: scheduler_start() already clears any UAS override
+    // itself (see scheduler.cpp), but if a run somehow starts while a bench
+    // sweep is mid-flight, stop it here too rather than let it keep
+    // retuning the DDS underneath an active mix.
+    if (scheduler_is_running() && (_uas_sweep_active || uas_has_manual_override())) {
+        _uas_sweep_abort("a run started");
+        uas_clear_manual_override();
+    }
+
+    // Advance the UAS bench sweep, if one is running — every loop
+    // iteration, not gated by STREAM_INTERVAL_MS below, so the dwell timing
+    // and sample count at each step stay accurate regardless of streaming
+    // state.
+    if (_uas_sweep_active) {
+        float mv = (float)uas_read_mv();
+        _uas_sweep_sum    += mv;
+        _uas_sweep_sum_sq += mv * mv;
+        _uas_sweep_n++;
+
+        if (millis() - _uas_sweep_step_start_ms >= _uas_sweep_dwell_ms) {
+            float mean = (_uas_sweep_n > 0) ? (_uas_sweep_sum / _uas_sweep_n) : 0.0f;
+            float variance = (_uas_sweep_n > 0) ? (_uas_sweep_sum_sq / _uas_sweep_n) - (mean * mean) : 0.0f;
+            if (variance < 0.0f) variance = 0.0f;  // guard tiny negative from float rounding
+            ble_log("SWEEP: freq_hz=%.0f mean_mv=%.1f std_mv=%.2f n=%lu",
+                    _uas_sweep_cur_hz, mean, sqrtf(variance), (unsigned long)_uas_sweep_n);
+
+            _uas_sweep_cur_hz += _uas_sweep_step_hz;
+            if (_uas_sweep_cur_hz > _uas_sweep_end_hz + 0.5f) {
+                _uas_sweep_active = false;
+                uas_clear_manual_override();
+                ble_log("UASSWEEP: done");
+            } else {
+                uas_set_manual_override_hz(_uas_sweep_cur_hz);
+                _uas_sweep_step_start_ms = millis();
+                _uas_sweep_sum = _uas_sweep_sum_sq = 0.0f;
+                _uas_sweep_n = 0;
+            }
+        }
+    }
+
     // Periodic streaming.
     uint32_t now = millis();
     if (now - _stream_last_ms < STREAM_INTERVAL_MS) return;
@@ -279,11 +424,16 @@ void ble_debug_update() {
         // monotonicity check — trigger captures with `CAPTURE` (or the UI's
         // encoder long-press) while this is running as an independent
         // cross-check against CV, per the July 2026 technical advisory.
-        char line[128];
-        int n = snprintf(line, sizeof(line), "UAS:");
-        for (uint8_t i = 0; i < uas_get_num_frequencies() && n < (int)sizeof(line); i++) {
-            n += snprintf(line + n, sizeof(line) - n, " f%u=%.0fkHz(att=%.3f)",
-                          i, uas_get_frequency_hz(i) / 1000.0f, uas_get_attenuation(i));
+        char line[144];
+        int n;
+        if (uas_has_manual_override()) {
+            n = snprintf(line, sizeof(line), "UAS: [BENCH OVERRIDE] reading=%lu mV", (unsigned long)uas_read_mv());
+        } else {
+            n = snprintf(line, sizeof(line), "UAS:");
+            for (uint8_t i = 0; i < uas_get_num_frequencies() && n < (int)sizeof(line); i++) {
+                n += snprintf(line + n, sizeof(line) - n, " f%u=%.0fkHz(att=%.3f)",
+                              i, uas_get_frequency_hz(i) / 1000.0f, uas_get_attenuation(i));
+            }
         }
         if (n >= (int)sizeof(line)) n = sizeof(line) - 1;  // snprintf can report more than it wrote
         int16_t median = rpi_get_median_um();

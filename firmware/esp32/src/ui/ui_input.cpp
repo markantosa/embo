@@ -1,5 +1,6 @@
 #include "ui_input.h"
 #include "config.h"
+#include "ui_display.h"
 #include <Arduino.h>
 
 // ── EC11 rotary encoder — quadrature decode (Buxton table), ported from
@@ -94,4 +95,34 @@ void ui_input_init() {
     pinMode(PIN_EC11_B, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(PIN_EC11_A), _isrEncoder, CHANGE);
     attachInterrupt(digitalPinToInterrupt(PIN_EC11_B), _isrEncoder, CHANGE);
+    // TEMP DIAGNOSTIC — remove once resolved. Logs the EC11 switch pin's
+    // raw state over 500ms right after boot to catch any spurious
+    // LOW pulses (electrical noise/chatter) that could fire a debounced
+    // press with zero physical interaction.
+    for (uint8_t i = 0; i < 10; i++) {
+        Serial.printf("EC11_SW raw read #%u: %s\n", i, digitalRead(PIN_EC11_SW) == LOW ? "LOW (pressed)" : "HIGH (idle)");
+        delay(50);
+    }
+}
+
+// ── Touch ─────────────────────────────────────────────────────────────────────
+
+static bool _touchWasDown = false;
+
+int ui_input_poll_touch_tap(const TouchButton *buttons, uint8_t count) {
+    int32_t x = 0, y = 0;
+    bool down = ui_display_tft().getTouch(&x, &y);
+
+    int hit = -1;
+    if (down && !_touchWasDown) {  // only the touch-DOWN edge counts as a tap
+        for (uint8_t i = 0; i < count; i++) {
+            const TouchButton &b = buttons[i];
+            if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) {
+                hit = (int)i;
+                break;
+            }
+        }
+    }
+    _touchWasDown = down;
+    return hit;
 }

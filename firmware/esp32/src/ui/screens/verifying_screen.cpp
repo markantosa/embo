@@ -20,19 +20,20 @@ void VerifyingScreen::onEnter() {
 void VerifyingScreen::_draw(bool waiting, bool forceFull) {
     LGFX &tft = ui_display_tft();
     if (forceFull) {
-        tft.fillScreen(TFT_BLACK);
-        ui_display_draw_centered("Camera Verify", 60, TFT_WHITE, 3);
+        tft.setFont(&fonts::FreeSansBold12pt7b);
+        ui_display_draw_centered("Camera Verify", 50, TFT_WHITE, 1);
+        tft.setFont(&fonts::FreeSans9pt7b);
     }
     if (waiting) {
-        if (forceFull) ui_display_draw_centered("Capturing...", 130, TFT_DARKGREY, 2);
+        if (forceFull) ui_display_draw_centered("Capturing...", 130, TFT_DARKGREY, 1);
         ui_display_draw_spinner(180);
     } else {
         tft.fillRect(0, 110, tft.width(), 90, TFT_BLACK);
-        ui_display_draw_centered(_resultMsg, 140, TFT_WHITE, 2);
+        ui_display_draw_centered(_resultMsg, 140, TFT_WHITE, 1);
         if (_specMsg[0] != '\0') {
-            ui_display_draw_centered(_specMsg, 170, _inSpec ? TFT_GREEN : TFT_RED, 2);
+            ui_display_draw_centered(_specMsg, 170, _inSpec ? TFT_GREEN : TFT_RED, 1);
         }
-        ui_display_draw_centered("Press knob to continue", 220, TFT_DARKGREY, 2);
+        ui_display_draw_centered("Press knob to continue", 220, TFT_DARKGREY, 1);
     }
 }
 
