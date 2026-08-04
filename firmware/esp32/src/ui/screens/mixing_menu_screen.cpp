@@ -8,23 +8,11 @@
 #include "motors.h"
 #include "config.h"
 #include "ui.h"
+#include "mixing_options.h"
 #include <stdio.h>
 #include <string.h>
 
-enum class SyringePreset : uint8_t { TERUMO, NIPRO };
-// Cosmetic only for now, by product decision — stored/displayed but does
-// not change any calibration constant yet. If/when it does, this is where
-// a real steps-per-mm or barrel-diameter lookup would plug in.
-static SyringePreset _preset = SyringePreset::TERUMO;
-
-static const TouchButton kButtons[] = {
-    { 60, 175, 200, 34, "Preset" },  // [0] cycles the syringe preset
-    { 20, 260, 100, 40, "Back"   },  // [1] back to Start Menu
-};
-
-static const char *_presetLabel() {
-    return _preset == SyringePreset::TERUMO ? "Terumo" : "Nipro";
-}
+static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 
 void MixingMenuScreen::_draw() {
     LGFX &tft = ui_display_tft();
@@ -35,9 +23,11 @@ void MixingMenuScreen::_draw() {
     ui_display_draw_centered("BENCH BUILD - NO HOMING", 2, TFT_WHITE, 1);
 #endif
     tft.setFont(&fonts::FreeSansBold12pt7b);
-    ui_display_draw_centered("Mixing Menu", 26, TFT_WHITE, 1);
+    ui_display_draw_centered(mixing_options_target_type_label(), 26, TFT_WHITE, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered("Size/viscosity selection", 60, TFT_DARKGREY, 1);
+    char agentLine[24];
+    snprintf(agentLine, sizeof(agentLine), "Agent: %s", mixing_options_agent_label());
+    ui_display_draw_centered(agentLine, 60, TFT_DARKGREY, 1);
 
     char buf[16];
     snprintf(buf, sizeof(buf), "%u um", scheduler_get_target_um());
@@ -45,17 +35,12 @@ void MixingMenuScreen::_draw() {
     ui_display_draw_centered(buf, 95, TFT_WHITE, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
 
-    char presetLine[32];
-    snprintf(presetLine, sizeof(presetLine), "Syringe: %s", _presetLabel());
-    ui_display_draw_touch_button(kButtons[0].x, kButtons[0].y, kButtons[0].w, kButtons[0].h,
-                                  presetLine, TFT_DARKGREY, TFT_WHITE);
-
     bool homed = motors_is_homed();
     ui_display_draw_centered(homed ? "Press knob to continue" : "NOT HOMED - press knob to home", 225,
                               homed ? TFT_DARKGREY : TFT_RED, homed ? 2 : 1);
 
-    ui_display_draw_touch_button(kButtons[1].x, kButtons[1].y, kButtons[1].w, kButtons[1].h,
-                                  kButtons[1].label, TFT_DARKGREY, TFT_WHITE);
+    ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
+                                  kBackButton.label, TFT_DARKGREY, TFT_WHITE);
     ui_display_draw_centered("(or press BTN1)", 245, TFT_DARKGREY, 1);
 }
 
@@ -92,11 +77,8 @@ void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {
         return;
     }
 
-    int tap = ui_input_poll_touch_tap(kButtons, 2);
+    int tap = ui_input_poll_touch_tap(&kBackButton, 1);
     if (tap == 0) {
-        _preset = (_preset == SyringePreset::TERUMO) ? SyringePreset::NIPRO : SyringePreset::TERUMO;
-        needsRedraw = true;
-    } else if (tap == 1) {
         mgr.pop();
         return;
     }

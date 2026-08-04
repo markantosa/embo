@@ -7,6 +7,9 @@
 #include "ui/screens/menu_screen.h"
 #include "ui/screens/developer_mode_screen.h"
 #include "ui/screens/uas_debug_toggle_screen.h"
+#include "ui/screens/sound_toggle_screen.h"
+#include "mixing_options.h"
+#include "sound_settings.h"
 #include "ui/screens/mixing_menu_screen.h"
 #include "ui/screens/warning_screen.h"
 #include "ui/screens/mixing_running_screen.h"
@@ -33,9 +36,9 @@
 // No other file needs to know it exists.
 //
 // Screen graph (see the flowchart this was built from):
-//   Insert syringe -> Start Menu -> [Start] -> Mixing Menu -> Warning
-//                                                            -> Mixing Running -> End -> (back to Start Menu)
-//                                -> [Settings] -> [Presets] (stub)
+//   Insert syringe -> Start Menu -> [Start] -> Agent selection -> Target type -> Mixing Menu -> Warning
+//                                                                                              -> Mixing Running -> End -> (back to Start Menu)
+//                                -> [Settings] -> [Sound] (on/off toggle)
 //                                              -> [Developer mode] -> [UAS debug mode] (BLE toggle)
 //                                -> [Camera feature] -> mount check -> (stub, "developing in progress")
 //   End screen and Mixing/Warning screens can also reach Verifying (camera
@@ -49,6 +52,7 @@ static BuzzerDriver _buzzer(PIN_BUZ_PWM);
 static VerifyingScreen       _verifyingScreen;
 static ErrorScreen           _errorScreen;
 static UasDebugToggleScreen  _uasDebugToggleScreen;
+static SoundToggleScreen     _soundToggleScreen;
 static DeveloperModeScreen   _developerModeScreen;
 static MixingMenuScreen      _mixingMenuScreen;
 static WarningScreen         _warningScreen;
@@ -56,7 +60,6 @@ static MixingRunningScreen   _mixingRunningScreen;
 static EndScreen             _endScreen;
 static PlaceholderScreen     _cameraMountScreen;
 static PlaceholderScreen     _cameraStubScreen;
-static PlaceholderScreen     _presetsStubScreen;
 static PlaceholderScreen     _insertSyringeScreen;
 
 // ── Settings Menu — defined before Start Menu since Start Menu's "Settings"
@@ -64,20 +67,56 @@ static PlaceholderScreen     _insertSyringeScreen;
 // order matters: MenuItem callback bodies need referenced statics already
 // declared, unlike .wire() calls in ui_init() which run after everything
 // exists regardless of order). ────────────────────────────────────────────
-static void _settingsGoPresets(ScreenManager &mgr)   { mgr.push(&_presetsStubScreen); }
+static void _settingsGoSound(ScreenManager &mgr)     { mgr.push(&_soundToggleScreen); }
 static void _settingsGoDeveloper(ScreenManager &mgr) { mgr.push(&_developerModeScreen); }
 static void _settingsBack(ScreenManager &mgr)        { mgr.pop(); }
 
 static const MenuItem kSettingsItems[] = {
-    { "Presets",        _settingsGoPresets },
+    { "Sound",          _settingsGoSound },
     { "Developer mode", _settingsGoDeveloper },
     { "Back",           _settingsBack },
 };
 static MenuScreen _settingsMenuScreen("Settings", kSettingsItems,
                                        sizeof(kSettingsItems) / sizeof(kSettingsItems[0]));
 
+// ── Target Type — Start > Agent selection > here > Mixing Menu. Defined
+// before Agent Selection since Agent Selection's items need to reference
+// it (same ordering rule as Settings Menu above). ──────────────────────────
+static void _targetTypeGoSize(ScreenManager &mgr) {
+    mixing_options_set_target_type(TargetType::SIZE);
+    mgr.push(&_mixingMenuScreen);
+}
+static void _targetTypeGoViscosity(ScreenManager &mgr) {
+    mixing_options_set_target_type(TargetType::VISCOSITY);
+    mgr.push(&_mixingMenuScreen);
+}
+
+static const MenuItem kTargetTypeItems[] = {
+    { "Size",      _targetTypeGoSize },
+    { "Viscosity", _targetTypeGoViscosity },
+};
+static MenuScreen _targetTypeMenuScreen("Target Type", kTargetTypeItems,
+                                         sizeof(kTargetTypeItems) / sizeof(kTargetTypeItems[0]));
+
+// ── Agent Selection — Start > here > Target Type > Mixing Menu. ────────────
+static void _agentGoTerumo(ScreenManager &mgr) {
+    mixing_options_set_agent(SyringeAgent::TERUMO);
+    mgr.push(&_targetTypeMenuScreen);
+}
+static void _agentGoNipro(ScreenManager &mgr) {
+    mixing_options_set_agent(SyringeAgent::NIPRO);
+    mgr.push(&_targetTypeMenuScreen);
+}
+
+static const MenuItem kAgentItems[] = {
+    { "Terumo", _agentGoTerumo },
+    { "Nipro",  _agentGoNipro },
+};
+static MenuScreen _agentSelectionMenuScreen("Agent Selection", kAgentItems,
+                                             sizeof(kAgentItems) / sizeof(kAgentItems[0]));
+
 // ── Start Menu ────────────────────────────────────────────────────────────────
-static void _startGoStart(ScreenManager &mgr)    { mgr.push(&_mixingMenuScreen); }
+static void _startGoStart(ScreenManager &mgr)    { mgr.push(&_agentSelectionMenuScreen); }
 static void _startGoSettings(ScreenManager &mgr) { mgr.push(&_settingsMenuScreen); }
 static void _startGoCamera(ScreenManager &mgr)   { mgr.push(&_cameraMountScreen); }
 
@@ -109,9 +148,13 @@ void ui_init() {
     Serial.printf("UI_INIT: pushing logo at x=%d y=%d\n", x, y);
     tft.pushImage(x, y, LOGO_WIDTH, LOGO_HEIGHT, epd_bitmap_embo_logoembologo320240);
     Serial.println("UI_INIT: boot splash drawn");
-    _buzzer.tone(523, 150);
-    delay(150); //brief splash hold 
-    _buzzer.stop();
+    if (sound_is_enabled()) {
+        _buzzer.tone(523, 150);
+        delay(150); //brief splash hold
+        _buzzer.stop();
+    } else {
+        delay(150);
+    }
     delay(1350); //remainder of the splash hold
     Serial.println("UI_INIT: splash hold done, wiring screens");
 
@@ -119,8 +162,6 @@ void ui_init() {
     _cameraMountScreen.configure("Camera Feature", "Ensure syringe is properly mounted", true);
     _cameraMountScreen.setConfirmTarget(&_cameraStubScreen, true);  // push — Back pops to Start Menu
     _cameraStubScreen.configure("Camera Feature", "Feature idea developing in progress", true);
-
-    _presetsStubScreen.configure("Presets", "Feature idea developing in progress", true);
 
     _developerModeScreen.wire(_uasDebugToggleScreen);
     _mixingMenuScreen.wire(_warningScreen, _verifyingScreen);

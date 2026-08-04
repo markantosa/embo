@@ -1,4 +1,5 @@
 #include "ble_debug.h"
+#include "ble_binary_telemetry.h"
 #include "motors.h"
 #include "uas.h"
 #include "turbidity.h"
@@ -325,6 +326,7 @@ void ble_debug_init() {
     NimBLEDevice::init("EMBO-Debug");
     NimBLEServer *server = NimBLEDevice::createServer();
     server->setCallbacks(new ServerCB());
+    ble_binary_telemetry_init(server);
 
     NimBLEService *svc = server->createService(NUS_SERVICE_UUID);
 
@@ -358,6 +360,8 @@ void ble_debug_set_enabled(bool enabled) {
 bool ble_debug_is_enabled() { return _ble_enabled; }
 
 void ble_debug_update() {
+    ble_binary_telemetry_update();
+
     // Process any pending command from the BLE RX callback.
     if (_cmd_pending) {
         _cmd_pending = false;
