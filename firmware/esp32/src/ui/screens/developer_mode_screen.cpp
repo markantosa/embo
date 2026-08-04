@@ -20,6 +20,8 @@ void DeveloperModeScreen::_draw(bool forceFull) {
         tft.setFont(&fonts::FreeSans9pt7b);
         ui_display_draw_centered("UAS debug mode >", 200, TFT_GREEN, 1);
         ui_display_draw_centered("Press knob to open", 225, TFT_DARKGREY, 1);
+        ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
+                                      kBackButton.label, TFT_DARKGREY, TFT_WHITE);
         ui_display_draw_centered("(or hold knob)", 245, TFT_DARKGREY, 1);
     }
 

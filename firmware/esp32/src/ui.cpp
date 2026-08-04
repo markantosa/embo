@@ -102,17 +102,6 @@ void ui_init() {
     Serial.printf("UI_INIT: after setRotation(3), tft.width()=%d tft.height()=%d (logo is %dx%d)\n",
                   tft.width(), tft.height(), LOGO_WIDTH, LOGO_HEIGHT);
 
-    // DIAGNOSTIC — solid color fill before the boot logo, to isolate "panel
-    // isn't receiving anything at all" from "panel works but the logo draw
-    // itself is wrong." If the physical screen shows solid red here, the
-    // SPI/init pipeline is fine and the bug is in the pushImage() call or
-    // the logo data below; if it's still white/blank even through this,
-    // the panel isn't getting ANY commands — check pin_rst/pin_cs/pin_dc
-    // wiring and SPI mode against LGFX_Config.h. Remove once resolved.
-    delay(1000);
-
-    _buzzer.begin();
-
     // Boot splash — bitmap logo instead of a plain text splash, validated on
     // the bench (testing/display_ui_testing) before folding in here.
     int16_t x = (tft.width()  - LOGO_WIDTH)  / 2;
@@ -123,6 +112,7 @@ void ui_init() {
     _buzzer.tone(523, 150);
     delay(1500);  // brief splash hold — not the full 5s bench-test delay, boot has real init work to do after
     Serial.println("UI_INIT: splash hold done, wiring screens");
+
 
     _cameraMountScreen.configure("Camera Feature", "Ensure syringe is properly mounted", true);
     _cameraMountScreen.setConfirmTarget(&_cameraStubScreen, true);  // push — Back pops to Start Menu
@@ -142,7 +132,6 @@ void ui_init() {
 }
 
 void ui_update() {
-    _buzzer.update();  // services the boot chirp's auto-stop timing
     _screenManager.update();
 }
 
