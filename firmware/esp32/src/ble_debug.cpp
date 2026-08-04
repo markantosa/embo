@@ -336,9 +336,12 @@ void ble_debug_init() {
     rx_char->setCallbacks(new RxCB());
 
     svc->start();
+
+    NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
+    pAdvertising->addServiceUUID(NUS_SERVICE_UUID);
+    pAdvertising->setName("EMBO-Debug");
+
     // Deliberately NOT starting advertising here — BLE is off by default,
-    // only switched on via ble_debug_set_enabled(true) (wired to the UI's
-    // Developer Mode > UAS debug mode toggle, see uas_debug_toggle_screen.cpp).
 }
 
 void ble_debug_set_enabled(bool enabled) {

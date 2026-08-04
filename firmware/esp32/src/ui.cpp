@@ -86,7 +86,7 @@ static const MenuItem kStartItems[] = {
     { "Settings",       _startGoSettings },
     { "Camera feature", _startGoCamera },
 };
-static MenuScreen _startMenuScreen("Start Menu", kStartItems,
+static MenuScreen _startMenuScreen("EMBO", kStartItems,
                                     sizeof(kStartItems) / sizeof(kStartItems[0]));
 
 static ScreenManager _screenManager;
@@ -110,7 +110,9 @@ void ui_init() {
     tft.pushImage(x, y, LOGO_WIDTH, LOGO_HEIGHT, epd_bitmap_embo_logoembologo320240);
     Serial.println("UI_INIT: boot splash drawn");
     _buzzer.tone(523, 150);
-    delay(1500);  // brief splash hold — not the full 5s bench-test delay, boot has real init work to do after
+    delay(150); //brief splash hold 
+    _buzzer.stop();
+    delay(1350); //remainder of the splash hold
     Serial.println("UI_INIT: splash hold done, wiring screens");
 
 
@@ -133,6 +135,7 @@ void ui_init() {
 
 void ui_update() {
     _screenManager.update();
+    _buzzer.update();
 }
 
 void ui_show_error(const char *msg) {
