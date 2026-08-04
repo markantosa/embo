@@ -52,6 +52,8 @@ bool force_sensor_update() {
 
 float force_sensor_get_grams_1() { return _grams1; }
 float force_sensor_get_grams_2() { return _grams2; }
+int32_t force_sensor_get_raw_1() { return _raw1; }
+int32_t force_sensor_get_raw_2() { return _raw2; }
 
 bool force_sensor_estop_tripped() {
     return calib_force_estop_tripped(_grams1, _grams2);

@@ -30,6 +30,10 @@ void uas_calibrate_baseline();
 // Immediate calibrated ADC read in mV at whichever frequency is currently
 // tuned — for debug streaming, bypasses settle delay.
 uint32_t uas_read_mv();
+// Whichever frequency the DDS is tuned to right now — cycles through the
+// production set during normal operation, or holds at the bench override
+// frequency if uas_has_manual_override() is true. For telemetry/debug only.
+float uas_get_current_frequency_hz();
 
 // ── Manual frequency override (bench/bring-up only — see ble_debug.cpp's
 // UASFREQ/UASSWEEP commands) ────────────────────────────────────────────────

@@ -144,6 +144,10 @@ uint32_t uas_read_mv() {
     return _adc_read_mv();
 }
 
+float uas_get_current_frequency_hz() {
+    return _manualOverrideActive ? _manualOverrideHz : _freq_hz[UAS_NUM_FREQUENCIES - 1];
+}
+
 void uas_set_manual_override_hz(float hz) {
     _dds.setFrequency(hz, 0);
     delayMicroseconds(UAS_SETTLE_US);

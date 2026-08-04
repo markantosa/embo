@@ -25,3 +25,7 @@ float force_sensor_get_grams_2();
 // Caller (main.cpp) must route this into the same immediate motor-kill path
 // as the button e-stop — see firmware/CALIBRATION.md §8.
 bool force_sensor_estop_tripped();
+// Raw ADC counts (pre-calibration) — for diagnostics/telemetry only, not
+// used anywhere in the fusion/e-stop path, which works entirely in grams.
+int32_t force_sensor_get_raw_1();
+int32_t force_sensor_get_raw_2();
