@@ -1,12 +1,18 @@
 #include "mixing_options.h"
 
 static SyringeAgent _agent = SyringeAgent::Gelfoam;
+static SyringeType _syringetype = SyringeType::Terumo;
 static TargetType   _targetType = TargetType::SIZE;
 
 SyringeAgent mixing_options_get_agent() { return _agent; }
 void mixing_options_set_agent(SyringeAgent agent) { _agent = agent; }
 const char *mixing_options_agent_label() {
     return _agent == SyringeAgent::Gelfoam ? "Gelfoam" : "Lyostypt";
+}
+SyringeType mixing_options_get_syringe_type() {return _syringetype;}
+void mixing_options_set_syringe_type(SyringeType syrtype) {_syringetype = syrtype;}
+const char *mixing_options_set_syringe_type_label() {
+    return _syringetype == SyringeType::Terumo ? "Terumo" : "Nipro";
 }
 
 TargetType mixing_options_get_target_type() { return _targetType; }

@@ -98,14 +98,31 @@ static const MenuItem kTargetTypeItems[] = {
 static MenuScreen _targetTypeMenuScreen("Target Type", kTargetTypeItems,
                                          sizeof(kTargetTypeItems) / sizeof(kTargetTypeItems[0]));
 
-// ── Agent Selection — Start > here > Target Type > Mixing Menu. ────────────
+// --Syringe Selection - Start > Agent Selection > here > Target Type > Mixing running ----
+static void _syringeGoTerumo(ScreenManager &mgr) {
+    mixing_options_set_syringe_type(SyringeType::Terumo);
+    mgr.push(&_targetTypeMenuScreen);
+}
+static void _syringeGoNipro(ScreenManager &mgr) {
+    mixing_options_set_syringe_type(SyringeType::Nipro);
+    mgr.push(&_targetTypeMenuScreen);
+}
+
+static const MenuItem kSyringeTypeItems[] = {
+    {"Terumo", _syringeGoTerumo},
+    {"Nipro", _syringeGoNipro},
+};
+static MenuScreen _syringeTypeMenuScreen("Select Syringe Type:", kSyringeTypeItems,
+                                           sizeof(kSyringeTypeItems)/ sizeof(kSyringeTypeItems[0]));
+
+// ── Agent Selection — Start > here > Syringe Selection > Target Type > Mixing running ────────────
 static void _agentGoGelfoam(ScreenManager &mgr) {
     mixing_options_set_agent(SyringeAgent::Gelfoam);
-    mgr.push(&_targetTypeMenuScreen);
+    mgr.push(&_syringeTypeMenuScreen);
 }
 static void _agentGoLyostypt(ScreenManager &mgr) {
     mixing_options_set_agent(SyringeAgent::Lyostypt);
-    mgr.push(&_targetTypeMenuScreen);
+    mgr.push(&_syringeTypeMenuScreen);
 }
 
 static const MenuItem kAgentItems[] = {
