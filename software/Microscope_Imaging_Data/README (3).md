@@ -1,4 +1,4 @@
-# Gelfoam Particle Size vs. Stroke Count — Microscope Measurement Dataset
+# Particle Size vs. Stroke Count — Microscope Measurement Dataset
 
 ## Purpose
 Characterizes how Gelfoam-surrogate particle size (equivalent circular
