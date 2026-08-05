@@ -11,7 +11,7 @@
 // selecting "Viscosity" here only changes Mixing Menu's on-screen label,
 // not the underlying control, which stays the same µm target either way.
 
-enum class SyringeAgent : uint8_t { TERUMO, NIPRO };
+enum class SyringeAgent : uint8_t { Gelfoam, Lyostypt };
 enum class TargetType   : uint8_t { SIZE, VISCOSITY };
 
 SyringeAgent mixing_options_get_agent();

@@ -99,21 +99,22 @@ static MenuScreen _targetTypeMenuScreen("Target Type", kTargetTypeItems,
                                          sizeof(kTargetTypeItems) / sizeof(kTargetTypeItems[0]));
 
 // ── Agent Selection — Start > here > Target Type > Mixing Menu. ────────────
-static void _agentGoTerumo(ScreenManager &mgr) {
-    mixing_options_set_agent(SyringeAgent::TERUMO);
+static void _agentGoGelfoam(ScreenManager &mgr) {
+    mixing_options_set_agent(SyringeAgent::Gelfoam);
     mgr.push(&_targetTypeMenuScreen);
 }
-static void _agentGoNipro(ScreenManager &mgr) {
-    mixing_options_set_agent(SyringeAgent::NIPRO);
+static void _agentGoLyostypt(ScreenManager &mgr) {
+    mixing_options_set_agent(SyringeAgent::Lyostypt);
     mgr.push(&_targetTypeMenuScreen);
 }
 
 static const MenuItem kAgentItems[] = {
-    { "Terumo", _agentGoTerumo },
-    { "Nipro",  _agentGoNipro },
+    { "Gelfoam", _agentGoGelfoam}
+    ,{ "Lyostypt",  _agentGoLyostypt },
 };
-static MenuScreen _agentSelectionMenuScreen("Agent Selection", kAgentItems,
+static MenuScreen _agentSelectionMenuScreen("Select Agent", kAgentItems,
                                              sizeof(kAgentItems) / sizeof(kAgentItems[0]));
+
 
 // ── Start Menu ────────────────────────────────────────────────────────────────
 static void _startGoStart(ScreenManager &mgr)    { mgr.push(&_agentSelectionMenuScreen); }
