@@ -5,8 +5,16 @@
 // Force sensing
 // ---------------------------------------------------------------------------
 
+static int32_t _tare1 = HX711_TARE_1;
+static int32_t _tare2 = HX711_TARE_2;
+
+void calib_hx711_set_tare(uint8_t channel, int32_t tareCount) {
+    if (channel == 0) _tare1 = tareCount;
+    else _tare2 = tareCount;
+}
+
 float calib_hx711_to_grams(uint8_t channel, int32_t rawCount) {
-    int32_t tare = (channel == 0) ? HX711_TARE_1 : HX711_TARE_2;
+    int32_t tare = (channel == 0) ? _tare1 : _tare2;
     float scale = (channel == 0) ? HX711_SCALE_COUNTS_PER_GRAM_1 : HX711_SCALE_COUNTS_PER_GRAM_2;
     if (scale == 0.0f) return 0.0f;
     return (float)(rawCount - tare) / scale;

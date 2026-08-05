@@ -19,9 +19,9 @@ void EndScreen::_draw() {
     tft.setFont(&fonts::FreeSansBold12pt7b);
     ui_display_draw_centered("Results", 30, TFT_WHITE, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered(_resultMsg, 100, TFT_GREEN, 1);
-    ui_display_draw_centered("Hold knob to verify with camera", 220, TFT_DARKGREY, 1);
-    ui_display_draw_centered("(or press BTN1)", 245, TFT_DARKGREY, 1);
+    ui_display_draw_centered(_resultMsg, 100, COLOR_BRIGHT_BLUE, 1);
+    ui_display_draw_centered("Hold knob to verify with camera", 220, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("(or press BTN1)", 245, COLOR_LUNAR_ROCK, 1);
 }
 
 void EndScreen::update(ScreenManager &mgr, bool forceFull) {

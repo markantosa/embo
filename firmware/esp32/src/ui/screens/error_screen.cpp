@@ -14,8 +14,8 @@ void ErrorScreen::update(ScreenManager &mgr, bool forceFull) {
     LGFX &tft = ui_display_tft();
     tft.fillScreen(TFT_BLACK);
     tft.setFont(&fonts::FreeSansBold12pt7b);
-    ui_display_draw_centered("HARDWARE FAULT", 100, TFT_RED, 1);
+    ui_display_draw_centered("HARDWARE FAULT", 100, COLOR_CLOWN_NOSE, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered(_msg, 140, TFT_RED, 1);
-    ui_display_draw_centered("Reboot required", 200, TFT_DARKGREY, 1);
+    ui_display_draw_centered(_msg, 140, COLOR_CLOWN_NOSE, 1);
+    ui_display_draw_centered("Reboot required", 200, COLOR_LUNAR_ROCK, 1);
 }

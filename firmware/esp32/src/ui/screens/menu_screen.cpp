@@ -17,7 +17,7 @@ void MenuScreen::_draw(bool forceFull) {
         tft.fillScreen(TFT_BLACK);
         tft.setFont(&fonts::FreeSansBold12pt7b);
         ui_display_draw_centered(_title, 24, TFT_WHITE, 1);
-        tft.drawFastHLine(30, 62, tft.width() - 60, TFT_DARKGREY);
+        tft.drawFastHLine(30, 62, tft.width() - 60, COLOR_LUNAR_ROCK);
     }
 
     // Redraw just the item list — cheap enough to do every time something
@@ -30,9 +30,9 @@ void MenuScreen::_draw(bool forceFull) {
         bool sel = (i == _selected);
         int16_t rowY = top + i * rowH;
         if (sel) {
-            tft.fillRoundRect(20, rowY, tft.width() - 40, rowH - 8, 8, TFT_DARKGREY);
+            tft.fillRoundRect(20, rowY, tft.width() - 40, rowH - 8, 8, COLOR_LUNAR_ROCK);
         }
-        ui_display_draw_centered(_items[i].label, rowY + 10, sel ? TFT_WHITE : TFT_DARKGREY, 1);
+        ui_display_draw_centered(_items[i].label, rowY + 10, sel ? TFT_WHITE : COLOR_LUNAR_ROCK, 1);
     }
 }
 

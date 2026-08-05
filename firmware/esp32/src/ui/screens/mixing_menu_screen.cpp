@@ -18,7 +18,7 @@ void MixingMenuScreen::_draw() {
     LGFX &tft = ui_display_tft();
     tft.fillScreen(TFT_BLACK);
 #ifdef BENCH_NO_HOMING
-    tft.fillRect(0, 0, tft.width(), 20, TFT_RED);
+    tft.fillRect(0, 0, tft.width(), 20, COLOR_CLOWN_NOSE);
     tft.setFont(&fonts::FreeSans9pt7b);
     ui_display_draw_centered("BENCH BUILD - NO HOMING", 2, TFT_WHITE, 1);
 #endif
@@ -27,7 +27,7 @@ void MixingMenuScreen::_draw() {
     tft.setFont(&fonts::FreeSans9pt7b);
     char agentLine[24];
     snprintf(agentLine, sizeof(agentLine), "Agent: %s", mixing_options_agent_label());
-    ui_display_draw_centered(agentLine, 60, TFT_DARKGREY, 1);
+    ui_display_draw_centered(agentLine, 60, COLOR_LUNAR_ROCK, 1);
 
     char buf[16];
     snprintf(buf, sizeof(buf), "%u um", scheduler_get_target_um());
@@ -37,11 +37,11 @@ void MixingMenuScreen::_draw() {
 
     bool homed = motors_is_homed();
     ui_display_draw_centered(homed ? "Press knob to continue" : "NOT HOMED - press knob to home", 225,
-                              homed ? TFT_DARKGREY : TFT_RED, homed ? 2 : 1);
+                              homed ? COLOR_LUNAR_ROCK : COLOR_CLOWN_NOSE, homed ? 2 : 1);
 
     ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
-                                  kBackButton.label, TFT_DARKGREY, TFT_WHITE);
-    ui_display_draw_centered("(or press BTN1)", 245, TFT_DARKGREY, 1);
+                                  kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
+    ui_display_draw_centered("(or press BTN1)", 245, COLOR_LUNAR_ROCK, 1);
 }
 
 void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {

@@ -18,11 +18,11 @@ void DeveloperModeScreen::_draw(bool forceFull) {
         tft.setFont(&fonts::FreeSansBold12pt7b);
         ui_display_draw_centered("Developer Mode", 15, TFT_WHITE, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
-        ui_display_draw_centered("UAS debug mode >", 200, TFT_GREEN, 1);
-        ui_display_draw_centered("Press knob to open", 225, TFT_DARKGREY, 1);
+        ui_display_draw_centered("UAS debug mode >", 200, COLOR_BRIGHT_BLUE, 1);
+        ui_display_draw_centered("Press knob to open", 225, COLOR_LUNAR_ROCK, 1);
         ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
-                                      kBackButton.label, TFT_DARKGREY, TFT_WHITE);
-        ui_display_draw_centered("(or hold knob)", 245, TFT_DARKGREY, 1);
+                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
+        ui_display_draw_centered("(or hold knob)", 245, COLOR_LUNAR_ROCK, 1);
     }
 
     // Live telemetry — refreshed every call, not just on forceFull (this is
@@ -31,17 +31,17 @@ void DeveloperModeScreen::_draw(bool forceFull) {
     tft.fillRect(0, 55, tft.width(), 130, TFT_BLACK);
     char line[48];
     snprintf(line, sizeof(line), "Load cell 1: %.1f g", force_sensor_get_grams_1());
-    ui_display_draw_centered(line, 60, TFT_DARKGREY, 1);
+    ui_display_draw_centered(line, 60, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "Load cell 2: %.1f g", force_sensor_get_grams_2());
-    ui_display_draw_centered(line, 85, TFT_DARKGREY, 1);
+    ui_display_draw_centered(line, 85, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "Turbidity ALS: %u  (%s)",
              turbidity_get_als_clear(), turbidity_apds_ok() ? "ok" : "fault");
-    ui_display_draw_centered(line, 110, TFT_DARKGREY, 1);
+    ui_display_draw_centered(line, 110, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "Turbidity IR: %lu  (%s)",
              (unsigned long)turbidity_get_ir_raw(), turbidity_max_ok() ? "ok" : "fault");
-    ui_display_draw_centered(line, 135, TFT_DARKGREY, 1);
+    ui_display_draw_centered(line, 135, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "UAS reading: %lu mV", (unsigned long)uas_read_mv());
-    ui_display_draw_centered(line, 160, TFT_DARKGREY, 1);
+    ui_display_draw_centered(line, 160, COLOR_LUNAR_ROCK, 1);
 }
 
 void DeveloperModeScreen::update(ScreenManager &mgr, bool forceFull) {

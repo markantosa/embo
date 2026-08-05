@@ -21,6 +21,8 @@ void setup() {
     Serial.println("BOOT: turbidity_init done");
     force_sensor_init();   // fusion input AND independent e-stop safety input, see calibration.h
     Serial.println("BOOT: force_sensor_init done");
+    force_sensor_tare(); //fresh zero after every boot
+    Serial.println("BOOT: force_sensor_tare done");
     ui_init();
     Serial.println("BOOT: ui_init done");
     rpi_uart_init();

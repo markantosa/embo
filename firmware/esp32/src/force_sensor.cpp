@@ -1,6 +1,7 @@
 #include "force_sensor.h"
 #include "config.h"
 #include "calibration.h"
+#include "ble_debug.h"
 #include <Arduino.h>
 
 static int32_t _raw1 = 0, _raw2 = 0;
@@ -54,6 +55,30 @@ float force_sensor_get_grams_1() { return _grams1; }
 float force_sensor_get_grams_2() { return _grams2; }
 int32_t force_sensor_get_raw_1() { return _raw1; }
 int32_t force_sensor_get_raw_2() { return _raw2; }
+
+void force_sensor_tare(uint8_t samples) {
+    int64_t sum1 = 0, sum2 = 0;
+    uint8_t got = 0;
+    uint32_t deadline = millis() +2000;
+    while (got <samples && millis() <deadline){
+        if (force_sensor_update()) {
+            sum1 += _raw1;
+            sum2 += _raw2;
+            got++;
+        }
+    }
+    if (got==0) {
+        ble_log("Force sensor: tare FAILED (no readings within 2s) - using fallback tare");
+        return;
+    }
+    int32_t tare1 = (int32_t)(sum1/got);
+    int32_t tare2 = (int32_t)(sum2/got);
+
+    calib_hx711_set_tare(0,tare1);
+    calib_hx711_set_tare(1,tare2);
+    ble_log("Force sensor: tared (raw1=%1d raw2=%1d, %u samples)", (long)tare1, (long)tare2,got);
+
+}
 
 bool force_sensor_estop_tripped() {
     return calib_force_estop_tripped(_grams1, _grams2);

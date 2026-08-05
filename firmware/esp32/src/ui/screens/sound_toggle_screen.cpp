@@ -16,19 +16,19 @@ void SoundToggleScreen::_draw() {
     tft.setFont(&fonts::FreeSansBold12pt7b);
     ui_display_draw_centered("Sound", 25, TFT_WHITE, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered("Boot chirp and future UI tones", 90, TFT_DARKGREY, 1);
-    ui_display_draw_centered("(resets to ON every power-on)", 115, TFT_DARKGREY, 1);
+    ui_display_draw_centered("Boot chirp and future UI tones", 90, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("(resets to ON every power-on)", 115, COLOR_LUNAR_ROCK, 1);
 
     bool on = sound_is_enabled();
     ui_display_draw_centered(on ? "Currently: ON" : "Currently: OFF", 150,
-                              on ? TFT_GREEN : TFT_RED, 1);
+                              on ? COLOR_BRIGHT_BLUE : COLOR_CLOWN_NOSE, 1);
 
     ui_display_draw_touch_button(kButtons[0].x, kButtons[0].y, kButtons[0].w, kButtons[0].h,
-                                  on ? "Turn OFF" : "Turn ON", on ? TFT_RED : TFT_GREEN, TFT_BLACK);
+                                  on ? "Turn OFF" : "Turn ON", on ? COLOR_CLOWN_NOSE : COLOR_BRIGHT_BLUE, TFT_BLACK);
     ui_display_draw_touch_button(kButtons[1].x, kButtons[1].y, kButtons[1].w, kButtons[1].h,
-                                  kButtons[1].label, TFT_DARKGREY, TFT_WHITE);
-    ui_display_draw_centered("Or press knob to toggle", 230, TFT_DARKGREY, 1);
-    ui_display_draw_centered("(hold knob to go back)", 245, TFT_DARKGREY, 1);
+                                  kButtons[1].label, COLOR_LUNAR_ROCK, TFT_WHITE);
+    ui_display_draw_centered("Or press knob to toggle", 230, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("(hold knob to go back)", 245, COLOR_LUNAR_ROCK, 1);
 }
 
 void SoundToggleScreen::update(ScreenManager &mgr, bool forceFull) {

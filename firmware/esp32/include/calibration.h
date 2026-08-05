@@ -24,7 +24,11 @@
 // ---------------------------------------------------------------------------
 
 // Tare: raw 24-bit signed count with the plunger mechanically at rest,
-// unloaded. Re-measure per channel — load cells are rarely identical.
+// unloaded. These two are now just the STARTUP FALLBACK, used only if
+// force_sensor_tare() (force_sensor.h) can't complete in time — the real
+// tare is measured fresh every boot instead of relying on a stale
+// bench-measured constant, since load cells drift and mounting varies
+// run to run. See calib_hx711_set_tare().
 #define HX711_TARE_1                    0
 #define HX711_TARE_2                    0
 
@@ -43,6 +47,10 @@
 #define HX711_ESTOP_GRAMS               5000.0f
 
 float calib_hx711_to_grams(uint8_t channel, int32_t rawCount);
+// Overrides the tare point used by calib_hx711_to_grams() for one channel
+// (0 or 1) at runtime — called once per boot by force_sensor_tare(), not
+// meant to be called mid-run. Until called, HX711_TARE_1/2 above are used.
+void calib_hx711_set_tare(uint8_t channel, int32_t tareCount);
 
 // True if either channel is over the e-stop threshold. Caller (motors.cpp /
 // main.cpp) should route this into the same kill path as the button e-stop

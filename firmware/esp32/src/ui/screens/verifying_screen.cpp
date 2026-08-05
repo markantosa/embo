@@ -25,15 +25,15 @@ void VerifyingScreen::_draw(bool waiting, bool forceFull) {
         tft.setFont(&fonts::FreeSans9pt7b);
     }
     if (waiting) {
-        if (forceFull) ui_display_draw_centered("Capturing...", 130, TFT_DARKGREY, 1);
+        if (forceFull) ui_display_draw_centered("Capturing...", 130, COLOR_LUNAR_ROCK, 1);
         ui_display_draw_spinner(180);
     } else {
         tft.fillRect(0, 110, tft.width(), 90, TFT_BLACK);
         ui_display_draw_centered(_resultMsg, 140, TFT_WHITE, 1);
         if (_specMsg[0] != '\0') {
-            ui_display_draw_centered(_specMsg, 170, _inSpec ? TFT_GREEN : TFT_RED, 1);
+            ui_display_draw_centered(_specMsg, 170, _inSpec ? COLOR_BRIGHT_BLUE : COLOR_CLOWN_NOSE, 1);
         }
-        ui_display_draw_centered("Press knob to continue", 220, TFT_DARKGREY, 1);
+        ui_display_draw_centered("Press knob to continue", 220, COLOR_LUNAR_ROCK, 1);
     }
 }
 

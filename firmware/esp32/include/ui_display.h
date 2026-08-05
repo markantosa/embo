@@ -3,6 +3,20 @@
 #include <stdint.h>
 #include "LGFX_Config.h"
 
+// App color palette — RGB565 values as given, matching TFT_* library
+// constants' format exactly, so they drop into any existing color argument.
+// TFT_WHITE/TFT_BLACK (library-provided) already equal COLOR_WHITE/
+// COLOR_BLACK exactly, so those two are left as TFT_WHITE/TFT_BLACK
+// throughout rather than duplicated under a new name.
+#define COLOR_WHITE          0xFFFF  // #FFFFFF
+#define COLOR_BLACK          0x0000  // #000000
+#define COLOR_CRYSTAL_BELL   0xEF7D  // #EFEFEF
+#define COLOR_LUNAR_ROCK     0xC618  // #C5C4C5 — general secondary/grey text, replaces TFT_DARKGREY
+#define COLOR_WAITING        0x9CF3  // #9C9D9E
+#define COLOR_GUILLIMAN_BLUE 0x64DC  // #639AE9
+#define COLOR_CLOWN_NOSE     0xE24B  // #EA4758 — danger/error/stop, replaces TFT_RED
+#define COLOR_BRIGHT_BLUE    0x0B3E  // #0564F5 — positive/on/selected, replaces TFT_GREEN
+
 // Shared TFT instance + small drawing helpers used by every screen, so
 // adding a screen never means re-deriving "how do I center some text."
 

@@ -10,14 +10,14 @@ static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 void WarningScreen::_draw() {
     LGFX &tft = ui_display_tft();
     tft.fillScreen(TFT_BLACK);
-    tft.fillRect(0, 0, tft.width(), 30, TFT_RED);
+    tft.fillRect(0, 0, tft.width(), 30, COLOR_CLOWN_NOSE);
     tft.setFont(&fonts::FreeSansBold12pt7b);
     ui_display_draw_centered("WARNING", 4, TFT_WHITE, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
     ui_display_draw_centered("Ensure syringe is properly", 90, TFT_WHITE, 1);
     ui_display_draw_centered("mounted inside", 115, TFT_WHITE, 1);
-    ui_display_draw_centered("Press knob to confirm and start", 200, TFT_DARKGREY, 1);
-    ui_display_draw_centered("(hold knob to go back)", 245, TFT_DARKGREY, 1);
+    ui_display_draw_centered("Press knob to confirm and start", 200, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("(hold knob to go back)", 245, COLOR_LUNAR_ROCK, 1);
 }
 
 void WarningScreen::update(ScreenManager &mgr, bool forceFull) {

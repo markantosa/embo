@@ -28,14 +28,14 @@ void PlaceholderScreen::_draw() {
         ui_display_draw_centered(_title, y, TFT_WHITE, 1);
         y += 40;
     }
-    ui_display_draw_centered(_message, y, TFT_DARKGREY, 1);
+    ui_display_draw_centered(_message, y, COLOR_LUNAR_ROCK, 1);
     if (_confirmTarget) {
-        ui_display_draw_centered("Press knob to continue", 220, TFT_DARKGREY, 1);
+        ui_display_draw_centered("Press knob to continue", 220, COLOR_LUNAR_ROCK, 1);
     }
     if (_showBack) {
         ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
-                                      kBackButton.label, TFT_DARKGREY, TFT_WHITE);
-        ui_display_draw_centered("(or hold knob)", 245, TFT_DARKGREY, 1);
+                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
+        ui_display_draw_centered("(or hold knob)", 245, COLOR_LUNAR_ROCK, 1);
     }
 }
 

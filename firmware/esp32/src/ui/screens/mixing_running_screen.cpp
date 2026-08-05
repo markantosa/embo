@@ -20,21 +20,21 @@ void MixingRunningScreen::_draw(bool forceFull) {
         tft.setFont(&fonts::FreeSansBold12pt7b);
         ui_display_draw_centered("Mixing", 70, TFT_WHITE, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
-        ui_display_draw_centered("Hold BTN1 for emergency stop", 220, TFT_DARKGREY, 1);
+        ui_display_draw_centered("Hold BTN1 for emergency stop", 220, COLOR_LUNAR_ROCK, 1);
     }
 
     // The pause/resume label can change without anything else on screen
     // changing, so redraw just that button whenever paused state might
     // have changed (forceFull, or right after we act on a tap/BTN1 below).
     ui_display_draw_touch_button(kButtons[0].x, kButtons[0].y, kButtons[0].w, kButtons[0].h,
-                                  paused ? "Resume" : "Pause", paused ? TFT_GREEN : TFT_DARKGREY, TFT_WHITE);
+                                  paused ? "Resume" : "Pause", paused ? COLOR_BRIGHT_BLUE : COLOR_LUNAR_ROCK, TFT_WHITE);
     ui_display_draw_touch_button(kButtons[1].x, kButtons[1].y, kButtons[1].w, kButtons[1].h,
-                                  "Stop", TFT_RED, TFT_WHITE);
+                                  "Stop", COLOR_CLOWN_NOSE, TFT_WHITE);
 
     if (paused) {
         if (forceFull) {
             tft.fillRect(0, 130, tft.width(), 30, TFT_BLACK);
-            ui_display_draw_centered("PAUSED", 140, TFT_DARKGREY, 1);
+            ui_display_draw_centered("PAUSED", 140, COLOR_LUNAR_ROCK, 1);
         }
     } else {
         ui_display_draw_spinner(160);

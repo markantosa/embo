@@ -14,6 +14,18 @@
 
 void force_sensor_init();
 
+// Blocking — samples both channels (averaged over `samples` readings) and
+// calls calib_hx711_set_tare() for each, so this run's zero point reflects
+// today's actual unloaded reading rather than a stale bench constant. Call
+// once at boot, right after force_sensor_init(), BEFORE a syringe is
+// loaded — taring with something already pressing on the load cells would
+// silently shift the zero point and, since force also feeds the automatic
+// e-stop (force_sensor_estop_tripped()), that's a safety-relevant
+// assumption, not just a measurement nicety. Has a 2s timeout per channel;
+// if a channel never becomes ready in time, that channel keeps whatever
+// tare it already had (HX711_TARE_1/2 from calibration.h on first boot).
+void force_sensor_tare(uint8_t samples = 16);
+
 // Non-blocking: returns false (leaves outputs unchanged) if either channel
 // isn't ready yet. Call every loop().
 bool force_sensor_update();
