@@ -7,6 +7,7 @@
 #include "force_sensor.h"
 #include "turbidity.h"
 #include "uas.h"
+#include "motors.h"
 #include <stdio.h>
 
 static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
@@ -28,7 +29,7 @@ void DeveloperModeScreen::_draw(bool forceFull) {
     // Live telemetry — refreshed every call, not just on forceFull (this is
     // the whole point of the screen). Cheap enough: a handful of fillRect +
     // text draws, same pattern as the spinner elsewhere.
-    tft.fillRect(0, 55, tft.width(), 130, TFT_BLACK);
+    tft.fillRect(0, 55, tft.width(), 155, TFT_BLACK);
     char line[48];
     snprintf(line, sizeof(line), "Load cell 1: %.1f g", force_sensor_get_grams_1());
     ui_display_draw_centered(line, 60, COLOR_LUNAR_ROCK, 1);
@@ -42,6 +43,14 @@ void DeveloperModeScreen::_draw(bool forceFull) {
     ui_display_draw_centered(line, 135, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "UAS reading: %lu mV", (unsigned long)uas_read_mv());
     ui_display_draw_centered(line, 160, COLOR_LUNAR_ROCK, 1);
+    // "Position" here means homed status + completed stroke count, NOT an
+    // absolute step count — strokes are driven by time (STROKE_FORWARD_MS/
+    // STROKE_RETURN_MS in config.h), not step-counted, so there is no real
+    // absolute position anywhere in this firmware to report. This is the
+    // most honest thing available; see motors.h.
+    snprintf(line, sizeof(line), "Motors: %s, %lu strokes",
+             motors_is_homed() ? "HOMED" : "NOT HOMED", (unsigned long)motor_get_stroke_count());
+    ui_display_draw_centered(line, 185, COLOR_LUNAR_ROCK, 1);
 }
 
 void DeveloperModeScreen::update(ScreenManager &mgr, bool forceFull) {

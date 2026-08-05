@@ -17,6 +17,8 @@
 #include "ui/screens/verifying_screen.h"
 #include "ui/screens/error_screen.h"
 #include "ui/screens/bench_diagnostics_menu.h"
+#include "motors.h"
+#include "scheduler.h"
 #include "ui/boot_logo.h"
 #include "hal/buzzer_driver.h"
 #include "ble_debug.h"
@@ -39,6 +41,7 @@
 //   Insert syringe -> Start Menu -> [Start] -> Agent selection -> Target type -> Mixing Menu -> Warning
 //                                                                                              -> Mixing Running -> End -> (back to Start Menu)
 //                                -> [Settings] -> [Sound] (on/off toggle)
+//                                              -> [Motion] -> [Home Motors]
 //                                              -> [Developer mode] -> [UAS debug mode] (BLE toggle)
 //                                -> [Camera feature] -> mount check -> (stub, "developing in progress")
 //   End screen and Mixing/Warning screens can also reach Verifying (camera
@@ -62,17 +65,45 @@ static PlaceholderScreen     _cameraMountScreen;
 static PlaceholderScreen     _cameraStubScreen;
 static PlaceholderScreen     _insertSyringeScreen;
 
+// ── Motion Menu — Settings > Motion. Defined before Settings Menu since
+// Settings' "Motion" item needs to reference it by address (same ordering
+// rule as the rest of this file). ──────────────────────────────────────────
+static void _motionHome(ScreenManager &mgr) {
+    if (scheduler_is_running()) {
+        ble_log("Motion > Home Motors: refused - a run is in progress");
+        return;
+    }
+    // Blocking, same tradeoff already accepted everywhere else homing is
+    // triggered (Mixing Menu, BLE HOME) — nothing can be running yet, see
+    // the guard above.
+    if (!motors_home()) {
+        ui_show_error("HOMING FAILED - check limit switches");
+        return;
+    }
+    mgr.pop();
+}
+static void _motionBack(ScreenManager &mgr) { mgr.pop(); }
+
+static const MenuItem kMotionItems[] = {
+    { "Home Motors", _motionHome },
+    { "Back",        _motionBack },
+};
+static MenuScreen _motionMenuScreen("Motion", kMotionItems,
+                                     sizeof(kMotionItems) / sizeof(kMotionItems[0]));
+
 // ── Settings Menu — defined before Start Menu since Start Menu's "Settings"
 // item needs to reference it by address (see file header for why this
 // order matters: MenuItem callback bodies need referenced statics already
 // declared, unlike .wire() calls in ui_init() which run after everything
 // exists regardless of order). ────────────────────────────────────────────
 static void _settingsGoSound(ScreenManager &mgr)     { mgr.push(&_soundToggleScreen); }
+static void _settingsGoMotion(ScreenManager &mgr)    { mgr.push(&_motionMenuScreen); }
 static void _settingsGoDeveloper(ScreenManager &mgr) { mgr.push(&_developerModeScreen); }
 static void _settingsBack(ScreenManager &mgr)        { mgr.pop(); }
 
 static const MenuItem kSettingsItems[] = {
     { "Sound",          _settingsGoSound },
+    { "Motion",         _settingsGoMotion },
     { "Developer mode", _settingsGoDeveloper },
     { "Back",           _settingsBack },
 };
