@@ -14,10 +14,10 @@ void MenuScreen::onEnter() {
 void MenuScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
     if (forceFull) {
-        tft.fillScreen(TFT_BLACK);
-        tft.setFont(&fonts::FreeSansBold12pt7b);
-        ui_display_draw_centered(_title, 24, TFT_WHITE, 1);
-        tft.drawFastHLine(30, 62, tft.width() - 60, COLOR_LUNAR_ROCK);
+        tft.fillScreen(TFT_WHITE); // background colour 
+        tft.setFont(&fonts::FreeSansBold12pt7b); // setting the font
+        ui_display_draw_centered(_title, 24, TFT_BLACK, 1); // drawing 
+        tft.drawFastHLine(30, 62, tft.width() - 60, COLOR_LUNAR_ROCK); // line below title line 
     }
 
     // Redraw just the item list — cheap enough to do every time something
@@ -30,9 +30,9 @@ void MenuScreen::_draw(bool forceFull) {
         bool sel = (i == _selected);
         int16_t rowY = top + i * rowH;
         if (sel) {
-            tft.fillRoundRect(20, rowY, tft.width() - 40, rowH - 8, 8, COLOR_LUNAR_ROCK);
+            tft.fillRoundRect(20, rowY, tft.width() - 40, rowH - 8, 8, COLOR_BRIGHT_BLUE);
         }
-        ui_display_draw_centered(_items[i].label, rowY + 10, sel ? TFT_WHITE : COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered(_items[i].label, rowY + 10, sel ? TFT_WHITE : COLOR_BRIGHT_BLUE, 1);
     }
 }
 

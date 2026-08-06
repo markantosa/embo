@@ -187,6 +187,22 @@ bool motors_home() {
 
     uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
     while (millis() < deadline) {
+        // A tripped flag might be electrical noise from the stepper's own
+        // step pulses inducing a spurious edge on the limit line — this
+        // can happen almost immediately after the motor starts moving,
+        // well before it's anywhere near the physical switch. A genuine
+        // closure stays LOW; noise doesn't. If it didn't hold, clear it
+        // and resume driving toward the limit instead of accepting a
+        // false stop.
+        if (_limit_m1_hit && digitalRead(PIN_LIMIT_M1) == HIGH) {
+            motor_clear_limit(1);
+            motor_set_speed(1, HOMING_STEP_HZ);  // ISR zeroed this — re-enable
+        }
+        if (_limit_m2_hit && digitalRead(PIN_LIMIT_M2) == HIGH) {
+            motor_clear_limit(2);
+            motor_set_speed(2, HOMING_STEP_HZ);
+        }
+
         bool m1_done = motor_limit_hit(1);
         bool m2_done = motor_limit_hit(2);
         if (m1_done && m2_done) break;
