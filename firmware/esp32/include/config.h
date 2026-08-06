@@ -98,6 +98,13 @@
 #define TMC_ADDR_M1         0   // MS1=GND, MS2=GND
 #define TMC_ADDR_M2         1   // MS1=3.3V via 10k, MS2=GND
 
+// Ported from a confirmed-working bench firmware (PCB_Test_Firmware_v3_4) —
+// these are real calibrated values, not the raw IHOLD/IRUN register
+// guesses this used to use.
+#define TMC_R_SENSE           0.11f
+#define TMC_RUN_CURRENT_MA    600
+#define TMC_HOLD_CURRENT_MA   300
+
 // ── ADC ──────────────────────────────────────────────────────────────────────
 // GPIO1 = ADC1_CH0. Use ADC_ATTEN_DB_12 (0–3.1V range, ~0.757 mV/LSB).
 // Wait ≥500µs after each AD9833 frequency step before reading.

@@ -10,11 +10,12 @@ void motor_set_speed(uint8_t motor, uint32_t step_hz);
 void motor_set_dir(uint8_t motor, bool forward);
 void motor_enable(uint8_t motor, bool en);
 
-// Time-integrated position estimate (steps since last motor_reset_position()
-// or last successful homing, whichever is most recent) — see motors.cpp for
-// why this is an estimate, not an interrupt-counted position, and why
-// that's still good enough for bench/UI purposes. Settles up to the moment
-// of the call, so it's accurate even mid-move.
+// Exact, interrupt-counted position (steps since last motor_reset_position()
+// or last successful homing, whichever is most recent) — incremented once
+// per step pulse by the hardware-timer ISR that generates them (see
+// motors.cpp). Was a time-integrated estimate in an earlier LEDC-PWM-based
+// version of this file; ported to real step counting along with the rest
+// of the step-generation mechanism from a confirmed-working bench firmware.
 int32_t motor_get_position(uint8_t motor);
 void motor_reset_position(uint8_t motor);
 

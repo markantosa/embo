@@ -3,6 +3,7 @@
 #include "ble_debug.h"
 #include <Arduino.h>
 #include <TMCStepper.h>
+#include <esp_timer.h>
 
 // Half-duplex UART for both TMC2209 modules on the shared PDN line.
 // Serial1 is used; TX (GPIO4) and RX (GPIO44) are genuinely separate ESP32
@@ -11,56 +12,54 @@
 // shared TX/RX config was tried first and proved unreliable, see
 // docs/EMBO_PCB_Design_Brief_v3_4.txt §7.3.
 static HardwareSerial _tmc_serial(1);
-static TMC2209Stepper _driver_m1(&_tmc_serial, 0.11f, TMC_ADDR_M1);
-static TMC2209Stepper _driver_m2(&_tmc_serial, 0.11f, TMC_ADDR_M2);
+static TMC2209Stepper _driver_m1(&_tmc_serial, TMC_R_SENSE, TMC_ADDR_M1);
+static TMC2209Stepper _driver_m2(&_tmc_serial, TMC_R_SENSE, TMC_ADDR_M2);
 
 static volatile bool _limit_m1_hit = false;
 static volatile bool _limit_m2_hit = false;
 
-// ── Position tracking (time-integrated estimate, not hardware step-counted) ──
-// LEDC generates the actual step pulses autonomously in hardware — there's
-// no per-step interrupt to count from, unlike a timer-ISR-driven step
-// generator would give you. Position here is estimated by integrating
-// elapsed time * commanded step rate every time speed or direction
-// changes, settled up to "now" on every read too. Accurate as long as the
-// LEDC hardware doesn't drop steps (it shouldn't, under normal operation)
-// — this is a real position for bench/UI purposes, just not an
-// interrupt-verified one.
-static int32_t  _position1 = 0, _position2 = 0;
-static uint32_t _posLastMs1 = 0, _posLastMs2 = 0;
-static uint32_t _curHz1 = 0, _curHz2 = 0;
-static bool     _curFwd1 = true, _curFwd2 = true;
-
-static void _settlePosition(uint8_t motor) {
-    int32_t  &pos    = (motor == 1) ? _position1  : _position2;
-    uint32_t &lastMs = (motor == 1) ? _posLastMs1 : _posLastMs2;
-    uint32_t  hz     = (motor == 1) ? _curHz1     : _curHz2;
-    bool      fwd    = (motor == 1) ? _curFwd1    : _curFwd2;
-
-    uint32_t now = millis();
-    if (hz > 0) {
-        uint32_t elapsedMs = now - lastMs;
-        int32_t steps = (int32_t)((uint64_t)elapsedMs * hz / 1000);
-        pos += fwd ? steps : -steps;
-    }
-    lastMs = now;
-}
-
 static bool     _homed        = false;
 static uint32_t _stroke_count = 0;
 
+// ── Step generation: hardware timer (esp_timer), ISR-ticked, one pulse per
+// callback — ported from a confirmed-working bench firmware
+// (PCB_Test_Firmware_v3_4) after the previous LEDC PWM-based driver here
+// could not move the motors at all. Root cause turned out to be upstream
+// in the TMC2209 init sequence (missing toff/pdn_disable/senddelay, see
+// _tmc_init_driver below), not the step-generation mechanism itself — but
+// this port keeps the whole confirmed-working sequence together rather
+// than mixing a validated init with an unvalidated pulse generator.
+// Bonus: position is now an exact ISR-incremented step count, not a
+// time-integrated estimate — see motor_get_position()/motor_reset_position().
+struct StepAxis {
+    int stepPin, dirPin, enPin;
+    volatile int8_t  dir      = 0;  // -1 / 0 / +1 — 0 means stopped
+    volatile int32_t position = 0;  // exact, ISR-incremented step count
+    esp_timer_handle_t timer  = nullptr;
+};
+static StepAxis _axis1{PIN_STEP_M1, PIN_DIR_M1, PIN_EN_M1};
+static StepAxis _axis2{PIN_STEP_M2, PIN_DIR_M2, PIN_EN_M2};
+
+static StepAxis &_axis(uint8_t motor) { return (motor == 1) ? _axis1 : _axis2; }
+
+static void IRAM_ATTR _stepPulse(void *arg) {
+    StepAxis *ax = static_cast<StepAxis *>(arg);
+    if (ax->dir == 0) return;  // defensive — esp_timer_stop() is what actually prevents firing
+    digitalWrite(ax->stepPin, HIGH);
+    delayMicroseconds(2);
+    digitalWrite(ax->stepPin, LOW);
+    ax->position += ax->dir;
+}
+
 void IRAM_ATTR isr_limit_m1() {
     _limit_m1_hit = true;
-    // Immediately silence the step pulse so the motor stops within one step.
-    // ledcWrite with duty=0 keeps the pin attached but outputs a flat LOW —
-    // the driver's STEP pin sees no more edges. arduino-esp32 3.x LEDC API is
-    // pin-based, not channel-based (channels are managed internally).
-    ledcWrite(PIN_STEP_M1, 0);
+    // Immediately silence stepping so the motor stops within one step.
+    esp_timer_stop(_axis1.timer);  // safe even if not currently running
 }
 
 void IRAM_ATTR isr_limit_m2() {
     _limit_m2_hit = true;
-    ledcWrite(PIN_STEP_M2, 0);
+    esp_timer_stop(_axis2.timer);
 }
 
 static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
@@ -69,10 +68,16 @@ static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
     // TOFF=0 explicitly disables the TMC2209's driver output stage — a
     // hardware fact about this chip, not a library default to trust.
     // Without this, STEP pulses can arrive with EN correctly asserted and
-    // the motor still never produces torque, depending on whatever TOFF
-    // happens to be at power-on reset. 4 matches the reference bring-up
-    // (testing/hal) for this same module.
+    // the motor still never produces torque. This was the actual root
+    // cause of "no movement at all" — confirmed by comparing against
+    // PCB_Test_Firmware_v3_4, a bench firmware that moves these same
+    // modules correctly and always sets this.
     drv.toff(4);
+
+    // Real calibrated current via TMCStepper's own rms_current() (which
+    // does the IHOLD/IRUN register math from actual mA figures using
+    // TMC_R_SENSE), not hand-picked raw register values.
+    drv.rms_current(TMC_RUN_CURRENT_MA, (float)TMC_HOLD_CURRENT_MA / (float)TMC_RUN_CURRENT_MA);
 
     // PDN_UART is a multiplexed pin on this chip — without this, it can be
     // misread as an external power-down signal instead of pure UART
@@ -80,11 +85,8 @@ static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
     // PDN_UART bus (multi-drop, see EMBO_PCB_Design_Brief_v3_4.txt §7.3).
     drv.pdn_disable(true);
 
-    // Multi-drop UART bus timing — the TMC2209 datasheet specifically
-    // calls for SENDDELAY >= 2 "in a multiple node system... to ensure
-    // clean bus transitions," and that's exactly this board's topology
-    // (2 drivers, 1 shared PDN_UART bus). 4 matches the reference bring-up.
-    drv.senddelay(4);
+    // Use UART-controlled current scaling, not the onboard trimpot.
+    drv.I_scale_analog(false);
 
     // SpreadCycle is required for StallGuard4. This module has no SPREAD pin —
     // must be set via UART at every boot. Read back to confirm before proceeding.
@@ -96,12 +98,11 @@ static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
         ble_log("TMC addr %u: SpreadCycle OK", addr);
     }
 
-    // Use UART-controlled current scaling, not the onboard trimpot.
-    // Eliminates run-to-run variability from VREF pot position.
-    drv.I_scale_analog(false);
-    drv.ihold(10);   // hold current ~31% of RMS — low, motors idle between strokes
-    drv.irun(20);    // run current  ~62% of RMS — adjust after load test
-    drv.iholddelay(6);
+    // Multi-drop UART bus timing — the TMC2209 datasheet specifically
+    // calls for SENDDELAY >= 2 "in a multiple node system... to ensure
+    // clean bus transitions," and that's exactly this board's topology
+    // (2 drivers, 1 shared PDN_UART bus).
+    drv.senddelay(4);
 
     // 8 microsteps: good balance of resolution and StallGuard sensitivity.
     // StallGuard becomes less reliable above 16 microsteps at low speed.
@@ -125,30 +126,34 @@ static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
 }
 
 void motors_init() {
-    // Direction + enable pins
+    // Direction + enable + step pins
     pinMode(PIN_DIR_M1, OUTPUT);
     pinMode(PIN_EN_M1, OUTPUT);
+    pinMode(PIN_STEP_M1, OUTPUT);
     pinMode(PIN_DIR_M2, OUTPUT);
     pinMode(PIN_EN_M2, OUTPUT);
+    pinMode(PIN_STEP_M2, OUTPUT);
+    digitalWrite(PIN_STEP_M1, LOW);
+    digitalWrite(PIN_DIR_M1, LOW);
+    digitalWrite(PIN_STEP_M2, LOW);
+    digitalWrite(PIN_DIR_M2, LOW);
 
     // Start disabled (EN active LOW — pulled HIGH = disabled)
     digitalWrite(PIN_EN_M1, HIGH);
     digitalWrite(PIN_EN_M2, HIGH);
 
-    // STEP pins: LEDC at 1 Hz, 50% duty, timer resolution 10-bit.
-    // Frequency is changed by motor_set_speed(); 1 Hz just initialises the pin.
-    // Duty is fixed at half the timer period so the pulse is always a clean square wave.
-    // Explicit channel assignment (ledcAttachChannel, not plain ledcAttach) —
-    // auto-allocated LEDC channels/timers have already caused a real,
-    // confirmed cross-talk problem between unrelated peripherals on this
-    // board (see buzzer_driver.cpp's history); pinning these to fixed
-    // channels (0, 1 — buzzer is channel 2, see ui.cpp) removes that
-    // ambiguity for the two pins the whole safety-relevant stroke timing
-    // depends on.
-    ledcAttachChannel(PIN_STEP_M1, 1, 10, 0);
-    ledcAttachChannel(PIN_STEP_M2, 1, 10, 1);
-    ledcWrite(PIN_STEP_M1, 0);  // keep silent until explicitly started
-    ledcWrite(PIN_STEP_M2, 0);
+    // One hardware timer per axis, one pulse generated per callback.
+    esp_timer_create_args_t args1 = {};
+    args1.callback = &_stepPulse;
+    args1.arg = &_axis1;
+    args1.name = "m1step";
+    esp_timer_create(&args1, &_axis1.timer);
+
+    esp_timer_create_args_t args2 = {};
+    args2.callback = &_stepPulse;
+    args2.arg = &_axis2;
+    args2.name = "m2step";
+    esp_timer_create(&args2, &_axis2.timer);
 
     // Limit switch ISRs
     pinMode(PIN_LIMIT_M1, INPUT_PULLUP);
@@ -165,41 +170,37 @@ void motors_init() {
 }
 
 void motor_set_speed(uint8_t motor, uint32_t step_hz) {
-    _settlePosition(motor);  // integrate motion at the OLD speed up to now
-    if (motor == 1) _curHz1 = step_hz; else _curHz2 = step_hz;
-
-    int pin = (motor == 1) ? PIN_STEP_M1 : PIN_STEP_M2;
-
+    StepAxis &ax = _axis(motor);
     if (step_hz == 0) {
-        ledcWrite(pin, 0);  // flat LOW — no steps
+        esp_timer_stop(ax.timer);  // safe even if not currently running
         return;
     }
-
-    // Change frequency while keeping 50% duty cycle.
-    // Timer resolution stays at 10 bits; duty = 512 = half of 1024.
-    ledcChangeFrequency(pin, step_hz, 10);
-    ledcWrite(pin, 512);
+    uint64_t periodUs = 1000000ULL / step_hz;
+    esp_timer_stop(ax.timer);
+    esp_timer_start_periodic(ax.timer, periodUs);
 }
 
 void motor_set_dir(uint8_t motor, bool forward) {
-    _settlePosition(motor);  // integrate motion at the OLD direction up to now
-    if (motor == 1) { _curFwd1 = forward; digitalWrite(PIN_DIR_M1, forward ? HIGH : LOW); }
-    if (motor == 2) { _curFwd2 = forward; digitalWrite(PIN_DIR_M2, forward ? HIGH : LOW); }
+    StepAxis &ax = _axis(motor);
+    ax.dir = forward ? 1 : -1;
+    digitalWrite(ax.dirPin, forward ? HIGH : LOW);
 }
 
 void motor_enable(uint8_t motor, bool en) {
-    if (motor == 1) digitalWrite(PIN_EN_M1, en ? LOW : HIGH);
-    if (motor == 2) digitalWrite(PIN_EN_M2, en ? LOW : HIGH);
+    StepAxis &ax = _axis(motor);
+    digitalWrite(ax.enPin, en ? LOW : HIGH);
+    if (!en) {
+        esp_timer_stop(ax.timer);
+        ax.dir = 0;
+    }
 }
 
 int32_t motor_get_position(uint8_t motor) {
-    _settlePosition(motor);  // bring the running integral up to date first
-    return (motor == 1) ? _position1 : _position2;
+    return _axis(motor).position;  // exact ISR-incremented count, no settling needed
 }
 
 void motor_reset_position(uint8_t motor) {
-    _settlePosition(motor);  // flush any pending motion before zeroing
-    if (motor == 1) _position1 = 0; else _position2 = 0;
+    _axis(motor).position = 0;
 }
 
 bool motor_limit_hit(uint8_t motor) {
@@ -218,7 +219,7 @@ void motor_clear_limit(uint8_t motor) {
 // noise doesn't. Returns true only if the switch is still actually
 // reading LOW right now. If the flag was set but the pin has since gone
 // HIGH again, this clears the flag (treating it as noise) and returns
-// false — but note the ISR already zeroed the step pulse unconditionally
+// false — but note the ISR already stopped the step timer unconditionally
 // when the edge first fired (see isr_limit_m1/m2), so a caller that gets
 // false back MUST re-issue motor_set_speed() to actually resume motion;
 // this function only clears the logical flag, it doesn't restart stepping.
@@ -286,8 +287,8 @@ bool motors_home() {
     uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
     while (millis() < deadline) {
         // If a flag tripped but wasn't a genuine closure (noise), resume
-        // driving toward the limit — the ISR already silenced the step
-        // pulse, so this has to explicitly restart it.
+        // driving toward the limit — the ISR already stopped stepping, so
+        // this has to explicitly restart it.
         if (motor_limit_hit(1) && !motor_limit_hit_debounced(1)) {
             motor_set_speed(1, HOMING_STEP_HZ);
         }

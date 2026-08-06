@@ -45,10 +45,7 @@ void DeveloperModeScreen::_draw(bool forceFull) {
     ui_display_draw_centered(line, 118, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "UAS reading: %lu mV", (unsigned long)uas_read_mv());
     ui_display_draw_centered(line, 138, COLOR_LUNAR_ROCK, 1);
-    // Position is a time-integrated estimate (LEDC generates steps in
-    // hardware — no per-step interrupt to count from) — accurate for
-    // bench/UI purposes as long as the hardware doesn't drop steps, but
-    // not an interrupt-verified count. See motors.h.
+    // Exact, interrupt-counted position — see motors.h.
     snprintf(line, sizeof(line), "Motors: %s  M1:%ld M2:%ld",
              motors_is_homed() ? "HOMED" : "NOT HOMED",
              (long)motor_get_position(1), (long)motor_get_position(2));
