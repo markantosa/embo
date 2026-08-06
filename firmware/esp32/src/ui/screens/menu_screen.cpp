@@ -17,14 +17,14 @@ void MenuScreen::_draw(bool forceFull) {
         tft.fillScreen(TFT_WHITE); // background colour 
         tft.setFont(&fonts::FreeSansBold12pt7b); // setting the font
         ui_display_draw_centered(_title, 24, TFT_BLACK, 1); // drawing 
-        tft.drawFastHLine(30, 62, tft.width() - 60, COLOR_LUNAR_ROCK); // line below title line 
+        tft.drawFastHLine(30, 62, tft.width() - 60, TFT_BLACK); // line below title line 
     }
 
     // Redraw just the item list — cheap enough to do every time something
     // changes, and avoids a full-screen flicker on every encoder detent.
     int16_t top  = 90;
     int16_t rowH = 40;
-    tft.fillRect(0, top, tft.width(), rowH * _count, TFT_BLACK);
+    tft.fillRect(0, top, tft.width(), rowH * _count, TFT_WHITE);
     tft.setFont(&fonts::FreeSans9pt7b);
     for (uint8_t i = 0; i < _count; i++) {
         bool sel = (i == _selected);
