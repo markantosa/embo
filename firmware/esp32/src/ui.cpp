@@ -17,6 +17,7 @@
 #include "ui/screens/verifying_screen.h"
 #include "ui/screens/error_screen.h"
 #include "ui/screens/bench_diagnostics_menu.h"
+#include "ui/screens/jog_motor_screen.h"
 #include "motors.h"
 #include "scheduler.h"
 #include "ui/boot_logo.h"
@@ -47,7 +48,7 @@
 //   End screen and Mixing/Warning screens can also reach Verifying (camera
 //   size check) via encoder long-press, same as before this redesign.
 
-static BuzzerDriver _buzzer(PIN_BUZ_PWM);
+static BuzzerDriver _buzzer(PIN_BUZ_PWM, 2);  // channel 2 — motors explicitly own 0 and 1, see motors.cpp
 
 // ── Screens with no constructor-time cross-references (all wired via
 // post-construction methods in ui_init(), so declaration order among these
@@ -64,6 +65,8 @@ static EndScreen             _endScreen;
 static PlaceholderScreen     _cameraMountScreen;
 static PlaceholderScreen     _cameraStubScreen;
 static PlaceholderScreen     _insertSyringeScreen;
+static JogMotorScreen        _jogMotor1Screen;
+static JogMotorScreen        _jogMotor2Screen;
 
 // ── Motion Menu — Settings > Motion. Defined before Settings Menu since
 // Settings' "Motion" item needs to reference it by address (same ordering
@@ -83,10 +86,14 @@ static void _motionHome(ScreenManager &mgr) {
     mgr.pop();
 }
 static void _motionBack(ScreenManager &mgr) { mgr.pop(); }
+static void _motionJog1(ScreenManager &mgr) { mgr.push(&_jogMotor1Screen); }
+static void _motionJog2(ScreenManager &mgr) { mgr.push(&_jogMotor2Screen); }
 
 static const MenuItem kMotionItems[] = {
-    { "Home Motors", _motionHome },
-    { "Back",        _motionBack },
+    { "Home Motors",  _motionHome },
+    { "Jog Motor 1",  _motionJog1 },
+    { "Jog Motor 2",  _motionJog2 },
+    { "Back",         _motionBack },
 };
 static MenuScreen _motionMenuScreen("Motion", kMotionItems,
                                      sizeof(kMotionItems) / sizeof(kMotionItems[0]));
@@ -212,6 +219,8 @@ void ui_init() {
     _cameraMountScreen.setConfirmTarget(&_cameraStubScreen, true);  // push — Back pops to Start Menu
     _cameraStubScreen.configure("Camera Feature", "Feature idea developing in progress", true);
 
+    _jogMotor1Screen.setMotor(1);
+    _jogMotor2Screen.setMotor(2);
     _developerModeScreen.wire(_uasDebugToggleScreen);
     _mixingMenuScreen.wire(_warningScreen, _verifyingScreen);
     _warningScreen.wire(_mixingRunningScreen);

@@ -8,6 +8,7 @@
 #include "calibration.h"
 #include "rpi_uart.h"
 #include "ui.h"
+#include "config.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <stdio.h>
@@ -21,7 +22,8 @@
 #define NUS_TX_UUID       "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"   // notify (ESP32→phone)
 #define NUS_RX_UUID       "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"   // write  (phone→ESP32)
 
-#define DEBUG_STEP_HZ     500   // step rate used for MOVE commands
+// MOVE's step rate is now MOTOR_JOG_HZ (config.h) — shared with the UI's
+// Settings > Motion > Jog screens, so both bench-move paths use one speed.
 
 static NimBLECharacteristic *_tx_char = nullptr;
 static bool _connected = false;
@@ -137,11 +139,11 @@ static void _handle_command(const char *cmd) {
         }
         bool fwd = (steps > 0);
         uint32_t abs_steps = (uint32_t)(steps < 0 ? -steps : steps);
-        uint32_t duration_ms = (abs_steps * 1000UL) / DEBUG_STEP_HZ;
+        uint32_t duration_ms = (abs_steps * 1000UL) / MOTOR_JOG_HZ;
         motor_set_dir(motor, fwd);
         motor_enable(motor, true);
         motor_clear_limit(motor);
-        motor_set_speed(motor, DEBUG_STEP_HZ);
+        motor_set_speed(motor, MOTOR_JOG_HZ);
         _move_motor  = motor;
         _move_end_ms = millis() + duration_ms;
         _move_active = true;
@@ -467,12 +469,21 @@ void ble_debug_update() {
 }
 
 void ble_log(const char *fmt, ...) {
-    if (!_connected || !_tx_char) return;
     char buf[128];
     va_list args;
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
+
+    // Always mirror to Serial, regardless of BLE connection state — most
+    // bench testing/debugging happens over USB serial, not BLE, and this
+    // was previously a complete no-op with nothing connected (see
+    // _connected check below), which silently swallowed every log call
+    // in the codebase (homing, scheduler, TMC init, everything) whenever
+    // nobody happened to have a BLE client open.
+    Serial.println(buf);
+
+    if (!_connected || !_tx_char) return;
     _tx_char->setValue((uint8_t *)buf, strlen(buf));
     _tx_char->notify();
 }

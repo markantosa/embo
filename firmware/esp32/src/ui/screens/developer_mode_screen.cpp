@@ -28,29 +28,31 @@ void DeveloperModeScreen::_draw(bool forceFull) {
 
     // Live telemetry — refreshed every call, not just on forceFull (this is
     // the whole point of the screen). Cheap enough: a handful of fillRect +
-    // text draws, same pattern as the spinner elsewhere.
-    tft.fillRect(0, 55, tft.width(), 155, TFT_BLACK);
+    // text draws, same pattern as the spinner elsewhere. Bounded to end
+    // before y=200 — the "UAS debug mode >" text below starts there, and
+    // this rect must never reach it or it gets erased every frame.
+    tft.fillRect(0, 55, tft.width(), 135, TFT_BLACK);
     char line[48];
     snprintf(line, sizeof(line), "Load cell 1: %.1f g", force_sensor_get_grams_1());
-    ui_display_draw_centered(line, 60, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 58, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "Load cell 2: %.1f g", force_sensor_get_grams_2());
-    ui_display_draw_centered(line, 85, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 78, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "Turbidity ALS: %u  (%s)",
              turbidity_get_als_clear(), turbidity_apds_ok() ? "ok" : "fault");
-    ui_display_draw_centered(line, 110, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 98, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "Turbidity IR: %lu  (%s)",
              (unsigned long)turbidity_get_ir_raw(), turbidity_max_ok() ? "ok" : "fault");
-    ui_display_draw_centered(line, 135, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 118, COLOR_LUNAR_ROCK, 1);
     snprintf(line, sizeof(line), "UAS reading: %lu mV", (unsigned long)uas_read_mv());
-    ui_display_draw_centered(line, 160, COLOR_LUNAR_ROCK, 1);
-    // "Position" here means homed status + completed stroke count, NOT an
-    // absolute step count — strokes are driven by time (STROKE_FORWARD_MS/
-    // STROKE_RETURN_MS in config.h), not step-counted, so there is no real
-    // absolute position anywhere in this firmware to report. This is the
-    // most honest thing available; see motors.h.
-    snprintf(line, sizeof(line), "Motors: %s, %lu strokes",
-             motors_is_homed() ? "HOMED" : "NOT HOMED", (unsigned long)motor_get_stroke_count());
-    ui_display_draw_centered(line, 185, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 138, COLOR_LUNAR_ROCK, 1);
+    // Position is a time-integrated estimate (LEDC generates steps in
+    // hardware — no per-step interrupt to count from) — accurate for
+    // bench/UI purposes as long as the hardware doesn't drop steps, but
+    // not an interrupt-verified count. See motors.h.
+    snprintf(line, sizeof(line), "Motors: %s  M1:%ld M2:%ld",
+             motors_is_homed() ? "HOMED" : "NOT HOMED",
+             (long)motor_get_position(1), (long)motor_get_position(2));
+    ui_display_draw_centered(line, 158, COLOR_LUNAR_ROCK, 1);
 }
 
 void DeveloperModeScreen::update(ScreenManager &mgr, bool forceFull) {

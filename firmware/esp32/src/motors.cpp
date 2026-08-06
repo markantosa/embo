@@ -17,6 +17,35 @@ static TMC2209Stepper _driver_m2(&_tmc_serial, 0.11f, TMC_ADDR_M2);
 static volatile bool _limit_m1_hit = false;
 static volatile bool _limit_m2_hit = false;
 
+// ── Position tracking (time-integrated estimate, not hardware step-counted) ──
+// LEDC generates the actual step pulses autonomously in hardware — there's
+// no per-step interrupt to count from, unlike a timer-ISR-driven step
+// generator would give you. Position here is estimated by integrating
+// elapsed time * commanded step rate every time speed or direction
+// changes, settled up to "now" on every read too. Accurate as long as the
+// LEDC hardware doesn't drop steps (it shouldn't, under normal operation)
+// — this is a real position for bench/UI purposes, just not an
+// interrupt-verified one.
+static int32_t  _position1 = 0, _position2 = 0;
+static uint32_t _posLastMs1 = 0, _posLastMs2 = 0;
+static uint32_t _curHz1 = 0, _curHz2 = 0;
+static bool     _curFwd1 = true, _curFwd2 = true;
+
+static void _settlePosition(uint8_t motor) {
+    int32_t  &pos    = (motor == 1) ? _position1  : _position2;
+    uint32_t &lastMs = (motor == 1) ? _posLastMs1 : _posLastMs2;
+    uint32_t  hz     = (motor == 1) ? _curHz1     : _curHz2;
+    bool      fwd    = (motor == 1) ? _curFwd1    : _curFwd2;
+
+    uint32_t now = millis();
+    if (hz > 0) {
+        uint32_t elapsedMs = now - lastMs;
+        int32_t steps = (int32_t)((uint64_t)elapsedMs * hz / 1000);
+        pos += fwd ? steps : -steps;
+    }
+    lastMs = now;
+}
+
 static bool     _homed        = false;
 static uint32_t _stroke_count = 0;
 
@@ -36,6 +65,26 @@ void IRAM_ATTR isr_limit_m2() {
 
 static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
     drv.begin();
+
+    // TOFF=0 explicitly disables the TMC2209's driver output stage — a
+    // hardware fact about this chip, not a library default to trust.
+    // Without this, STEP pulses can arrive with EN correctly asserted and
+    // the motor still never produces torque, depending on whatever TOFF
+    // happens to be at power-on reset. 4 matches the reference bring-up
+    // (testing/hal) for this same module.
+    drv.toff(4);
+
+    // PDN_UART is a multiplexed pin on this chip — without this, it can be
+    // misread as an external power-down signal instead of pure UART
+    // traffic. Matters more than usual here since both modules share one
+    // PDN_UART bus (multi-drop, see EMBO_PCB_Design_Brief_v3_4.txt §7.3).
+    drv.pdn_disable(true);
+
+    // Multi-drop UART bus timing — the TMC2209 datasheet specifically
+    // calls for SENDDELAY >= 2 "in a multiple node system... to ensure
+    // clean bus transitions," and that's exactly this board's topology
+    // (2 drivers, 1 shared PDN_UART bus). 4 matches the reference bring-up.
+    drv.senddelay(4);
 
     // SpreadCycle is required for StallGuard4. This module has no SPREAD pin —
     // must be set via UART at every boot. Read back to confirm before proceeding.
@@ -66,6 +115,13 @@ static void _tmc_init_driver(TMC2209Stepper &drv, uint8_t addr) {
     // Verify GCONF readback as a basic comms sanity check.
     uint32_t gconf = drv.GCONF();
     ble_log("TMC addr %u: GCONF=0x%08X", addr, gconf);
+
+    // TMCStepper's own dedicated UART link-check — 0 = good connection,
+    // non-zero = bad. More definitive than inferring from SpreadCycle
+    // readback alone, since a corrupted read could coincidentally still
+    // look like it "worked."
+    uint8_t conn = drv.test_connection();
+    ble_log("TMC addr %u: test_connection() = %u (%s)", addr, conn, conn == 0 ? "OK" : "BAD LINK");
 }
 
 void motors_init() {
@@ -82,10 +138,15 @@ void motors_init() {
     // STEP pins: LEDC at 1 Hz, 50% duty, timer resolution 10-bit.
     // Frequency is changed by motor_set_speed(); 1 Hz just initialises the pin.
     // Duty is fixed at half the timer period so the pulse is always a clean square wave.
-    // arduino-esp32 3.x LEDC API is pin-based (ledcAttach), not channel-based
-    // (ledcSetup/ledcAttachPin from the 2.x core, which no longer exist).
-    ledcAttach(PIN_STEP_M1, 1, 10);
-    ledcAttach(PIN_STEP_M2, 1, 10);
+    // Explicit channel assignment (ledcAttachChannel, not plain ledcAttach) —
+    // auto-allocated LEDC channels/timers have already caused a real,
+    // confirmed cross-talk problem between unrelated peripherals on this
+    // board (see buzzer_driver.cpp's history); pinning these to fixed
+    // channels (0, 1 — buzzer is channel 2, see ui.cpp) removes that
+    // ambiguity for the two pins the whole safety-relevant stroke timing
+    // depends on.
+    ledcAttachChannel(PIN_STEP_M1, 1, 10, 0);
+    ledcAttachChannel(PIN_STEP_M2, 1, 10, 1);
     ledcWrite(PIN_STEP_M1, 0);  // keep silent until explicitly started
     ledcWrite(PIN_STEP_M2, 0);
 
@@ -104,6 +165,9 @@ void motors_init() {
 }
 
 void motor_set_speed(uint8_t motor, uint32_t step_hz) {
+    _settlePosition(motor);  // integrate motion at the OLD speed up to now
+    if (motor == 1) _curHz1 = step_hz; else _curHz2 = step_hz;
+
     int pin = (motor == 1) ? PIN_STEP_M1 : PIN_STEP_M2;
 
     if (step_hz == 0) {
@@ -118,13 +182,24 @@ void motor_set_speed(uint8_t motor, uint32_t step_hz) {
 }
 
 void motor_set_dir(uint8_t motor, bool forward) {
-    if (motor == 1) digitalWrite(PIN_DIR_M1, forward ? HIGH : LOW);
-    if (motor == 2) digitalWrite(PIN_DIR_M2, forward ? HIGH : LOW);
+    _settlePosition(motor);  // integrate motion at the OLD direction up to now
+    if (motor == 1) { _curFwd1 = forward; digitalWrite(PIN_DIR_M1, forward ? HIGH : LOW); }
+    if (motor == 2) { _curFwd2 = forward; digitalWrite(PIN_DIR_M2, forward ? HIGH : LOW); }
 }
 
 void motor_enable(uint8_t motor, bool en) {
     if (motor == 1) digitalWrite(PIN_EN_M1, en ? LOW : HIGH);
     if (motor == 2) digitalWrite(PIN_EN_M2, en ? LOW : HIGH);
+}
+
+int32_t motor_get_position(uint8_t motor) {
+    _settlePosition(motor);  // bring the running integral up to date first
+    return (motor == 1) ? _position1 : _position2;
+}
+
+void motor_reset_position(uint8_t motor) {
+    _settlePosition(motor);  // flush any pending motion before zeroing
+    if (motor == 1) _position1 = 0; else _position2 = 0;
 }
 
 bool motor_limit_hit(uint8_t motor) {
@@ -134,6 +209,27 @@ bool motor_limit_hit(uint8_t motor) {
 void motor_clear_limit(uint8_t motor) {
     if (motor == 1) _limit_m1_hit = false;
     if (motor == 2) _limit_m2_hit = false;
+}
+
+// A tripped limit flag might be electrical noise from the stepper's own
+// step pulses inducing a spurious edge on the limit line — this can
+// happen almost immediately after the motor starts moving, well before
+// it's anywhere near the physical switch. A genuine closure stays LOW;
+// noise doesn't. Returns true only if the switch is still actually
+// reading LOW right now. If the flag was set but the pin has since gone
+// HIGH again, this clears the flag (treating it as noise) and returns
+// false — but note the ISR already zeroed the step pulse unconditionally
+// when the edge first fired (see isr_limit_m1/m2), so a caller that gets
+// false back MUST re-issue motor_set_speed() to actually resume motion;
+// this function only clears the logical flag, it doesn't restart stepping.
+bool motor_limit_hit_debounced(uint8_t motor) {
+    if (!motor_limit_hit(motor)) return false;
+    uint8_t pin = (motor == 1) ? PIN_LIMIT_M1 : PIN_LIMIT_M2;
+    if (digitalRead(pin) == HIGH) {
+        motor_clear_limit(motor);
+        return false;  // was noise, not a genuine closure
+    }
+    return true;
 }
 
 uint16_t motor_sg_result(uint8_t motor) {
@@ -174,6 +270,8 @@ bool motors_home() {
     // and the loud log line below.
     ble_log("Homing: SKIPPED — BENCH_NO_HOMING build, motors/limit switches not required");
     ble_log("Homing: *** THIS IS A BENCH-ONLY BUILD — DO NOT USE WITH REAL HARDWARE ***");
+    motor_reset_position(1);
+    motor_reset_position(2);
     _homed = true;
     _stroke_count = 0;
     return true;
@@ -187,19 +285,13 @@ bool motors_home() {
 
     uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
     while (millis() < deadline) {
-        // A tripped flag might be electrical noise from the stepper's own
-        // step pulses inducing a spurious edge on the limit line — this
-        // can happen almost immediately after the motor starts moving,
-        // well before it's anywhere near the physical switch. A genuine
-        // closure stays LOW; noise doesn't. If it didn't hold, clear it
-        // and resume driving toward the limit instead of accepting a
-        // false stop.
-        if (_limit_m1_hit && digitalRead(PIN_LIMIT_M1) == HIGH) {
-            motor_clear_limit(1);
-            motor_set_speed(1, HOMING_STEP_HZ);  // ISR zeroed this — re-enable
+        // If a flag tripped but wasn't a genuine closure (noise), resume
+        // driving toward the limit — the ISR already silenced the step
+        // pulse, so this has to explicitly restart it.
+        if (motor_limit_hit(1) && !motor_limit_hit_debounced(1)) {
+            motor_set_speed(1, HOMING_STEP_HZ);
         }
-        if (_limit_m2_hit && digitalRead(PIN_LIMIT_M2) == HIGH) {
-            motor_clear_limit(2);
+        if (motor_limit_hit(2) && !motor_limit_hit_debounced(2)) {
             motor_set_speed(2, HOMING_STEP_HZ);
         }
 
@@ -225,6 +317,8 @@ bool motors_home() {
     _backoff_single(1);
     _backoff_single(2);
 
+    motor_reset_position(1);
+    motor_reset_position(2);
     _homed = true;
     _stroke_count = 0;
     ble_log("Homing: complete");

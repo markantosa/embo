@@ -5,15 +5,12 @@ BuzzerDriver::BuzzerDriver(uint8_t pin, uint8_t pwmChannel)
 
 void BuzzerDriver::begin() {
     // Modern arduino-esp32 core (3.x / IDF5) API.
-    // If you're on core 2.x, swap for:
-    //   ledcSetup(_pwmChannel, 2000, PWM_RESOLUTION_BITS);
-    //   ledcAttachPin(_pin, _pwmChannel);
-    ledcAttach(_pin, 2000, PWM_RESOLUTION_BITS);
+    ledcAttachChannel(_pin, 2000, PWM_RESOLUTION_BITS, _pwmChannel);
     ledcWrite(_pin, 0);
 }
 
 void BuzzerDriver::tone(uint32_t frequencyHz, uint32_t durationMs) {
-    ledcAttach(_pin, frequencyHz, PWM_RESOLUTION_BITS);
+    ledcAttachChannel(_pin, frequencyHz, PWM_RESOLUTION_BITS, _pwmChannel);
     ledcWrite(_pin, PWM_DUTY_50PCT);
     _playing = true;
     _startMs = millis();
@@ -32,7 +29,6 @@ void BuzzerDriver::update() {
     if (_playing && _durationMs > 0 && (millis() - _startMs >= _durationMs)) {
         stop();
     }
-    stop();
 }
 
 bool BuzzerDriver::isPlaying() const {
