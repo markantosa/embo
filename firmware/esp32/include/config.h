@@ -171,7 +171,7 @@
 // opposed to calibration.h's sensor/model constants (how strokes map to
 // particle size) — kept separate on purpose.
 #define STROKE_RUN_HZ        4000   // step rate during a stroke
-#define MOTOR_JOG_HZ         500    // step rate for manual jog moves — BLE MOVE and Settings > Motion > Jog
+#define MOTOR_JOG_HZ         2000    // step rate for manual jog moves — BLE MOVE and Settings > Motion > Jog
 #define STROKE_FORWARD_MS    400    // forward phase duration
 #define STROKE_RETURN_MS     400    // return phase duration
 
