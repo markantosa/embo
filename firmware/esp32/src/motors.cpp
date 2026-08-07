@@ -181,7 +181,12 @@ void motors_init() {
     _tmc_init_driver(_driver_m1, TMC_ADDR_M1);
     _tmc_init_driver(_driver_m2, TMC_ADDR_M2);
 
-    // Fixed firmware config, not runtime-settable — see config.h.
+    // Applied from boot, before any homing — position at startup is
+    // unknown/arbitrary (not yet zeroed against a real reference), but the
+    // configured range is what should be in effect by default regardless.
+    // motors_home() itself temporarily disables these during the actual
+    // homing approach (position isn't meaningful yet at that point either)
+    // and restores them once homing establishes a known zero — see there.
     motor_set_soft_limits(1, MOTOR1_SOFT_LIMIT_MIN, MOTOR1_SOFT_LIMIT_MAX);
     motor_set_soft_limits(2, MOTOR2_SOFT_LIMIT_MIN, MOTOR2_SOFT_LIMIT_MAX);
 }
@@ -308,6 +313,16 @@ bool motors_home() {
     ble_log("Homing: starting");
     _homed = false;
 
+    // Position is unknown/arbitrary before a home reference exists, so a
+    // configured soft-limit range (which is relative to a homed zero
+    // point) can't be trusted to actually include the real limit switch —
+    // disable soft limits for the duration of the approach itself.
+    // Restored below once homing actually establishes position 0, on
+    // every exit path (success or failure), so this never leaves limits
+    // silently disabled if homing doesn't complete.
+    motor_set_soft_limits(1, INT32_MIN, INT32_MAX);
+    motor_set_soft_limits(2, INT32_MIN, INT32_MAX);
+
     // Drive both motors toward their limit switches simultaneously.
     _home_single(1);
     _home_single(2);
@@ -339,6 +354,12 @@ bool motors_home() {
 
     if (!m1_ok || !m2_ok) {
         ble_log("Homing: FAILED (M1=%d M2=%d) — check limit switches", m1_ok, m2_ok);
+        // Restore configured limits even on failure — position is still
+        // not meaningful (never got zeroed), but there's no reason to
+        // leave the board with soft limits silently disabled indefinitely
+        // just because this attempt didn't complete.
+        motor_set_soft_limits(1, MOTOR1_SOFT_LIMIT_MIN, MOTOR1_SOFT_LIMIT_MAX);
+        motor_set_soft_limits(2, MOTOR2_SOFT_LIMIT_MIN, MOTOR2_SOFT_LIMIT_MAX);
         return false;
     }
 
@@ -348,6 +369,10 @@ bool motors_home() {
 
     motor_reset_position(1);
     motor_reset_position(2);
+    // Position is now a known, trustworthy zero — safe to re-enable the
+    // real configured limits.
+    motor_set_soft_limits(1, MOTOR1_SOFT_LIMIT_MIN, MOTOR1_SOFT_LIMIT_MAX);
+    motor_set_soft_limits(2, MOTOR2_SOFT_LIMIT_MIN, MOTOR2_SOFT_LIMIT_MAX);
     _homed = true;
     _stroke_count = 0;
     ble_log("Homing: complete");
