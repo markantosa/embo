@@ -269,11 +269,10 @@
 <div class="section-title">Load Cell Push Test</div>
 <div class="card" style="max-width:480px">
   <div class="unit">
-    "Start" automatically drives the selected motor toward its configured
-    soft limit (config.h) while recording — stops itself the instant the
-    limit is reached. Or use the Motor 1/2 jog buttons above with "Start
-    Recording" below for manual control instead — either records the same
-    way.
+    Logs Force Channel 1 and Channel 2 together (plus position/StallGuard)
+    while running — use the Motor 1/2 jog buttons above, or the on-device
+    Test Both Motors feature, to actually move anything; this card is
+    logging only.
   </div>
   <div class="reading">
     <span class="label">Recorded points</span>
@@ -281,27 +280,90 @@
   </div>
 
   <div class="motor-controls">
-    <label class="label" style="width:5em">Motor</label>
-    <select id="pushMotorSelect" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
-      <option value="0">Motor 1</option>
-      <option value="1">Motor 2</option>
-    </select>
-  </div>
-  <div class="slider-row">
-    <span class="label">Speed</span>
-    <input type="range" min="0" max="100" value="40" id="pushSpeedSlider">
-    <span class="pct" id="pushSpeedPct">40%</span>
-  </div>
-  <div class="motor-controls">
-    <button class="home-btn" id="pushStartBtn" style="margin-top:8px">Start — push to limit</button>
-  </div>
-
-  <div class="motor-controls" style="margin-top:14px">
-    <button class="home-btn" id="pushRecordBtn" style="margin-top:0">Start Recording</button>
+    <button class="home-btn" id="pushRecordBtn" style="margin-top:0">Start Logging</button>
   </div>
   <div class="motor-controls">
     <button class="connect" id="downloadPushBtn" style="background:var(--muted); flex:1" disabled>Download Push Test CSV (0)</button>
     <button class="connect" id="clearPushBtn" style="background:var(--danger); flex:1">Clear</button>
+  </div>
+</div>
+
+<div class="section-title">Flash-Buffered Load Cell Log</div>
+<div class="card" style="max-width:480px">
+  <div class="unit">
+    More reliable than live streaming — samples are written to flash on
+    the board itself while capturing, so a BLE hiccup during capture can't
+    lose data. Start, do your test, Stop, then Dump to retrieve the
+    complete file. Each chunk is numbered; a dropped chunk is reported
+    instead of silently producing a corrupt file.
+  </div>
+  <div class="reading">
+    <span class="label">Status</span>
+    <span class="value" id="flashLogStatus">idle</span>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="flashLogStartBtn" style="flex:1">Start Capture</button>
+    <button class="home-btn" id="flashLogStopBtn" style="flex:1">Stop Capture</button>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="flashLogDumpBtn" style="flex:1">Dump &amp; Download</button>
+    <button class="connect" id="flashLogClearBtn" style="background:var(--danger); flex:1">Clear</button>
+  </div>
+  <div class="reading">
+    <span class="label">Dump progress</span>
+    <span class="value" id="flashLogProgress">--</span>
+  </div>
+</div>
+
+<div class="card" style="max-width:480px">
+  <div class="unit">
+    1. Remove all weight, click "Capture Tare" for each channel.<br>
+    2. Place a known weight, enter its mass in grams, click "Capture Loaded".<br>
+    3. This only computes a number — copy the resulting #define line into
+    <code>calibration.h</code> yourself and reflash; nothing here changes
+    firmware.
+  </div>
+
+  <div class="unit" style="margin-top:14px; font-weight:600">Channel 1</div>
+  <div class="reading">
+    <span class="label">Live raw</span>
+    <span class="value" id="calibLive1">--</span>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibTare1Btn" style="flex:1">Capture Tare</button>
+    <span class="value" id="calibTare1Value" style="flex:1; text-align:center">tare: --</span>
+  </div>
+  <div class="slider-row">
+    <span class="label" style="width:8em">Known weight (g)</span>
+    <input type="number" id="calibWeight1" placeholder="e.g. 100" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibLoaded1Btn" style="flex:1">Capture Loaded</button>
+  </div>
+  <div class="reading">
+    <span class="label">Result</span>
+    <span class="value" id="calibResult1">--</span>
+  </div>
+
+  <div class="unit" style="margin-top:18px; font-weight:600">Channel 2</div>
+  <div class="reading">
+    <span class="label">Live raw</span>
+    <span class="value" id="calibLive2">--</span>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibTare2Btn" style="flex:1">Capture Tare</button>
+    <span class="value" id="calibTare2Value" style="flex:1; text-align:center">tare: --</span>
+  </div>
+  <div class="slider-row">
+    <span class="label" style="width:8em">Known weight (g)</span>
+    <input type="number" id="calibWeight2" placeholder="e.g. 100" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibLoaded2Btn" style="flex:1">Capture Loaded</button>
+  </div>
+  <div class="reading">
+    <span class="label">Result</span>
+    <span class="value" id="calibResult2">--</span>
   </div>
 </div>
 
@@ -328,9 +390,11 @@ const TELEMETRY_UUID   = '8f6a2002-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 const MOTOR_CMD_UUID   = '8f6a2003-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 const HOME_CMD_UUID    = '8f6a2004-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 const LOG_UUID         = '8f6a2005-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const LOG_CTRL_UUID    = '8f6a2008-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const LOG_DATA_UUID    = '8f6a2009-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 const FREQ_CMD_UUID    = '8f6a2006-3b1a-4e3d-9f2e-6a2c6c9a9a10';
 
-let device, motorCmdChar, homeCmdChar, freqCmdChar;
+let device, motorCmdChar, homeCmdChar, freqCmdChar, logCtrlChar;
 let connected = false;
 let latestUasVolts = null; // updated by onTelemetry, read by the sweep loop
 
@@ -388,10 +452,6 @@ const downloadPushBtn = document.getElementById('downloadPushBtn');
 const clearPushBtn = document.getElementById('clearPushBtn');
 const pushRecordBtn = document.getElementById('pushRecordBtn');
 const pushCountValue = document.getElementById('pushCountValue');
-const pushMotorSelect = document.getElementById('pushMotorSelect');
-const pushSpeedSlider = document.getElementById('pushSpeedSlider');
-const pushSpeedPct = document.getElementById('pushSpeedPct');
-const pushStartBtn = document.getElementById('pushStartBtn');
 let pushRows = [];
 let pushTestRunning = false;
 let pushSessionStartMs = 0;
@@ -417,10 +477,10 @@ pushRecordBtn.addEventListener('click', () => {
   pushTestRunning = !pushTestRunning;
   if (pushTestRunning) {
     pushSessionStartMs = Date.now();
-    pushRecordBtn.textContent = 'Stop Recording';
+    pushRecordBtn.textContent = 'Stop Logging';
     pushRecordBtn.classList.add('homing');  // reuse the existing "active" amber styling
   } else {
-    pushRecordBtn.textContent = 'Start Recording';
+    pushRecordBtn.textContent = 'Start Logging';
     pushRecordBtn.classList.remove('homing');
   }
 });
@@ -433,51 +493,47 @@ downloadPushBtn.addEventListener('click', () => {
 
 clearPushBtn.addEventListener('click', () => resetPushData());
 
-pushSpeedSlider.addEventListener('input', () => { pushSpeedPct.textContent = pushSpeedSlider.value + '%'; });
+// ---- Load Cell Calibration — purely a client-side calculator using the
+// raw counts already in telemetry. Computes HX711_SCALE_COUNTS_PER_GRAM_x
+// for you to paste into calibration.h; never writes anything to the
+// firmware itself, same "config in firmware, not the UI" approach used
+// for the soft motion limits. ----
+let lastForce1 = 0, lastForce2 = 0;
+let calibTare1 = null, calibTare2 = null;
 
-// ---- Automated push-to-limit — dir=-1 ("down"), same convention as the
-// existing "◀" jog buttons on the Motor 1/2 cards. Re-sends the jog
-// command every 150ms while active, same reasoning as the manual
-// press-and-hold jog: the firmware auto-stops a motor if no MOTOR_CMD
-// arrives within 300ms, so a single command wouldn't keep it moving.
-// Stops (and stops recording) on: clicking Start again, or onTelemetry()
-// seeing the soft-limit bit for this motor go active. ----
-let pushAutoRunning = false;
-let pushAutoMotorId = null;
-let pushAutoInterval = null;
+function wireCalibChannel(ch, tareBtnId, tareValueId, weightId, loadedBtnId, resultId, lastForceGetter) {
+  const tareBtn = document.getElementById(tareBtnId);
+  const tareValueEl = document.getElementById(tareValueId);
+  const weightInput = document.getElementById(weightId);
+  const loadedBtn = document.getElementById(loadedBtnId);
+  const resultEl = document.getElementById(resultId);
+  let tare = null;
 
-function stopAutoPush(reason) {
-  if (!pushAutoRunning) return;
-  pushAutoRunning = false;
-  if (pushAutoInterval) { clearInterval(pushAutoInterval); pushAutoInterval = null; }
-  if (connected && pushAutoMotorId !== null) sendMotorCmd(pushAutoMotorId, 0, 0);
-  pushTestRunning = false;
-  pushStartBtn.textContent = 'Start — push to limit';
-  pushStartBtn.classList.remove('homing');
-  pushRecordBtn.textContent = 'Start Recording';
-  pushRecordBtn.classList.remove('homing');
-  if (reason) appendLog(reason);
+  tareBtn.addEventListener('click', () => {
+    tare = lastForceGetter();
+    tareValueEl.textContent = `tare: ${tare}`;
+    resultEl.textContent = '--';
+  });
+
+  loadedBtn.addEventListener('click', () => {
+    if (tare === null) {
+      appendLog(`WARN: capture tare for channel ${ch} first`);
+      return;
+    }
+    const weight = parseFloat(weightInput.value);
+    if (!weight || weight <= 0) {
+      appendLog(`WARN: enter a valid known weight (g) for channel ${ch} first`);
+      return;
+    }
+    const loaded = lastForceGetter();
+    const scale = (loaded - tare) / weight;
+    resultEl.textContent = `#define HX711_SCALE_COUNTS_PER_GRAM_${ch}    ${scale.toFixed(3)}f  (tare=${tare} loaded=${loaded} weight=${weight}g)`;
+    appendLog(`-- calibration ch${ch}: scale=${scale.toFixed(3)} (tare=${tare} loaded=${loaded} weight=${weight}g) --`);
+  });
 }
 
-pushStartBtn.addEventListener('click', () => {
-  if (pushAutoRunning) {
-    stopAutoPush('-- push test stopped manually --');
-    return;
-  }
-  if (!connected) return;
-  pushAutoMotorId = parseInt(pushMotorSelect.value, 10);
-  const speed = parseInt(pushSpeedSlider.value, 10);
-  pushAutoRunning = true;
-  pushTestRunning = true;
-  pushSessionStartMs = Date.now();
-  pushStartBtn.textContent = 'Stop';
-  pushStartBtn.classList.add('homing');
-  pushRecordBtn.textContent = 'Stop Recording';
-  pushRecordBtn.classList.add('homing');
-  sendMotorCmd(pushAutoMotorId, -1, speed);
-  pushAutoInterval = setInterval(() => sendMotorCmd(pushAutoMotorId, -1, parseInt(pushSpeedSlider.value, 10)), 150);
-  appendLog(`-- push test started: motor ${pushAutoMotorId + 1} --`);
-});
+wireCalibChannel(1, 'calibTare1Btn', 'calibTare1Value', 'calibWeight1', 'calibLoaded1Btn', 'calibResult1', () => lastForce1);
+wireCalibChannel(2, 'calibTare2Btn', 'calibTare2Value', 'calibWeight2', 'calibLoaded2Btn', 'calibResult2', () => lastForce2);
 
 resetBtn.addEventListener('click', () => {
   rawRows = [];
@@ -588,10 +644,15 @@ async function connect() {
     motorCmdChar = await service.getCharacteristic(MOTOR_CMD_UUID);
     homeCmdChar = await service.getCharacteristic(HOME_CMD_UUID);
     freqCmdChar = await service.getCharacteristic(FREQ_CMD_UUID);
+    logCtrlChar = await service.getCharacteristic(LOG_CTRL_UUID);
+    const logDataChar = await service.getCharacteristic(LOG_DATA_UUID);
     const logCharacteristic = await service.getCharacteristic(LOG_UUID);
 
     await telemetryChar.startNotifications();
     telemetryChar.addEventListener('characteristicvaluechanged', onTelemetry);
+
+    await logDataChar.startNotifications();
+    logDataChar.addEventListener('characteristicvaluechanged', onLogDataChunk);
 
     await logCharacteristic.startNotifications();
     logCharacteristic.addEventListener('characteristicvaluechanged', onLogLine);
@@ -671,6 +732,11 @@ function onTelemetry(event) {
   document.getElementById('force2Value').textContent = force2;
   sparks.force2.push(force2);
 
+  lastForce1 = force1;
+  lastForce2 = force2;
+  document.getElementById('calibLive1').textContent = force1;
+  document.getElementById('calibLive2').textContent = force2;
+
   document.getElementById('alsValue').textContent = als;
   sparks.als.push(als);
   document.getElementById('irValue').textContent = ir;
@@ -689,11 +755,6 @@ function onTelemetry(event) {
   const softLimit2Active = !!(limitFlags & 0x08);
   setBadge(document.getElementById('softLimit1Badge'), softLimit1Active ? 'active' : 'idle');
   setBadge(document.getElementById('softLimit2Badge'), softLimit2Active ? 'active' : 'idle');
-
-  if (pushAutoRunning) {
-    const hitLimit = (pushAutoMotorId === 0 && softLimit1Active) || (pushAutoMotorId === 1 && softLimit2Active);
-    if (hitLimit) stopAutoPush(`-- push test reached soft limit on motor ${pushAutoMotorId + 1} --`);
-  }
 
   const motorCardsForLimits = document.querySelectorAll('.card[data-motor]');
   motorCardsForLimits[0].classList.toggle('limit-active', limit1Active);
@@ -769,6 +830,87 @@ async function setFrequency(hz) {
   const buf = new ArrayBuffer(4);
   new DataView(buf).setFloat32(0, hz, true);
   await freqCmdChar.writeValueWithResponse(buf);
+}
+
+// ---- Flash-Buffered Load Cell Log — start/stop a capture that's written
+// to flash on the board itself, then dump it back over BLE in numbered
+// chunks. A dropped chunk is detected and reported rather than silently
+// producing a corrupt file, which is the whole point vs. the plain live
+// stream this is meant to replace. ----
+const flashLogStatus = document.getElementById('flashLogStatus');
+const flashLogProgress = document.getElementById('flashLogProgress');
+let dumpChunks = null;       // Array, indexed by seq, filled in as chunks arrive
+let dumpTotalChunks = 0;
+let dumpReceivedCount = 0;
+
+async function sendLogCtrl(cmd) {
+  if (!logCtrlChar) return;
+  const buf = new Uint8Array([cmd]);
+  await logCtrlChar.writeValueWithResponse(buf);
+}
+
+document.getElementById('flashLogStartBtn').addEventListener('click', () => {
+  sendLogCtrl(1);
+  flashLogStatus.textContent = 'capturing';
+});
+document.getElementById('flashLogStopBtn').addEventListener('click', () => {
+  sendLogCtrl(0);
+  flashLogStatus.textContent = 'stopped';
+});
+document.getElementById('flashLogClearBtn').addEventListener('click', () => {
+  sendLogCtrl(2);
+  flashLogStatus.textContent = 'cleared';
+  flashLogProgress.textContent = '--';
+});
+document.getElementById('flashLogDumpBtn').addEventListener('click', () => {
+  dumpChunks = null;
+  dumpTotalChunks = 0;
+  dumpReceivedCount = 0;
+  flashLogProgress.textContent = 'requesting...';
+  sendLogCtrl(3);
+});
+
+function onLogDataChunk(event) {
+  const dv = event.target.value;
+  const seq = dv.getUint16(0, true);
+  const total = dv.getUint16(2, true);
+  const len = dv.getUint16(4, true);
+  const payload = new Uint8Array(dv.buffer, dv.byteOffset + 6, len);
+
+  if (dumpChunks === null || dumpTotalChunks !== total) {
+    dumpChunks = new Array(total).fill(null);
+    dumpTotalChunks = total;
+    dumpReceivedCount = 0;
+  }
+  if (dumpChunks[seq] === null) dumpReceivedCount++;
+  dumpChunks[seq] = payload;
+  flashLogProgress.textContent = `${dumpReceivedCount}/${dumpTotalChunks} chunks`;
+
+  if (dumpReceivedCount === dumpTotalChunks) {
+    const missing = [];
+    for (let i = 0; i < dumpTotalChunks; i++) {
+      if (dumpChunks[i] === null) missing.push(i);
+    }
+    if (missing.length > 0) {
+      flashLogProgress.textContent = `INCOMPLETE — missing chunk(s): ${missing.join(', ')}`;
+      appendLog(`-- log dump incomplete: missing chunks ${missing.join(', ')} — try Dump again --`);
+      return;
+    }
+    const totalLen = dumpChunks.reduce((sum, c) => sum + c.length, 0);
+    const combined = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const c of dumpChunks) { combined.set(c, offset); offset += c.length; }
+    const text = new TextDecoder().decode(combined);
+    const blob = new Blob([text], { type: 'text/csv' });
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = URL.createObjectURL(blob);
+    a.download = `flash_loadcell_log_${stamp}.csv`;
+    a.click();
+    flashLogProgress.textContent = `complete — ${dumpTotalChunks} chunks, ${totalLen} bytes`;
+    appendLog(`-- log dump complete: ${totalLen} bytes downloaded --`);
+    dumpChunks = null;
+  }
 }
 
 // ---- Automated sweep: step through [start, end] by `step` (all entered in

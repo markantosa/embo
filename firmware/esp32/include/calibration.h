@@ -33,10 +33,14 @@
 #define HX711_TARE_2                    0
 
 // Scale: raw counts per gram, i.e. grams = (raw - tare) / scale.
-// PLACEHOLDER (1.0 = no conversion) — measure against a known reference
-// load at the load cell's real mounting point before trusting this.
-#define HX711_SCALE_COUNTS_PER_GRAM_1    1.0f
-#define HX711_SCALE_COUNTS_PER_GRAM_2    1.0f
+// Measured 2-point calibration (0g and 285.2g reference weight):
+//   Ch1: raw=38000 @ 0g, raw=-77500 @ 285.2g -> (-77500-38000)/285.2 = -404.979
+//   Ch2: raw=-129500 @ 0g, raw=-244000 @ 285.2g -> (-244000-(-129500))/285.2 = -401.473
+// Negative is correct, not a sign error — these channels' raw count
+// decreases as weight increases (wiring/polarity), and the formula above
+// handles a negative scale correctly either way.
+#define HX711_SCALE_COUNTS_PER_GRAM_1    -404.979f
+#define HX711_SCALE_COUNTS_PER_GRAM_2    -401.473f
 
 // Automatic e-stop trigger, independent of the mixing schedule. Set with
 // headroom above the peak force observed across several NORMAL mixing

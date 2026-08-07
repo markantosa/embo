@@ -469,10 +469,20 @@ void ble_debug_update() {
 }
 
 void ble_log(const char *fmt, ...) {
-    char buf[128];
+    char buf[160];  // was 128 — a few of the longer stroke-test messages plus
+                     // the new timestamp prefix were getting close to that limit
+    // Timestamp prefix — millis() since boot is the only time reference
+    // this board has (no RTC hardware), but it's genuinely useful for
+    // seeing elapsed time between log lines during a test. Reserve the
+    // first chunk of buf for it, then format the caller's message right
+    // after.
+    int prefixLen = snprintf(buf, sizeof(buf), "[%lu] ", (unsigned long)millis());
+    if (prefixLen < 0) prefixLen = 0;
+    if ((size_t)prefixLen > sizeof(buf)) prefixLen = sizeof(buf);
+
     va_list args;
     va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
+    vsnprintf(buf + prefixLen, sizeof(buf) - prefixLen, fmt, args);
     va_end(args);
 
     // Always mirror to Serial, regardless of BLE connection state — most

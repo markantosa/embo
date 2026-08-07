@@ -6,6 +6,7 @@
 #include "force_sensor.h"
 #include "ble_debug.h"
 #include "config.h"
+#include "data_logger.h"
 #include <NimBLEDevice.h>
 #include <Arduino.h>
 #include <string.h>
@@ -16,12 +17,30 @@
 #define BIN_HOME_CMD_UUID  "8f6a2004-3b1a-4e3d-9f2e-6a2c6c9a9a10"
 #define BIN_LOG_UUID       "8f6a2005-3b1a-4e3d-9f2e-6a2c6c9a9a10"
 #define BIN_FREQ_CMD_UUID  "8f6a2006-3b1a-4e3d-9f2e-6a2c6c9a9a10"
+#define BIN_LOG_CTRL_UUID  "8f6a2008-3b1a-4e3d-9f2e-6a2c6c9a9a10"
+#define BIN_LOG_DATA_UUID  "8f6a2009-3b1a-4e3d-9f2e-6a2c6c9a9a10"
 
 #define TELEMETRY_INTERVAL_MS 40  // matches the dashboard's own comment ("telemetry updates every ~40ms")
 
 static NimBLECharacteristic *_telemetryChar = nullptr;
 static NimBLECharacteristic *_logChar       = nullptr;
+static NimBLECharacteristic *_logDataChar   = nullptr;
 static uint32_t _lastTelemetryMs = 0;
+
+// Chunked file dump state — serviced from ble_binary_telemetry_update(),
+// one chunk every DUMP_CHUNK_INTERVAL_MS, not blasted out all at once.
+// 100-byte payload chosen conservatively to stay well within commonly
+// negotiated BLE MTUs (NimBLE-Arduino typically negotiates up into the
+// 180+ range, but this doesn't rely on that). Each chunk is prefixed with
+// seq/total/len so the dashboard can detect a dropped chunk instead of
+// silently reassembling a corrupt file — the whole point of this feature
+// is to be MORE trustworthy than the live stream it's replacing.
+#define LOG_CHUNK_PAYLOAD 100
+#define DUMP_CHUNK_INTERVAL_MS 20
+static bool     _dumpInProgress = false;
+static uint16_t _dumpSeq = 0;
+static uint16_t _dumpTotalChunks = 0;
+static uint32_t _lastDumpChunkMs = 0;
 
 // Exact byte layout the dashboard's onTelemetry() expects — little-endian,
 // packed, 41 bytes. Do not reorder/resize fields without updating the JS
@@ -118,6 +137,49 @@ class FreqCmdCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+static void _startDump() {
+    if (_dumpInProgress) {
+        _sendLogLine("LOG_CTRL: dump already in progress");
+        return;
+    }
+    if (data_logger_is_running()) {
+        _sendLogLine("LOG_CTRL: stop the capture before dumping it");
+        return;
+    }
+    if (!data_logger_open_for_read()) {
+        _sendLogLine("LOG_CTRL: no data to dump (start a capture first)");
+        return;
+    }
+    size_t total = data_logger_file_size();
+    _dumpTotalChunks = (uint16_t)((total + LOG_CHUNK_PAYLOAD - 1) / LOG_CHUNK_PAYLOAD);
+    _dumpSeq = 0;
+    _dumpInProgress = true;
+    _lastDumpChunkMs = 0;  // send the first chunk on the very next update()
+    char msg[48];
+    snprintf(msg, sizeof(msg), "LOG_CTRL: dump starting (%u bytes, %u chunks)",
+             (unsigned)total, _dumpTotalChunks);
+    _sendLogLine(msg);
+}
+
+// LOG_CTRL payload: single byte. 0=stop capture, 1=start capture,
+// 2=clear stored data, 3=dump stored data over LOG_DATA_UUID in chunks.
+// Deliberately NOT gated on scheduler_is_running() — logging load cell
+// data is passive (doesn't move anything), unlike MOTOR_CMD/HOME_CMD/
+// FREQ_CMD, so there's no safety reason to refuse it during a run.
+class LogCtrlCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        if (v.size() != 1) return;
+        switch ((uint8_t)v[0]) {
+            case 0: data_logger_stop(); break;
+            case 1: data_logger_start(); break;
+            case 2: data_logger_clear(); break;
+            case 3: _startDump(); break;
+            default: break;
+        }
+    }
+};
+
 void ble_binary_telemetry_init(NimBLEServer *server) {
     NimBLEService *svc = server->createService(BIN_SERVICE_UUID);
 
@@ -136,6 +198,11 @@ void ble_binary_telemetry_init(NimBLEServer *server) {
         BIN_FREQ_CMD_UUID, NIMBLE_PROPERTY::WRITE);
     freqCmdChar->setCallbacks(new FreqCmdCB());
 
+    NimBLECharacteristic *logCtrlChar = svc->createCharacteristic(
+        BIN_LOG_CTRL_UUID, NIMBLE_PROPERTY::WRITE);
+    logCtrlChar->setCallbacks(new LogCtrlCB());
+    _logDataChar = svc->createCharacteristic(BIN_LOG_DATA_UUID, NIMBLE_PROPERTY::NOTIFY);
+
     svc->start();
 
     // Also advertise this service's UUID so the dashboard's
@@ -144,8 +211,49 @@ void ble_binary_telemetry_init(NimBLEServer *server) {
     NimBLEDevice::getAdvertising()->addServiceUUID(BIN_SERVICE_UUID);
 }
 
+// Sends one LOG_DATA chunk per call at most, throttled to
+// DUMP_CHUNK_INTERVAL_MS — called every ble_binary_telemetry_update(), a
+// no-op unless a dump is actually in progress. Chunk layout: seq(u16 LE) +
+// totalChunks(u16 LE) + payloadLen(u16 LE) + payload bytes.
+static void _serviceDump() {
+    if (!_dumpInProgress) return;
+    uint32_t now = millis();
+    if (now - _lastDumpChunkMs < DUMP_CHUNK_INTERVAL_MS) return;
+    _lastDumpChunkMs = now;
+
+    uint8_t payload[LOG_CHUNK_PAYLOAD];
+    size_t n = data_logger_read_chunk(payload, LOG_CHUNK_PAYLOAD);
+    if (n == 0) {
+        data_logger_close_read();
+        _dumpInProgress = false;
+        _sendLogLine("LOG_CTRL: dump complete");
+        return;
+    }
+
+    uint8_t chunk[6 + LOG_CHUNK_PAYLOAD];
+    chunk[0] = (uint8_t)(_dumpSeq & 0xFF);
+    chunk[1] = (uint8_t)(_dumpSeq >> 8);
+    chunk[2] = (uint8_t)(_dumpTotalChunks & 0xFF);
+    chunk[3] = (uint8_t)(_dumpTotalChunks >> 8);
+    chunk[4] = (uint8_t)(n & 0xFF);
+    chunk[5] = (uint8_t)(n >> 8);
+    memcpy(chunk + 6, payload, n);
+
+    if (_logDataChar) {
+        _logDataChar->setValue(chunk, 6 + n);
+        _logDataChar->notify();
+    }
+    _dumpSeq++;
+}
+
 void ble_binary_telemetry_update() {
     if (!_telemetryChar) return;  // not yet initialized
+
+    // Serviced independently of the telemetry throttle below — a dump in
+    // progress needs to keep sending chunks every DUMP_CHUNK_INTERVAL_MS
+    // regardless of whether this particular call also happens to be a
+    // telemetry tick.
+    _serviceDump();
 
     uint32_t now = millis();
     if (now - _lastTelemetryMs < TELEMETRY_INTERVAL_MS) return;

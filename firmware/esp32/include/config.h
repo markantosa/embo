@@ -113,9 +113,22 @@
 // safe travel range is known). Enforced directly in the step-generation
 // ISR (motors.cpp) for every motor movement path, not just one.
 #define MOTOR1_SOFT_LIMIT_MIN   0
-#define MOTOR1_SOFT_LIMIT_MAX   18500
+#define MOTOR1_SOFT_LIMIT_MAX   16000
 #define MOTOR2_SOFT_LIMIT_MIN   0
-#define MOTOR2_SOFT_LIMIT_MAX   18500
+#define MOTOR2_SOFT_LIMIT_MAX   16000
+
+// Settings > Motion > Test Both Motors. One "stroke" for this bench test =
+// left motor 0→max then (concurrently) left back to 0 while right goes
+// 0→max — a test-specific concept, deliberately NOT the same counter as
+// motor_increment_stroke()/MIXING_MAX_STROKES_SAFETY_CAP, which belong to
+// the real mixing scheduler; this test never touches that counter.
+#define STROKE_TEST_COUNT_MIN       1
+#define STROKE_TEST_COUNT_MAX       50
+#define STROKE_TEST_COUNT_DEFAULT   5
+// Double MOTOR_JOG_HZ for this test specifically — doesn't change jog
+// speed anywhere else (BLE MOVE, the Jog Motor screens still use
+// MOTOR_JOG_HZ directly).
+#define MOTOR_STROKE_TEST_HZ        (MOTOR_JOG_HZ * 2)
 
 // ── ADC ──────────────────────────────────────────────────────────────────────
 // GPIO1 = ADC1_CH0. Use ADC_ATTEN_DB_12 (0–3.1V range, ~0.757 mV/LSB).
@@ -139,7 +152,7 @@
 
 // ── Homing ───────────────────────────────────────────────────────────────────
 // Slow approach speed — gentle enough to avoid impact damage on limit trip.
-#define HOMING_STEP_HZ       500
+#define HOMING_STEP_HZ       1000
 // Steps to back off from the limit switch after trip (8 microsteps per full step).
 // 200 steps @ 8µstep = 25 full steps. Tune to suit the lead screw pitch.
 #define HOMING_BACKOFF_STEPS 200

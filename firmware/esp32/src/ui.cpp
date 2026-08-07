@@ -18,6 +18,7 @@
 #include "ui/screens/error_screen.h"
 #include "ui/screens/bench_diagnostics_menu.h"
 #include "ui/screens/jog_motor_screen.h"
+#include "ui/screens/stroke_test_screen.h"
 #include "motors.h"
 #include "scheduler.h"
 #include "ui/boot_logo.h"
@@ -67,6 +68,7 @@ static PlaceholderScreen     _cameraStubScreen;
 static PlaceholderScreen     _insertSyringeScreen;
 static JogMotorScreen        _jogMotor1Screen;
 static JogMotorScreen        _jogMotor2Screen;
+static StrokeTestScreen      _strokeTestScreen;
 
 // ── Motion Menu — Settings > Motion. Defined before Settings Menu since
 // Settings' "Motion" item needs to reference it by address (same ordering
@@ -89,11 +91,16 @@ static void _motionBack(ScreenManager &mgr) { mgr.pop(); }
 static void _motionJog1(ScreenManager &mgr) { mgr.push(&_jogMotor1Screen); }
 static void _motionJog2(ScreenManager &mgr) { mgr.push(&_jogMotor2Screen); }
 
+// "Left"/"right" = Motor 1/Motor 2 — a naming choice used throughout this
+// test; nothing in firmware itself distinguishes left/right beyond this.
+static void _motionTestBoth(ScreenManager &mgr) { mgr.push(&_strokeTestScreen); }
+
 static const MenuItem kMotionItems[] = {
-    { "Home Motors",  _motionHome },
-    { "Jog Motor 1",  _motionJog1 },
-    { "Jog Motor 2",  _motionJog2 },
-    { "Back",         _motionBack },
+    { "Home Motors",      _motionHome },
+    { "Jog Motor 1",      _motionJog1 },
+    { "Jog Motor 2",      _motionJog2 },
+    { "Test Both Motors", _motionTestBoth },
+    { "Back",             _motionBack },
 };
 static MenuScreen _motionMenuScreen("Motion", kMotionItems,
                                      sizeof(kMotionItems) / sizeof(kMotionItems[0]));
