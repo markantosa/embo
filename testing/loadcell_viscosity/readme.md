@@ -1,5 +1,5 @@
 Things to note for loadcell data processing
-
+Data is in the folder "cleaned data"
 Format 
 
 example line of data : [490772] Motion > Test Both Motors: stroke 1 progress - left=14801 right=1199 - force1=-1730.63g force2=-0.40g
