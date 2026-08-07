@@ -15,3 +15,6 @@ after a stroke was completed, hence data was collected in multiple files for 3s,
 are the next files, arranged in order of which file was saved first i.e. 9s1 contains first few strokes, 9s7 contains last stroke data.
 
 Hope this is clear enough
+
+
+"loadcelldatacleaner.py" removes extra irrelevant rows of serial data that was collected during the collection process.
