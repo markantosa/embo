@@ -8,6 +8,17 @@
 #include "ble_debug.h"
 #include <stdio.h>
 
+// Direction convention: forward=true drives the DIR pin HIGH, forward=false
+// drives it LOW — same DIR pin state HOMING_FORWARD (config.h) uses to mean
+// "anticlockwise, toward the limit switch." Since HOMING_FORWARD is
+// currently `false` (LOW), jogging with forward=false ("REVERSE" on
+// screen) is the SAME physical rotation as homing's approach direction;
+// forward=true ("FORWARD" on screen) is the opposite (clockwise). If
+// HOMING_FORWARD ever gets flipped after bench verification, the
+// FORWARD/REVERSE labels below flip their real-world meaning too — update
+// the on-screen text in _draw() to match if that happens, so this screen
+// never silently disagrees with what homing actually does.
+
 void JogMotorScreen::onEnter() {
     _active = false;
 }
@@ -40,7 +51,8 @@ void JogMotorScreen::_draw(bool forceFull) {
         ui_display_draw_centered(title, 30, TFT_WHITE, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
         ui_display_draw_centered("Turn knob: CW = forward", 90, COLOR_LUNAR_ROCK, 1);
-        ui_display_draw_centered("CCW = reverse", 112, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered("CCW = reverse (anticlockwise,", 112, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered("same direction homing uses)", 128, COLOR_LUNAR_ROCK, 1);
         ui_display_draw_centered("Press knob to stop", 225, COLOR_LUNAR_ROCK, 1);
         ui_display_draw_centered("(hold knob or press BTN1 to exit)", 245, COLOR_LUNAR_ROCK, 1);
     }

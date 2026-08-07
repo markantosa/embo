@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
 // CHANGED FROM v2.4: GPIO21/37/42 used to be touch pins — they are now HX711
@@ -105,6 +107,16 @@
 #define TMC_RUN_CURRENT_MA    600
 #define TMC_HOLD_CURRENT_MA   300
 
+// Soft motion limits — fixed firmware config, not runtime-settable. Steps
+// from the last home/reset position; INT32_MIN/INT32_MAX means "no limit
+// on that side" (the default — fill in real values once the mechanism's
+// safe travel range is known). Enforced directly in the step-generation
+// ISR (motors.cpp) for every motor movement path, not just one.
+#define MOTOR1_SOFT_LIMIT_MIN   0
+#define MOTOR1_SOFT_LIMIT_MAX   18500
+#define MOTOR2_SOFT_LIMIT_MIN   0
+#define MOTOR2_SOFT_LIMIT_MAX   18500
+
 // ── ADC ──────────────────────────────────────────────────────────────────────
 // GPIO1 = ADC1_CH0. Use ADC_ATTEN_DB_12 (0–3.1V range, ~0.757 mV/LSB).
 // Wait ≥500µs after each AD9833 frequency step before reading.
@@ -133,7 +145,14 @@
 #define HOMING_BACKOFF_STEPS 200
 // Abort homing if limit not reached within this time.
 #define HOMING_TIMEOUT_MS    30000
-// Direction toward the limit switch. false = reverse. Verify on real hardware.
+// Direction toward the limit switch, intended to be anticlockwise —
+// false = reverse (DIR pin LOW). Direction sense depends entirely on
+// motor wiring/mounting, not anything in software, so this can't be
+// verified from code alone: watch the actual rotation on the bench during
+// a homing attempt, and if it's turning clockwise instead, flip this to
+// `true` (both _home_single()'s approach and _backoff_single()'s reverse
+// leg use this same constant, so flipping it here is the only change
+// needed — do not hardcode a direction anywhere else).
 #define HOMING_FORWARD       false
 
 // ── Particle size target ─────────────────────────────────────────────────────

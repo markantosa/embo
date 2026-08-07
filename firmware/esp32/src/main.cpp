@@ -58,12 +58,4 @@ void loop() {
     ui_update();
     ble_debug_update();
     scheduler_update();
-
-    static uint32_t lastLimitPrintMs = 0;
-    if (millis() - lastLimitPrintMs >= 200){
-        lastLimitPrintMs = millis();
-        Serial.printf("LIMIT M1=%s M2=%s\n",
-                        digitalRead(PIN_LIMIT_M1)==LOW ? "CLOSED":"open",
-                        digitalRead(PIN_LIMIT_M2)==LOW ? "CLOSED":"open");
-    }
 }

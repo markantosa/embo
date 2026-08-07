@@ -216,6 +216,10 @@
       <span class="label">Limit switch</span>
       <span class="badge" id="limit1Badge">--</span>
     </div>
+    <div class="switch-row">
+      <span class="label">Soft limit</span>
+      <span class="badge soft-limit-badge" id="softLimit1Badge">--</span>
+    </div>
     <div class="motor-controls">
       <button class="jog-btn" data-dir="-1">&#9664;</button>
       <button class="jog-btn" data-dir="1">&#9654;</button>
@@ -241,6 +245,10 @@
       <span class="label">Limit switch</span>
       <span class="badge" id="limit2Badge">--</span>
     </div>
+    <div class="switch-row">
+      <span class="label">Soft limit</span>
+      <span class="badge soft-limit-badge" id="softLimit2Badge">--</span>
+    </div>
     <div class="motor-controls">
       <button class="jog-btn" data-dir="-1">&#9664;</button>
       <button class="jog-btn" data-dir="1">&#9654;</button>
@@ -257,6 +265,45 @@
 </div>
 
 <button class="home-btn" id="homeBothBtn" style="max-width:320px; margin-top:16px">Home Both</button>
+
+<div class="section-title">Load Cell Push Test</div>
+<div class="card" style="max-width:480px">
+  <div class="unit">
+    "Start" automatically drives the selected motor toward its configured
+    soft limit (config.h) while recording — stops itself the instant the
+    limit is reached. Or use the Motor 1/2 jog buttons above with "Start
+    Recording" below for manual control instead — either records the same
+    way.
+  </div>
+  <div class="reading">
+    <span class="label">Recorded points</span>
+    <span class="value" id="pushCountValue">0</span>
+  </div>
+
+  <div class="motor-controls">
+    <label class="label" style="width:5em">Motor</label>
+    <select id="pushMotorSelect" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <option value="0">Motor 1</option>
+      <option value="1">Motor 2</option>
+    </select>
+  </div>
+  <div class="slider-row">
+    <span class="label">Speed</span>
+    <input type="range" min="0" max="100" value="40" id="pushSpeedSlider">
+    <span class="pct" id="pushSpeedPct">40%</span>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="pushStartBtn" style="margin-top:8px">Start — push to limit</button>
+  </div>
+
+  <div class="motor-controls" style="margin-top:14px">
+    <button class="home-btn" id="pushRecordBtn" style="margin-top:0">Start Recording</button>
+  </div>
+  <div class="motor-controls">
+    <button class="connect" id="downloadPushBtn" style="background:var(--muted); flex:1" disabled>Download Push Test CSV (0)</button>
+    <button class="connect" id="clearPushBtn" style="background:var(--danger); flex:1">Clear</button>
+  </div>
+</div>
 
 <div class="card log-card" style="margin-top:16px">
   <div class="log-header">
@@ -331,14 +378,120 @@ downloadRawBtn.addEventListener('click', () => {
   downloadCsvFile('uas_raw_data', RAW_CSV_HEADER, rawRows);
 });
 
+// ---- Load Cell Push Test: independent of the sweep-only recorder above —
+// gated on its own pushTestRunning flag. Two ways to drive it: manually
+// (jog buttons on the Motor 1/2 cards + Start/Stop Recording here), or
+// automatically (Start below drives the selected motor toward its
+// configured soft limit and records at the same time, stopping itself the
+// instant onTelemetry() sees that motor's soft-limit bit go active). ----
+const downloadPushBtn = document.getElementById('downloadPushBtn');
+const clearPushBtn = document.getElementById('clearPushBtn');
+const pushRecordBtn = document.getElementById('pushRecordBtn');
+const pushCountValue = document.getElementById('pushCountValue');
+const pushMotorSelect = document.getElementById('pushMotorSelect');
+const pushSpeedSlider = document.getElementById('pushSpeedSlider');
+const pushSpeedPct = document.getElementById('pushSpeedPct');
+const pushStartBtn = document.getElementById('pushStartBtn');
+let pushRows = [];
+let pushTestRunning = false;
+let pushSessionStartMs = 0;
+const PUSH_CSV_HEADER = ['timestamp_iso', 'elapsed_ms', 'force1', 'force2', 'position_m1', 'position_m2', 'sg1', 'sg2'];
+
+function logPushRow(fields) {
+  if (!pushTestRunning) return;
+  const now = Date.now();
+  pushRows.push([new Date(now).toISOString(), now - pushSessionStartMs, ...fields]);
+  pushCountValue.textContent = pushRows.length;
+  downloadPushBtn.textContent = `Download Push Test CSV (${pushRows.length})`;
+  downloadPushBtn.disabled = false;
+}
+
+function resetPushData() {
+  pushRows = [];
+  pushCountValue.textContent = '0';
+  downloadPushBtn.textContent = 'Download Push Test CSV (0)';
+  downloadPushBtn.disabled = true;
+}
+
+pushRecordBtn.addEventListener('click', () => {
+  pushTestRunning = !pushTestRunning;
+  if (pushTestRunning) {
+    pushSessionStartMs = Date.now();
+    pushRecordBtn.textContent = 'Stop Recording';
+    pushRecordBtn.classList.add('homing');  // reuse the existing "active" amber styling
+  } else {
+    pushRecordBtn.textContent = 'Start Recording';
+    pushRecordBtn.classList.remove('homing');
+  }
+});
+
+downloadPushBtn.addEventListener('click', () => {
+  if (pushRows.length === 0) return;
+  downloadCsvFile('load_cell_push_test', PUSH_CSV_HEADER, pushRows);
+  resetPushData();
+});
+
+clearPushBtn.addEventListener('click', () => resetPushData());
+
+pushSpeedSlider.addEventListener('input', () => { pushSpeedPct.textContent = pushSpeedSlider.value + '%'; });
+
+// ---- Automated push-to-limit — dir=-1 ("down"), same convention as the
+// existing "◀" jog buttons on the Motor 1/2 cards. Re-sends the jog
+// command every 150ms while active, same reasoning as the manual
+// press-and-hold jog: the firmware auto-stops a motor if no MOTOR_CMD
+// arrives within 300ms, so a single command wouldn't keep it moving.
+// Stops (and stops recording) on: clicking Start again, or onTelemetry()
+// seeing the soft-limit bit for this motor go active. ----
+let pushAutoRunning = false;
+let pushAutoMotorId = null;
+let pushAutoInterval = null;
+
+function stopAutoPush(reason) {
+  if (!pushAutoRunning) return;
+  pushAutoRunning = false;
+  if (pushAutoInterval) { clearInterval(pushAutoInterval); pushAutoInterval = null; }
+  if (connected && pushAutoMotorId !== null) sendMotorCmd(pushAutoMotorId, 0, 0);
+  pushTestRunning = false;
+  pushStartBtn.textContent = 'Start — push to limit';
+  pushStartBtn.classList.remove('homing');
+  pushRecordBtn.textContent = 'Start Recording';
+  pushRecordBtn.classList.remove('homing');
+  if (reason) appendLog(reason);
+}
+
+pushStartBtn.addEventListener('click', () => {
+  if (pushAutoRunning) {
+    stopAutoPush('-- push test stopped manually --');
+    return;
+  }
+  if (!connected) return;
+  pushAutoMotorId = parseInt(pushMotorSelect.value, 10);
+  const speed = parseInt(pushSpeedSlider.value, 10);
+  pushAutoRunning = true;
+  pushTestRunning = true;
+  pushSessionStartMs = Date.now();
+  pushStartBtn.textContent = 'Stop';
+  pushStartBtn.classList.add('homing');
+  pushRecordBtn.textContent = 'Stop Recording';
+  pushRecordBtn.classList.add('homing');
+  sendMotorCmd(pushAutoMotorId, -1, speed);
+  pushAutoInterval = setInterval(() => sendMotorCmd(pushAutoMotorId, -1, parseInt(pushSpeedSlider.value, 10)), 150);
+  appendLog(`-- push test started: motor ${pushAutoMotorId + 1} --`);
+});
+
 resetBtn.addEventListener('click', () => {
   rawRows = [];
   sweepRows = [];
+  pushRows = [];
   sessionStartMs = Date.now();
+  pushSessionStartMs = Date.now();
   downloadRawBtn.textContent = 'Download Raw Data (0)';
   downloadRawBtn.disabled = true;
   downloadAvgBtn.textContent = 'Download Averaged Summary (0)';
   downloadAvgBtn.disabled = true;
+  downloadPushBtn.textContent = 'Download Push Test CSV (0)';
+  downloadPushBtn.disabled = true;
+  pushCountValue.textContent = '0';
   sweepStatus.textContent = 'Idle';
   appendLog('-- data reset --');
 });
@@ -532,6 +685,16 @@ function onTelemetry(event) {
   setBadge(document.getElementById('limit1Badge'), limit1Active ? 'active' : 'idle');
   setBadge(document.getElementById('limit2Badge'), limit2Active ? 'active' : 'idle');
 
+  const softLimit1Active = !!(limitFlags & 0x04);
+  const softLimit2Active = !!(limitFlags & 0x08);
+  setBadge(document.getElementById('softLimit1Badge'), softLimit1Active ? 'active' : 'idle');
+  setBadge(document.getElementById('softLimit2Badge'), softLimit2Active ? 'active' : 'idle');
+
+  if (pushAutoRunning) {
+    const hitLimit = (pushAutoMotorId === 0 && softLimit1Active) || (pushAutoMotorId === 1 && softLimit2Active);
+    if (hitLimit) stopAutoPush(`-- push test reached soft limit on motor ${pushAutoMotorId + 1} --`);
+  }
+
   const motorCardsForLimits = document.querySelectorAll('.card[data-motor]');
   motorCardsForLimits[0].classList.toggle('limit-active', limit1Active);
   motorCardsForLimits[1].classList.toggle('limit-active', limit2Active);
@@ -556,6 +719,7 @@ function onTelemetry(event) {
   if (homingFlags & 0x08) cards[1].querySelector('.homed-tag').style.display = 'inline';
 
   logRawRow([uas.toFixed(4), uasFreq.toFixed(0), force1, force2, als, ir, red]);
+  logPushRow([force1, force2, pos1, pos2, sg1, sg2]);
 }
 
 const logView = document.getElementById('logView');
@@ -581,9 +745,13 @@ document.getElementById('clearLogBtn').addEventListener('click', () => {
 
 async function sendMotorCmd(motorId, dir, speedPct) {
   if (!motorCmdChar) return;
+  // motorId here is 0-indexed (matches data-motor="0"/"1" on the Motor 1/2
+  // cards) — MotorCmdCB on the firmware side requires exactly 1 or 2, so
+  // +1 at the wire boundary rather than changing the 0-indexed convention
+  // used throughout the rest of the dashboard.
   const buf = new ArrayBuffer(3);
   const dv = new DataView(buf);
-  dv.setUint8(0, motorId);
+  dv.setUint8(0, motorId + 1);
   dv.setInt8(1, dir);
   dv.setUint8(2, speedPct);
   try { await motorCmdChar.writeValueWithoutResponse(buf); } catch (e) { console.warn(e); }
@@ -720,7 +888,7 @@ document.getElementById('homeBothBtn').addEventListener('click', () => sendHomeC
 
 // Initialize badges to a known "not yet connected" idle state.
 ['apdsBadge', 'maxBadge'].forEach(id => setBadge(document.getElementById(id), 'idle'));
-['limit1Badge', 'limit2Badge'].forEach(id => setBadge(document.getElementById(id), 'idle'));
+['limit1Badge', 'limit2Badge', 'softLimit1Badge', 'softLimit2Badge'].forEach(id => setBadge(document.getElementById(id), 'idle'));
 </script>
 </body>
 </html>

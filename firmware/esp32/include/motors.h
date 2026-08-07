@@ -19,6 +19,18 @@ void motor_enable(uint8_t motor, bool en);
 int32_t motor_get_position(uint8_t motor);
 void motor_reset_position(uint8_t motor);
 
+// Soft position limits — fixed firmware config (MOTOR1/2_SOFT_LIMIT_MIN/MAX
+// in config.h), applied once by motors_init(). Not runtime-settable — this
+// isn't exposed to the UI/BLE on purpose, so there's no way to loosen or
+// mistakenly change a safety bound mid-session. Enforced directly in the
+// step-generation ISR (motors.cpp), so ANY caller driving a motor — BLE
+// jog, UI jog screens, even a mistaken call during homing — is protected
+// uniformly, not just whichever one code path happens to check it. A step
+// that would cross a configured bound simply isn't taken; the timer stops
+// itself right there.
+void motor_set_soft_limits(uint8_t motor, int32_t minPos, int32_t maxPos);
+bool motor_at_soft_limit(uint8_t motor);
+
 // Returns true if the limit switch for this motor has tripped since last clear.
 bool motor_limit_hit(uint8_t motor);
 void motor_clear_limit(uint8_t motor);

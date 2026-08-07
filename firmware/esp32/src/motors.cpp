@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <TMCStepper.h>
 #include <esp_timer.h>
+#include <cstdint>
 
 // Half-duplex UART for both TMC2209 modules on the shared PDN line.
 // Serial1 is used; TX (GPIO4) and RX (GPIO44) are genuinely separate ESP32
@@ -35,6 +36,8 @@ struct StepAxis {
     int stepPin, dirPin, enPin;
     volatile int8_t  dir      = 0;  // -1 / 0 / +1 — 0 means stopped
     volatile int32_t position = 0;  // exact, ISR-incremented step count
+    volatile int32_t softMin  = INT32_MIN;  // disabled by default — see motor_set_soft_limits()
+    volatile int32_t softMax  = INT32_MAX;
     esp_timer_handle_t timer  = nullptr;
 };
 static StepAxis _axis1{PIN_STEP_M1, PIN_DIR_M1, PIN_EN_M1};
@@ -45,10 +48,20 @@ static StepAxis &_axis(uint8_t motor) { return (motor == 1) ? _axis1 : _axis2; }
 static void IRAM_ATTR _stepPulse(void *arg) {
     StepAxis *ax = static_cast<StepAxis *>(arg);
     if (ax->dir == 0) return;  // defensive — esp_timer_stop() is what actually prevents firing
+    int32_t nextPos = ax->position + ax->dir;
+    if (nextPos < ax->softMin || nextPos > ax->softMax) {
+        // Would cross a configured soft limit — stop right here, don't
+        // take this step. Reversing direction and re-issuing speed moves
+        // back away from the limit normally; this only blocks the
+        // direction that would go further past it.
+        esp_timer_stop(ax->timer);
+        ax->dir = 0;
+        return;
+    }
     digitalWrite(ax->stepPin, HIGH);
     delayMicroseconds(2);
     digitalWrite(ax->stepPin, LOW);
-    ax->position += ax->dir;
+    ax->position = nextPos;
 }
 
 void IRAM_ATTR isr_limit_m1() {
@@ -167,6 +180,10 @@ void motors_init() {
 
     _tmc_init_driver(_driver_m1, TMC_ADDR_M1);
     _tmc_init_driver(_driver_m2, TMC_ADDR_M2);
+
+    // Fixed firmware config, not runtime-settable — see config.h.
+    motor_set_soft_limits(1, MOTOR1_SOFT_LIMIT_MIN, MOTOR1_SOFT_LIMIT_MAX);
+    motor_set_soft_limits(2, MOTOR2_SOFT_LIMIT_MIN, MOTOR2_SOFT_LIMIT_MAX);
 }
 
 void motor_set_speed(uint8_t motor, uint32_t step_hz) {
@@ -201,6 +218,17 @@ int32_t motor_get_position(uint8_t motor) {
 
 void motor_reset_position(uint8_t motor) {
     _axis(motor).position = 0;
+}
+
+void motor_set_soft_limits(uint8_t motor, int32_t minPos, int32_t maxPos) {
+    StepAxis &ax = _axis(motor);
+    ax.softMin = minPos;
+    ax.softMax = maxPos;
+}
+
+bool motor_at_soft_limit(uint8_t motor) {
+    StepAxis &ax = _axis(motor);
+    return ax.position <= ax.softMin || ax.position >= ax.softMax;
 }
 
 bool motor_limit_hit(uint8_t motor) {

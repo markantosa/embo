@@ -5,6 +5,7 @@
 #include "turbidity.h"
 #include "force_sensor.h"
 #include "ble_debug.h"
+#include "config.h"
 #include <NimBLEDevice.h>
 #include <Arduino.h>
 #include <string.h>
@@ -32,15 +33,18 @@ struct TelemetryPacket {
     float    uasFreqHz;
     uint16_t sgResultM1;
     uint16_t sgResultM2;
-    int32_t  positionM1;   // always 0 — this firmware drives timed strokes,
-    int32_t  positionM2;   // not step-counted absolute position, see motors.h
+    int32_t  positionM1;   // exact, ISR-counted step position — see motors.h
+    int32_t  positionM2;
     uint8_t  homingFlags;  // bit0/1: homing-in-progress M1/M2 (always 0 here —
                             //   motors_home() is blocking, so nothing can poll
                             //   telemetry while it's running anyway);
                             //   bit2/3: homed M1/M2 (this firmware only tracks
                             //   one combined homed flag, so both bits mirror
                             //   motors_is_homed() together)
-    uint8_t  limitFlags;   // bit0: M1 limit active, bit1: M2 limit active
+    uint8_t  limitFlags;   // bit0/1: M1/M2 hardware limit switch active
+                            //   bit2/3: M1/M2 AT a configured soft position
+                            //   limit — fixed firmware config, see
+                            //   MOTOR1/2_SOFT_LIMIT_MIN/MAX in config.h
     int32_t  forceRaw1;
     int32_t  forceRaw2;
     uint16_t alsClear;
@@ -72,9 +76,11 @@ class MotorCmdCB : public NimBLECharacteristicCallbacks {
         if (motorId != 1 && motorId != 2) return;
         if (speedPct > 100) speedPct = 100;
 
-        // speedPct is a percentage of the same bench jog rate MOVE uses over
-        // BLE text — see ble_debug.cpp's DEBUG_STEP_HZ.
-        uint32_t hz = (uint32_t)((uint32_t)500 * speedPct / 100);
+        // speedPct is a percentage of MOTOR_JOG_HZ — the same jog speed
+        // used everywhere else a motor is bench-driven (BLE MOVE, the UI
+        // Jog Motor screens), so changing one constant in config.h changes
+        // all of them together.
+        uint32_t hz = (uint32_t)((uint32_t)MOTOR_JOG_HZ * speedPct / 100);
         motor_set_dir(motorId, dir >= 0);
         motor_enable(motorId, hz > 0);
         motor_clear_limit(motorId);
@@ -150,10 +156,11 @@ void ble_binary_telemetry_update() {
     pkt.uasFreqHz   = uas_get_current_frequency_hz();
     pkt.sgResultM1  = motor_sg_result(1);
     pkt.sgResultM2  = motor_sg_result(2);
-    pkt.positionM1  = 0;
-    pkt.positionM2  = 0;
+    pkt.positionM1  = motor_get_position(1);
+    pkt.positionM2  = motor_get_position(2);
     pkt.homingFlags = motors_is_homed() ? 0x0C : 0x00;  // bits 2+3, see struct comment
-    pkt.limitFlags  = (motor_limit_hit(1) ? 0x01 : 0x00) | (motor_limit_hit(2) ? 0x02 : 0x00);
+    pkt.limitFlags  = (motor_limit_hit(1) ? 0x01 : 0x00) | (motor_limit_hit(2) ? 0x02 : 0x00)
+                    | (motor_at_soft_limit(1) ? 0x04 : 0x00) | (motor_at_soft_limit(2) ? 0x08 : 0x00);
     pkt.forceRaw1   = force_sensor_get_raw_1();
     pkt.forceRaw2   = force_sensor_get_raw_2();
     pkt.alsClear    = turbidity_get_als_clear();
