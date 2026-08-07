@@ -1,0 +1,46 @@
+packet,timestamp_ns,timestamp_us,serial_data
+33,354549635024125,354549635024.125,[49664] Motion > Test Both Motors: homing first (1 strokes requested at 4000 Hz)
+36,354553810467125,354553810467.125,[53838] === Motion > Test Both Motors: BEGIN stroke 1/1 (left=0 right=0 force1=-0.02g force2=1506.00g) ===
+37,354553811805083,354553811805.083,[53838] Motion > Test Both Motors: stroke 1/1 - left motor clockwise to max limit (alone)
+38,354554108601125,354554108601.125,[54138] Motion > Test Both Motors: stroke 1 progress - left=1197 - force1=-0.23g force2=1506.12g
+39,354554409171583,354554409171.583,[54438] Motion > Test Both Motors: stroke 1 progress - left=2397 - force1=-0.12g force2=1506.21g
+40,354554709477416,354554709477.416,[54738] Motion > Test Both Motors: stroke 1 progress - left=3597 - force1=0.06g force2=1506.04g
+41,354555008491458,354555008491.458,[55038] Motion > Test Both Motors: stroke 1 progress - left=4797 - force1=-0.03g force2=1506.07g
+42,354555309212291,354555309212.291,[55338] Motion > Test Both Motors: stroke 1 progress - left=5997 - force1=-0.15g force2=1506.26g
+43,354555609340875,354555609340.875,[55638] Motion > Test Both Motors: stroke 1 progress - left=7198 - force1=-1977.91g force2=1506.13g
+44,354555909221708,354555909221.708,[55938] Motion > Test Both Motors: stroke 1 progress - left=8397 - force1=-3536.80g force2=1506.12g
+45,354556209280416,354556209280.416,[56238] Motion > Test Both Motors: stroke 1 progress - left=9597 - force1=-981.45g force2=1506.17g
+46,354556509238916,354556509238.916,[56538] Motion > Test Both Motors: stroke 1 progress - left=10797 - force1=-1002.73g force2=1506.26g
+47,354556809189708,354556809189.708,[56838] Motion > Test Both Motors: stroke 1 progress - left=11997 - force1=-1085.05g force2=1506.23g
+48,354557109221791,354557109221.791,[57138] Motion > Test Both Motors: stroke 1 progress - left=13197 - force1=-1062.76g force2=1506.30g
+49,354557409220458,354557409220.458,[57438] Motion > Test Both Motors: stroke 1 progress - left=14397 - force1=-1100.67g force2=1506.16g
+50,354557709310625,354557709310.625,[57738] Motion > Test Both Motors: stroke 1 progress - left=15597 - force1=-1158.24g force2=1506.24g
+51,354557809979875,354557809979.875,"[57839] Motion > Test Both Motors: stroke 1/1 - left to 0, right to max (concurrent)"
+52,354558110490208,354558110490.208,[58139] Motion > Test Both Motors: stroke 1 progress - left=14801 right=1199 - force1=-367.95g force2=1505.96g
+53,354558409622083,354558409622.083,[58439] Motion > Test Both Motors: stroke 1 progress - left=13601 right=2399 - force1=-0.14g force2=1506.08g
+54,354558710378958,354558710378.958,[58739] Motion > Test Both Motors: stroke 1 progress - left=12401 right=3599 - force1=-0.37g force2=1506.11g
+55,354559009645458,354559009645.458,[59039] Motion > Test Both Motors: stroke 1 progress - left=11201 right=4799 - force1=-0.29g force2=1506.21g
+56,354559310400833,354559310400.833,[59339] Motion > Test Both Motors: stroke 1 progress - left=10001 right=5999 - force1=0.05g force2=1506.02g
+57,354559610388333,354559610388.333,[59639] Motion > Test Both Motors: stroke 1 progress - left=8801 right=7199 - force1=0.05g force2=643.37g
+58,354559910308000,354559910308.0,[59939] Motion > Test Both Motors: stroke 1 progress - left=7601 right=8399 - force1=-0.11g force2=399.95g
+59,354560210413541,354560210413.541,[60239] Motion > Test Both Motors: stroke 1 progress - left=6401 right=9599 - force1=-0.17g force2=449.27g
+60,354560510267000,354560510267.0,[60539] Motion > Test Both Motors: stroke 1 progress - left=5201 right=10799 - force1=-0.19g force2=487.68g
+61,354560810338083,354560810338.083,[60839] Motion > Test Both Motors: stroke 1 progress - left=4001 right=11999 - force1=-0.03g force2=513.28g
+62,354561110423791,354561110423.791,[61139] Motion > Test Both Motors: stroke 1 progress - left=2801 right=13199 - force1=-0.19g force2=604.11g
+63,354561410395958,354561410395.958,[61439] Motion > Test Both Motors: stroke 1 progress - left=1601 right=14399 - force1=-0.23g force2=687.36g
+64,354561710366250,354561710366.25,[61739] Motion > Test Both Motors: stroke 1 progress - left=401 right=15599 - force1=0.04g force2=738.12g
+65,354561811255583,354561811255.583,"[61840] Motion > Test Both Motors: stroke 1 - right reached target (position=16000, force2=703.88g)"
+66,354562009822041,354562009822.041,[62039] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.19g force2=289.57g
+67,354562310457666,354562310457.666,[62339] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.11g force2=-429.56g
+68,354562610335041,354562610335.041,[62639] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.06g force2=-408.46g
+69,354562910292666,354562910292.666,[62939] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.09g force2=-395.59g
+70,354563210310708,354563210310.708,[63239] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=0.05g force2=-383.93g
+71,354563510362416,354563510362.416,[63539] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=0.14g force2=-374.80g
+72,354563810495750,354563810495.75,[63839] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.05g force2=-368.46g
+73,354564110351083,354564110351.083,[64139] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.02g force2=-360.32g
+74,354564410537375,354564410537.375,[64439] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=0.10g force2=-351.53g
+75,354564710351916,354564710351.916,[64739] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=0.04g force2=-341.88g
+76,354565009265833,354565009265.833,[65039] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.07g force2=-335.28g
+77,354565310435458,354565310435.458,[65339] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=0.01g force2=-330.23g
+78,354565610381666,354565610381.666,[65639] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=0.00g force2=-301.57g
+79,354565910337916,354565910337.916,[65939] Motion > Test Both Motors: stroke 1 progress - left=63 right=16000 - force1=-0.09g force2=-277.55g
