@@ -1,0 +1,14 @@
+sample_id,n_particles,median_ecd_um,q1_um,q3_um,iqr_um,mean_um,stdev_um,min_um,max_um
+sample1,105,1003.5,749.5,1271.8,522.2,1054.0,390.9,461.4,2472.8
+sample2,63,828.8,642.1,1298.5,656.4,1007.3,462.3,369.1,2234.4
+sample3,78,929.1,678.2,1227.9,549.7,997.7,413.1,382.3,2415.4
+sample4,108,963.0,707.0,1466.3,759.3,1061.3,443.5,323.9,2043.5
+sample5,93,1101.8,751.4,1348.5,597.1,1075.0,405.3,412.9,2967.2
+
+Summary across the 5 sample medians
+average_of_medians_um,965.2
+median_of_medians_um,963.0
+stdev_of_medians_um,100.0
+cv_percent,10.4
+min_median_um,828.8
+max_median_um,1101.8
