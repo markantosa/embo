@@ -4,7 +4,7 @@ Format
 
 example line of data : [490772] Motion > Test Both Motors: stroke 1 progress - left=14801 right=1199 - force1=-1730.63g force2=-0.40g
 
-1. First 6 letter number [490772] is the timestamp of when the data was recorded. Due to HW limitations, exact time cannot be logged. 
+1. First 6 letter number [490772] is the timestamp (in milliseconds) of when the data was recorded. Due to HW limitations, exact time cannot be logged. 
 2. left=14801 right=1199 is the position of the loadcell. Loadcell position is based on motor steps. When the loadcell is homed i.e. at the 
     top left and top right respectively, the motor step position is set as 0, as per the homing procedure. Max travel distance currently in 
     the firmware is 16000 motor steps (yet to calculate into physical distance).
