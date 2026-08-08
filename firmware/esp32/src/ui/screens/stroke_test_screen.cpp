@@ -10,6 +10,13 @@
 #include "force_sensor.h"
 #include <stdio.h>
 
+// Set by _driveBothConcurrent()/the stroke-1 loop on failure, read by
+// _runTest() for the fault screen's message — lets a stall get a specific
+// diagnosis ("STALL: left motor, SG=42") instead of the generic "did not
+// complete" every failure used to show, regardless of whether it was
+// actually a stall or a genuine timeout.
+static char _lastFailureReason[80];
+
 void StrokeTestScreen::_draw(bool forceFull) {
     if (!forceFull) return;  // nothing here changes except via encoder rotation, handled below
     LGFX &tft = ui_display_tft();
@@ -90,6 +97,33 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
             motor_set_speed(2, MOTOR_STROKE_TEST_HZ);
         }
 
+        // Stall check — SG_RESULT below threshold means high load (TMC
+        // torque loss or a genuine mechanical jam, either way something's
+        // actually wrong, not just "still moving, not there yet"). Stop
+        // immediately rather than continuing to push against it for up to
+        // 30 more seconds — see STROKE_TEST_STALL_SG_THRESHOLD (config.h)
+        // for why that number isn't fully trustworthy yet.
+        if (!m1Done && motor_sg_result(1) < STROKE_TEST_STALL_SG_THRESHOLD) {
+            motor_set_speed(1, 0);
+            motor_enable(1, false);
+            motor_set_speed(2, 0);
+            motor_enable(2, false);
+            snprintf(_lastFailureReason, sizeof(_lastFailureReason),
+                     "STALL DETECTED - left motor (SG=%u)", motor_sg_result(1));
+            ble_log("Motion > Test Both Motors: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
+            return false;
+        }
+        if (!m2Done && motor_sg_result(2) < STROKE_TEST_STALL_SG_THRESHOLD) {
+            motor_set_speed(1, 0);
+            motor_enable(1, false);
+            motor_set_speed(2, 0);
+            motor_enable(2, false);
+            snprintf(_lastFailureReason, sizeof(_lastFailureReason),
+                     "STALL DETECTED - right motor (SG=%u)", motor_sg_result(2));
+            ble_log("Motion > Test Both Motors: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
+            return false;
+        }
+
         if (!m1Done) {
             int32_t p1 = motor_get_position(1);
             bool reached = leftForward ? (p1 >= MOTOR1_SOFT_LIMIT_MAX) : (p1 <= MOTOR1_SOFT_LIMIT_MIN);
@@ -136,9 +170,11 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
     if (!m2Done) { motor_set_speed(2, 0); motor_enable(2, false); }
 
     if (!m1Done || !m2Done) {
-        ble_log("Motion > Test Both Motors: TIMED OUT in stroke %d (%s) (left=%ld right=%ld force1=%.2fg force2=%.2fg)",
-                stroke, label, (long)motor_get_position(1), (long)motor_get_position(2),
-                force_sensor_get_grams_1(), force_sensor_get_grams_2());
+        snprintf(_lastFailureReason, sizeof(_lastFailureReason),
+                 "TIMED OUT - %s (left=%ld right=%ld)",
+                 label, (long)motor_get_position(1), (long)motor_get_position(2));
+        ble_log("Motion > Test Both Motors: %s in stroke %d - force1=%.2fg force2=%.2fg",
+                _lastFailureReason, stroke, force_sensor_get_grams_1(), force_sensor_get_grams_2());
         return false;
     }
     ble_log("Motion > Test Both Motors: stroke %d/%d - %s done (left=%ld right=%ld force1=%.2fg force2=%.2fg)",
@@ -194,11 +230,20 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
 
             uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
             uint32_t lastProgressMs = millis();
+            bool stalled = false;
             while (motor_get_position(1) < MOTOR1_SOFT_LIMIT_MAX && millis() < deadline) {
                 // Same noise check/resume as _driveBothConcurrent() below —
                 // see that function's comment for why this matters here.
                 if (motor_limit_hit(1) && !motor_limit_hit_debounced(1)) {
                     motor_set_speed(1, MOTOR_STROKE_TEST_HZ);
+                }
+                // Same stall check as _driveBothConcurrent() — see there
+                // for why this matters (catches a TMC torque loss or a
+                // genuine mechanical jam fast, instead of waiting the full
+                // 30s timeout regardless of which one it actually is).
+                if (motor_sg_result(1) < STROKE_TEST_STALL_SG_THRESHOLD) {
+                    stalled = true;
+                    break;
                 }
                 // Same reasoning as _driveBothConcurrent() — loop() (and
                 // its force_sensor_update() call) is frozen for the whole
@@ -216,10 +261,19 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
             motor_set_speed(1, 0);
             motor_enable(1, false);
 
+            if (stalled) {
+                snprintf(_lastFailureReason, sizeof(_lastFailureReason),
+                         "STALL DETECTED - left motor (SG=%u)", motor_sg_result(1));
+                ble_log("Motion > Test Both Motors: %s in stroke %d (left alone)", _lastFailureReason, stroke);
+                ui_show_error(_lastFailureReason);
+                return;
+            }
             if (motor_get_position(1) < MOTOR1_SOFT_LIMIT_MAX) {
-                ble_log("Motion > Test Both Motors: TIMED OUT in stroke %d (left alone) (left=%ld force1=%.2fg)",
-                        stroke, (long)motor_get_position(1), force_sensor_get_grams_1());
-                ui_show_error("MOTION TEST FAILED - left motor did not reach limit");
+                snprintf(_lastFailureReason, sizeof(_lastFailureReason),
+                         "TIMED OUT - left alone (left=%ld)", (long)motor_get_position(1));
+                ble_log("Motion > Test Both Motors: %s in stroke %d - force1=%.2fg",
+                        _lastFailureReason, stroke, force_sensor_get_grams_1());
+                ui_show_error(_lastFailureReason);
                 return;
             }
         } else {
@@ -228,7 +282,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
             // happens CONCURRENTLY with right returning to 0 — this is
             // the case that was previously missing.
             if (!_driveBothConcurrent(true, stroke, _strokeCount, "left to max, right to 0")) {
-                ui_show_error("MOTION TEST FAILED - concurrent forward leg did not complete");
+                ui_show_error(_lastFailureReason);
                 return;
             }
         }
@@ -236,7 +290,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
         // Second leg of every stroke: left back to 0 while right goes to
         // max — the same every time, regardless of stroke number.
         if (!_driveBothConcurrent(false, stroke, _strokeCount, "left to 0, right to max")) {
-            ui_show_error("MOTION TEST FAILED - concurrent return leg did not complete");
+            ui_show_error(_lastFailureReason);
             return;
         }
 

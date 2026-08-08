@@ -32,8 +32,16 @@ void setup() {
     Serial.println("BOOT: motors_init done");
     uas_init();
     Serial.println("BOOT: uas_init done");
-    turbidity_init();     // one of four closed-loop fusion inputs once calibrated, see scheduler.h
-    Serial.println("BOOT: turbidity_init done");
+    // TURBIDITY DISABLED FOR NOW — sensors aren't physically connected on
+    // the current bench setup, and calling this was the source of the
+    // continuous I2C bus errors. turbidity_get_als_clear()/get_ir_raw()
+    // etc. (turbidity.cpp) default to 0 and stay there with this disabled
+    // — scheduler.cpp's fusion math (one of its four inputs) will just see
+    // 0 permanently instead of a real reading, same as it effectively was
+    // anyway with the sensors unconnected. Re-enable by uncommenting these
+    // two lines (here and in loop() below) once the sensors are wired up.
+    // turbidity_init();
+    // Serial.println("BOOT: turbidity_init done");
     force_sensor_init();   // fusion input AND independent e-stop safety input, see calibration.h
     Serial.println("BOOT: force_sensor_init done");
     force_sensor_tare(); //fresh zero after every boot
@@ -67,7 +75,7 @@ void setup() {
 void loop() {
     rpi_uart_update();
     uas_update();
-    turbidity_update();
+    // turbidity_update();  // disabled for now — see the comment in setup()
 
     // force_sensor_update() still runs every loop — it's still one of the
     // four fusion inputs the scheduler uses for size estimation (see

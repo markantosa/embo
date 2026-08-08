@@ -283,6 +283,26 @@ static void _home_single(uint8_t motor) {
     motor_set_speed(motor, HOMING_STEP_HZ);
 }
 
+// Brief clockwise nudge before the real anticlockwise approach — see
+// HOMING_PRE_NUDGE_STEPS (config.h) for why. Both motors nudge
+// CONCURRENTLY (started together, one shared delay), matching how the
+// real approach also drives both simultaneously rather than one after
+// the other.
+static void _preNudgeBoth() {
+    motor_set_dir(1, !HOMING_FORWARD);  // clockwise
+    motor_enable(1, true);
+    motor_set_speed(1, HOMING_STEP_HZ);
+    motor_set_dir(2, !HOMING_FORWARD);
+    motor_enable(2, true);
+    motor_set_speed(2, HOMING_STEP_HZ);
+
+    uint32_t nudgeMs = (HOMING_PRE_NUDGE_STEPS * 1000UL) / HOMING_STEP_HZ;
+    delay(nudgeMs);
+
+    motor_set_speed(1, 0);
+    motor_set_speed(2, 0);
+}
+
 static void _backoff_single(uint8_t motor) {
     // Reverse direction and run at homing speed for exactly the backoff duration.
     // Time = steps / freq. Motor is already enabled from the approach phase.
@@ -324,6 +344,8 @@ bool motors_home() {
     motor_set_soft_limits(2, INT32_MIN, INT32_MAX);
 
     // Drive both motors toward their limit switches simultaneously.
+    ble_log("Homing: clockwise pre-nudge (%d steps)", HOMING_PRE_NUDGE_STEPS);
+    _preNudgeBoth();
     _home_single(1);
     _home_single(2);
 

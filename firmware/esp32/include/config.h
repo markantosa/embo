@@ -129,6 +129,18 @@
 // speed anywhere else (BLE MOVE, the Jog Motor screens still use
 // MOTOR_JOG_HZ directly).
 #define MOTOR_STROKE_TEST_HZ        (MOTOR_JOG_HZ * 2)
+// SG_RESULT (motor_sg_result(), motors.h) is 0-1023, HIGHER = LESS load —
+// a value below this during the stroke test is treated as a stall
+// (either TMC torque loss or a genuine mechanical jam) and stops that
+// motor immediately with a specific diagnosis, instead of waiting the
+// full HOMING_TIMEOUT_MS for a generic timeout. PLACEHOLDER — SG_RESULT's
+// baseline depends on current/speed/microstepping and needs measuring on
+// the actual bench (watch it during a few known-good runs, then set this
+// comfortably below the lowest normal value seen) before this is
+// trustworthy; not a calibrated number.
+// TEMPORARILY DISABLED (0 = never trips, motor_sg_result() is unsigned so
+// it can never read below 0) — restore a real threshold once tuned.
+#define STROKE_TEST_STALL_SG_THRESHOLD  0
 
 // ── ADC ──────────────────────────────────────────────────────────────────────
 // GPIO1 = ADC1_CH0. Use ADC_ATTEN_DB_12 (0–3.1V range, ~0.757 mV/LSB).
@@ -156,6 +168,12 @@
 // Steps to back off from the limit switch after trip (8 microsteps per full step).
 // 200 steps @ 8µstep = 25 full steps. Tune to suit the lead screw pitch.
 #define HOMING_BACKOFF_STEPS 200
+// Brief clockwise nudge before the real anticlockwise homing approach —
+// relieves any mechanical preload/backlash on the lead screw and gives a
+// consistent starting condition regardless of where the motor happened to
+// be sitting at boot (position is unknown pre-home). Both motors nudge
+// CONCURRENTLY, same as the real approach.
+#define HOMING_PRE_NUDGE_STEPS 500
 // Abort homing if limit not reached within this time.
 #define HOMING_TIMEOUT_MS    30000
 // Direction toward the limit switch, intended to be anticlockwise —
