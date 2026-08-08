@@ -5,7 +5,7 @@
 #include "ui_display.h"
 #include "ui/screens/placeholder_screen.h"
 #include "ui/screens/menu_screen.h"
-#include "ui/screens/developer_mode_screen.h"
+#include "ui/screens/telemetry_screen.h"
 #include "ui/screens/uas_debug_toggle_screen.h"
 #include "ui/screens/sound_toggle_screen.h"
 #include "mixing_options.h"
@@ -17,7 +17,6 @@
 #include "ui/screens/verifying_screen.h"
 #include "ui/screens/error_screen.h"
 #include "ui/screens/bench_diagnostics_menu.h"
-#include "ui/screens/jog_motor_screen.h"
 #include "ui/screens/stroke_test_screen.h"
 #include "motors.h"
 #include "scheduler.h"
@@ -58,7 +57,7 @@ static VerifyingScreen       _verifyingScreen;
 static ErrorScreen           _errorScreen;
 static UasDebugToggleScreen  _uasDebugToggleScreen;
 static SoundToggleScreen     _soundToggleScreen;
-static DeveloperModeScreen   _developerModeScreen;
+static TelemetryScreen       _telemetryScreen;
 static MixingMenuScreen      _mixingMenuScreen;
 static WarningScreen         _warningScreen;
 static MixingRunningScreen   _mixingRunningScreen;
@@ -66,9 +65,53 @@ static EndScreen             _endScreen;
 static PlaceholderScreen     _cameraMountScreen;
 static PlaceholderScreen     _cameraStubScreen;
 static PlaceholderScreen     _insertSyringeScreen;
-static JogMotorScreen        _jogMotor1Screen;
-static JogMotorScreen        _jogMotor2Screen;
 static StrokeTestScreen      _strokeTestScreen;
+
+// ── Move Left/Right Motor — Settings > Motion > Move Left/Right Motor.
+// Discrete 10-step nudge per press, not continuous jogging. Up = CCW
+// (anticlockwise), Down = CW (clockwise) — same DIR-pin convention
+// documented in motors.cpp/config.h (HOMING_FORWARD=false is
+// anticlockwise). Defined before Motion Menu since it references these by
+// address (same ordering rule as the rest of this file). ──────────────────
+#define MOVE_MOTOR_STEP_COUNT 10
+
+static void _moveMotorSteps(uint8_t motor, bool clockwise) {
+    if (scheduler_is_running()) {
+        ble_log("Motion > Move Motor: refused - a run is in progress");
+        return;
+    }
+    // Blocking for the short duration of the nudge — same tradeoff
+    // already accepted for every other Motion menu action (Home Motors,
+    // Stroke Testing) — this is brief enough (10 steps) that it's not
+    // meaningfully different from those.
+    motor_set_dir(motor, clockwise);
+    motor_enable(motor, true);
+    motor_set_speed(motor, MOTOR_JOG_HZ);
+    uint32_t moveMs = (MOVE_MOTOR_STEP_COUNT * 1000UL) / MOTOR_JOG_HZ;
+    delay(moveMs);
+    motor_set_speed(motor, 0);
+    motor_enable(motor, false);
+    ble_log("Motion > Move Motor: motor %u %s %d steps (position=%ld)",
+            motor, clockwise ? "CW" : "CCW", MOVE_MOTOR_STEP_COUNT, (long)motor_get_position(motor));
+}
+
+static void _moveLeftUp(ScreenManager &mgr)    { _moveMotorSteps(1, false); }  // CCW
+static void _moveLeftDown(ScreenManager &mgr)  { _moveMotorSteps(1, true); }   // CW
+static const MenuItem kMoveLeftItems[] = {
+    { "Up",   _moveLeftUp },
+    { "Down", _moveLeftDown },
+};
+static MenuScreen _moveLeftMenuScreen("Move Left Motor", kMoveLeftItems,
+                                       sizeof(kMoveLeftItems) / sizeof(kMoveLeftItems[0]));
+
+static void _moveRightUp(ScreenManager &mgr)   { _moveMotorSteps(2, false); }  // CCW
+static void _moveRightDown(ScreenManager &mgr) { _moveMotorSteps(2, true); }   // CW
+static const MenuItem kMoveRightItems[] = {
+    { "Up",   _moveRightUp },
+    { "Down", _moveRightDown },
+};
+static MenuScreen _moveRightMenuScreen("Move Right Motor", kMoveRightItems,
+                                        sizeof(kMoveRightItems) / sizeof(kMoveRightItems[0]));
 
 // ── Motion Menu — Settings > Motion. Defined before Settings Menu since
 // Settings' "Motion" item needs to reference it by address (same ordering
@@ -88,8 +131,8 @@ static void _motionHome(ScreenManager &mgr) {
     mgr.pop();
 }
 static void _motionBack(ScreenManager &mgr) { mgr.pop(); }
-static void _motionJog1(ScreenManager &mgr) { mgr.push(&_jogMotor1Screen); }
-static void _motionJog2(ScreenManager &mgr) { mgr.push(&_jogMotor2Screen); }
+static void _motionMoveLeft(ScreenManager &mgr)  { mgr.push(&_moveLeftMenuScreen); }
+static void _motionMoveRight(ScreenManager &mgr) { mgr.push(&_moveRightMenuScreen); }
 
 // "Left"/"right" = Motor 1/Motor 2 — a naming choice used throughout this
 // test; nothing in firmware itself distinguishes left/right beyond this.
@@ -97,13 +140,28 @@ static void _motionTestBoth(ScreenManager &mgr) { mgr.push(&_strokeTestScreen); 
 
 static const MenuItem kMotionItems[] = {
     { "Home Motors",      _motionHome },
-    { "Jog Motor 1",      _motionJog1 },
-    { "Jog Motor 2",      _motionJog2 },
-    { "Test Both Motors", _motionTestBoth },
+    { "Move Left Motor",  _motionMoveLeft },
+    { "Move Right Motor", _motionMoveRight },
+    { "Stroke Testing",   _motionTestBoth },
     { "Back",             _motionBack },
 };
 static MenuScreen _motionMenuScreen("Motion", kMotionItems,
                                      sizeof(kMotionItems) / sizeof(kMotionItems[0]));
+
+// ── Developer Mode submenu — Settings > Developer mode. Defined before
+// Settings Menu since it references this by address (same ordering rule
+// as the rest of this file). ────────────────────────────────────────────
+static void _devGoTelemetry(ScreenManager &mgr) { mgr.push(&_telemetryScreen); }
+static void _devGoUasDebug(ScreenManager &mgr)  { mgr.push(&_uasDebugToggleScreen); }
+static void _devBack(ScreenManager &mgr)        { mgr.pop(); }
+
+static const MenuItem kDeveloperModeItems[] = {
+    { "Telemetry",     _devGoTelemetry },
+    { "UAS Debug Mode", _devGoUasDebug },
+    { "Back",          _devBack },
+};
+static MenuScreen _developerModeMenuScreen("Developer Mode", kDeveloperModeItems,
+                                            sizeof(kDeveloperModeItems) / sizeof(kDeveloperModeItems[0]));
 
 // ── Settings Menu — defined before Start Menu since Start Menu's "Settings"
 // item needs to reference it by address (see file header for why this
@@ -112,7 +170,7 @@ static MenuScreen _motionMenuScreen("Motion", kMotionItems,
 // exists regardless of order). ────────────────────────────────────────────
 static void _settingsGoSound(ScreenManager &mgr)     { mgr.push(&_soundToggleScreen); }
 static void _settingsGoMotion(ScreenManager &mgr)    { mgr.push(&_motionMenuScreen); }
-static void _settingsGoDeveloper(ScreenManager &mgr) { mgr.push(&_developerModeScreen); }
+static void _settingsGoDeveloper(ScreenManager &mgr) { mgr.push(&_developerModeMenuScreen); }
 static void _settingsBack(ScreenManager &mgr)        { mgr.pop(); }
 
 static const MenuItem kSettingsItems[] = {
@@ -226,9 +284,9 @@ void ui_init() {
     _cameraMountScreen.setConfirmTarget(&_cameraStubScreen, true);  // push — Back pops to Start Menu
     _cameraStubScreen.configure("Camera Feature", "Feature idea developing in progress", true);
 
-    _jogMotor1Screen.setMotor(1);
-    _jogMotor2Screen.setMotor(2);
-    _developerModeScreen.wire(_uasDebugToggleScreen);
+    // Developer Mode submenu needs no wiring — its two items push
+    // _telemetryScreen and _uasDebugToggleScreen directly, both already
+    // existing static screens (see kDeveloperModeItems above).
     _mixingMenuScreen.wire(_warningScreen, _verifyingScreen);
     _warningScreen.wire(_mixingRunningScreen);
     _mixingRunningScreen.wire(_endScreen);

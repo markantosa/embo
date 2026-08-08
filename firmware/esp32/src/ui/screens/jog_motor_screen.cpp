@@ -47,7 +47,7 @@ void JogMotorScreen::_draw(bool forceFull) {
         tft.fillScreen(TFT_BLACK);
         tft.setFont(&fonts::FreeSansBold12pt7b);
         char title[24];
-        snprintf(title, sizeof(title), "Jog Motor %u", _motor);
+        snprintf(title, sizeof(title), "Move %s Motor", _motor == 1 ? "Left" : "Right");
         ui_display_draw_centered(title, 30, TFT_WHITE, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
         ui_display_draw_centered("Turn knob: CW = forward", 90, COLOR_LUNAR_ROCK, 1);

@@ -22,7 +22,7 @@ void StrokeTestScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
     tft.fillScreen(TFT_BLACK);
     tft.setFont(&fonts::FreeSansBold12pt7b);
-    ui_display_draw_centered("Test Both Motors", 30, TFT_WHITE, 1);
+    ui_display_draw_centered("Stroke Testing", 30, TFT_WHITE, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
     ui_display_draw_centered("Strokes to run", 90, COLOR_LUNAR_ROCK, 1);
     char buf[8];
@@ -68,7 +68,7 @@ void StrokeTestScreen::update(ScreenManager &mgr, bool forceFull) {
 // toward min), false = left toward min (right toward max). Returns false
 // on timeout (either motor).
 static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes, const char *label) {
-    ble_log("Motion > Test Both Motors: stroke %d/%d - %s (concurrent)",
+    ble_log("Motion > Stroke Testing: stroke %d/%d - %s (concurrent)",
             stroke, totalStrokes, label);
 
     motor_set_dir(1, leftForward);
@@ -110,7 +110,7 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
             motor_enable(2, false);
             snprintf(_lastFailureReason, sizeof(_lastFailureReason),
                      "STALL DETECTED - left motor (SG=%u)", motor_sg_result(1));
-            ble_log("Motion > Test Both Motors: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
+            ble_log("Motion > Stroke Testing: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
             return false;
         }
         if (!m2Done && motor_sg_result(2) < STROKE_TEST_STALL_SG_THRESHOLD) {
@@ -120,7 +120,7 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
             motor_enable(2, false);
             snprintf(_lastFailureReason, sizeof(_lastFailureReason),
                      "STALL DETECTED - right motor (SG=%u)", motor_sg_result(2));
-            ble_log("Motion > Test Both Motors: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
+            ble_log("Motion > Stroke Testing: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
             return false;
         }
 
@@ -131,7 +131,7 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
                 motor_set_speed(1, 0);
                 motor_enable(1, false);
                 m1Done = true;
-                ble_log("Motion > Test Both Motors: stroke %d - left reached target (position=%ld, force1=%.2fg)",
+                ble_log("Motion > Stroke Testing: stroke %d - left reached target (position=%ld, force1=%.2fg)",
                         stroke, (long)p1, force_sensor_get_grams_1());
             }
         }
@@ -142,7 +142,7 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
                 motor_set_speed(2, 0);
                 motor_enable(2, false);
                 m2Done = true;
-                ble_log("Motion > Test Both Motors: stroke %d - right reached target (position=%ld, force2=%.2fg)",
+                ble_log("Motion > Stroke Testing: stroke %d - right reached target (position=%ld, force2=%.2fg)",
                         stroke, (long)p2, force_sensor_get_grams_2());
             }
         }
@@ -159,7 +159,7 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
         // visible in the log, not just the start/end snapshot.
         if (millis() - lastProgressMs >= 300) {
             lastProgressMs = millis();
-            ble_log("Motion > Test Both Motors: stroke %d progress - left=%ld right=%ld - force1=%.2fg force2=%.2fg",
+            ble_log("Motion > Stroke Testing: stroke %d progress - left=%ld right=%ld - force1=%.2fg force2=%.2fg",
                     stroke, (long)motor_get_position(1), (long)motor_get_position(2),
                     force_sensor_get_grams_1(), force_sensor_get_grams_2());
         }
@@ -173,11 +173,11 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
         snprintf(_lastFailureReason, sizeof(_lastFailureReason),
                  "TIMED OUT - %s (left=%ld right=%ld)",
                  label, (long)motor_get_position(1), (long)motor_get_position(2));
-        ble_log("Motion > Test Both Motors: %s in stroke %d - force1=%.2fg force2=%.2fg",
+        ble_log("Motion > Stroke Testing: %s in stroke %d - force1=%.2fg force2=%.2fg",
                 _lastFailureReason, stroke, force_sensor_get_grams_1(), force_sensor_get_grams_2());
         return false;
     }
-    ble_log("Motion > Test Both Motors: stroke %d/%d - %s done (left=%ld right=%ld force1=%.2fg force2=%.2fg)",
+    ble_log("Motion > Stroke Testing: stroke %d/%d - %s done (left=%ld right=%ld force1=%.2fg force2=%.2fg)",
             stroke, totalStrokes, label, (long)motor_get_position(1), (long)motor_get_position(2),
             force_sensor_get_grams_1(), force_sensor_get_grams_2());
     return true;
@@ -198,11 +198,11 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
 // stroke counter (see config.h) — this never touches that.
 void StrokeTestScreen::_runTest(ScreenManager &mgr) {
     if (scheduler_is_running()) {
-        ble_log("Motion > Test Both Motors: refused - a run is in progress");
+        ble_log("Motion > Stroke Testing: refused - a run is in progress");
         return;
     }
 
-    ble_log("Motion > Test Both Motors: homing first (%d strokes requested at %u Hz)",
+    ble_log("Motion > Stroke Testing: homing first (%d strokes requested at %u Hz)",
             _strokeCount, MOTOR_STROKE_TEST_HZ);
     if (!motors_home()) {
         ui_show_error("HOMING FAILED - check limit switches");
@@ -211,7 +211,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
 
     for (int stroke = 1; stroke <= _strokeCount; stroke++) {
         force_sensor_update();  // fresh reading for this log line — see note above
-        ble_log("=== Motion > Test Both Motors: BEGIN stroke %d/%d (left=%ld right=%ld force1=%.2fg force2=%.2fg) ===",
+        ble_log("=== Motion > Stroke Testing: BEGIN stroke %d/%d (left=%ld right=%ld force1=%.2fg force2=%.2fg) ===",
                 stroke, _strokeCount, (long)motor_get_position(1), (long)motor_get_position(2),
                 force_sensor_get_grams_1(), force_sensor_get_grams_2());
 
@@ -222,7 +222,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
             // directly, NOT motor_at_soft_limit() — that trips on EITHER
             // boundary, and position starts exactly at softMin (0), so it
             // would report "at limit" before the motor ever took a step.
-            ble_log("Motion > Test Both Motors: stroke %d/%d - left motor clockwise to max limit (alone)",
+            ble_log("Motion > Stroke Testing: stroke %d/%d - left motor clockwise to max limit (alone)",
                     stroke, _strokeCount);
             motor_set_dir(1, true);
             motor_enable(1, true);
@@ -252,7 +252,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
                 force_sensor_update();
                 if (millis() - lastProgressMs >= 300) {
                     lastProgressMs = millis();
-                    ble_log("Motion > Test Both Motors: stroke %d progress - left=%ld - force1=%.2fg force2=%.2fg",
+                    ble_log("Motion > Stroke Testing: stroke %d progress - left=%ld - force1=%.2fg force2=%.2fg",
                             stroke, (long)motor_get_position(1),
                             force_sensor_get_grams_1(), force_sensor_get_grams_2());
                 }
@@ -264,14 +264,14 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
             if (stalled) {
                 snprintf(_lastFailureReason, sizeof(_lastFailureReason),
                          "STALL DETECTED - left motor (SG=%u)", motor_sg_result(1));
-                ble_log("Motion > Test Both Motors: %s in stroke %d (left alone)", _lastFailureReason, stroke);
+                ble_log("Motion > Stroke Testing: %s in stroke %d (left alone)", _lastFailureReason, stroke);
                 ui_show_error(_lastFailureReason);
                 return;
             }
             if (motor_get_position(1) < MOTOR1_SOFT_LIMIT_MAX) {
                 snprintf(_lastFailureReason, sizeof(_lastFailureReason),
                          "TIMED OUT - left alone (left=%ld)", (long)motor_get_position(1));
-                ble_log("Motion > Test Both Motors: %s in stroke %d - force1=%.2fg",
+                ble_log("Motion > Stroke Testing: %s in stroke %d - force1=%.2fg",
                         _lastFailureReason, stroke, force_sensor_get_grams_1());
                 ui_show_error(_lastFailureReason);
                 return;
@@ -295,11 +295,11 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
         }
 
         force_sensor_update();
-        ble_log("Motion > Test Both Motors: stroke %d/%d complete (left=%ld right=%ld force1=%.2fg force2=%.2fg)",
+        ble_log("Motion > Stroke Testing: stroke %d/%d complete (left=%ld right=%ld force1=%.2fg force2=%.2fg)",
                 stroke, _strokeCount, (long)motor_get_position(1), (long)motor_get_position(2),
                 force_sensor_get_grams_1(), force_sensor_get_grams_2());
     }
 
-    ble_log("Motion > Test Both Motors: all %d strokes complete", _strokeCount);
+    ble_log("Motion > Stroke Testing: all %d strokes complete", _strokeCount);
     mgr.pop();
 }
