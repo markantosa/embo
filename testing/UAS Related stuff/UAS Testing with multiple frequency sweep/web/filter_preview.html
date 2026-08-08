@@ -340,17 +340,19 @@ function updateChannel(key, rawValue) {
 
 // TelemetryPacket layout (little-endian, matches ble_service.h, pack(1)) —
 // same struct as the main dashboard, see index.html for field comments.
+// NOTE: this build adds uasFreqHz @4 (frequency-sweep support), which shifts
+// every field after uasVolts by 4 bytes versus the non-sweep firmware.
 function onTelemetry(event) {
   const dv = event.target.value;
   updateChannel('uas', dv.getFloat32(0, true));
-  updateChannel('sg1', dv.getUint16(4, true));
-  updateChannel('sg2', dv.getUint16(6, true));
-  // positionM1/M2 @8/@12, homingFlags @16, limitFlags @17 — not filter candidates, skipped here
-  updateChannel('force1', dv.getInt32(18, true));
-  updateChannel('force2', dv.getInt32(22, true));
-  updateChannel('als', dv.getUint16(26, true));
-  updateChannel('ir', dv.getUint32(28, true));
-  updateChannel('red', dv.getUint32(32, true));
+  updateChannel('sg1', dv.getUint16(8, true));
+  updateChannel('sg2', dv.getUint16(10, true));
+  // positionM1/M2 @12/@16, homingFlags @20, limitFlags @21 — not filter candidates, skipped here
+  updateChannel('force1', dv.getInt32(22, true));
+  updateChannel('force2', dv.getInt32(26, true));
+  updateChannel('als', dv.getUint16(30, true));
+  updateChannel('ir', dv.getUint32(32, true));
+  updateChannel('red', dv.getUint32(36, true));
 }
 </script>
 </body>

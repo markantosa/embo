@@ -11,17 +11,25 @@ Built and flashed with PlatformIO inside VS Code.
 | LEDC step generation, limit switch ISRs | `src/motors.cpp` | ✅ |
 | Homing routine + stroke counter | `src/motors.cpp` | ✅ |
 | AD9833 1MHz DDS init, UAS ADC calibration | `src/uas.cpp` | ✅ |
-| Turbidity (APDS9960 ALS + MAX30102 backscatter) | `src/turbidity.cpp` | ✅ read path — one of four closed-loop sensor-fusion inputs, see below |
-| Force sensing (HX711 x2, shared clock) | `src/force_sensor.cpp` | ✅ read path — fusion input AND independent e-stop, both pending real calibration data, see `CALIBRATION.md` §4 |
+| Turbidity (APDS9960 ALS + MAX30102 backscatter) | `src/turbidity.cpp` | ⚠️ implemented but **currently disabled** — `turbidity_init()`/`turbidity_update()` are commented out in `main.cpp` (sensors not physically connected on the current bench setup), so this fusion channel reads 0 permanently until re-enabled |
+| Force sensing (HX711 x2, shared clock) | `src/force_sensor.cpp` | ✅ read path — fusion input, calibrated scale factors in `calibration.h`. Automatic e-stop on over-force has been **removed** (see Safety below) — `force_sensor_estop_tripped()` still exists but nothing calls it |
 | RPi UART receive + on-demand capture protocol | `src/rpi_uart.cpp` | ✅ |
-| Sensor-to-physical-unit + 9-point fusion calibration | `src/calibration.cpp` | ✅ structure in place — `SENSOR_CAL_TABLE` is still all placeholders pending the 9-syringe bench session, see `../CALIBRATION.md` |
+| Sensor-to-physical-unit + 9-point fusion calibration | `src/calibration.cpp` | ✅ structure in place — `SENSOR_CAL_TABLE` is still all placeholders pending the 9-syringe bench session, see `../CALIBRATION.md`. With turbidity disabled and the table unpopulated, fusion currently has at most 2 live channels (UAS, force) and 0 trusted channels until real data is entered |
 | Mixing scheduler (closed loop on fused sensor estimate) | `src/scheduler.cpp` | ✅ structure in place — depends on `SENSOR_CAL_TABLE` being real data |
-| TFT display (LovyanGFX) + encoder + one button | `src/ui.cpp` | ✅ loading-screen UI + optional camera-verification screen, no touch |
-| NimBLE wireless debug UART | `src/ble_debug.cpp` | ✅ |
+| TFT display (LovyanGFX) + encoder + BTN1 + touch (secondary) | `src/ui.cpp`, `src/ui/screens/*` | ✅ menu-tree UI, see "Operational workflow" below |
+| Shared TFT drawing helpers | `src/ui/ui_display.cpp` | ✅ |
+| Shared input layer (EC11 ISR, BTN1/EC11-switch debounce, touch tap polling) | `src/ui/ui_input.cpp` | ✅ |
+| Session-only mixing options (agent, syringe type, target type) | `src/mixing_options.cpp` | ✅ **cosmetic/labeling only, confirmed** — no calibration constant reads these; no viscosity calibration exists anywhere in the codebase |
+| Session-only sound on/off flag | `src/sound_settings.cpp` | ✅ currently has no observable effect (the only sound, a boot chirp, fires before this setting is reachable) — exists for future UI tones |
+| Load-cell flash logging (LittleFS) | `src/data_logger.cpp` | ✅ buffers HX711 samples to `/loadcell.csv` for a more trustworthy record than the live stream; controlled by the binary BLE `LOG_CTRL` characteristic, see below |
+| NimBLE wireless debug UART (text console) | `src/ble_debug.cpp` | ✅ |
+| NimBLE binary telemetry service (second, separate service) | `src/ble_binary_telemetry.cpp` | ✅ built to match a specific bench HTML dashboard, see "BLE binary telemetry" below — not documented elsewhere, and distinct from both the text console above and from `testing/PCB_Test_Firmware_v3_4`'s dashboard |
 
 See [FIRMWARE_TODO.md](../FIRMWARE_TODO.md) for the full build-up task list and hardware checklist, and [`../CALIBRATION.md`](../CALIBRATION.md) for the one place to tweak every raw-sensor-to-physical-value mapping as calibration data comes in.
 
 **This IS closed-loop — just not on CV.** UAS attenuation, APDS9960 turbidity, MAX30102 turbidity, and load-cell force are each calibrated against a 9-point bench dataset (known particle sizes from 9 reference syringes, see `CALIBRATION.md` §5) and fused into a live size estimate the scheduler checks after every stroke. **CV is the one signal that's optional and on-demand** — the RPi only captures a frame and runs CV when the ESP32 explicitly asks (`rpi_request_capture()`); the doctor can trigger it (encoder long-press) to independently double-check the fusion's result, but it never drives the stop decision itself.
+
+**Currently, in practice, fusion has less than its full four channels.** Turbidity is disabled at the source (see table above) and `SENSOR_CAL_TABLE` is unpopulated, so `calib_estimate_particle_size_um()` currently returns `numChannelsUsed == 0` regardless — the scheduler can only stop via `MIXING_MAX_STROKES_SAFETY_CAP` until the 9-syringe bench session runs (and, separately, until turbidity sensors are wired up and `turbidity_init()`/`turbidity_update()` are uncommented in `main.cpp`).
 
 **Why these four sensors weren't closed-loop inputs before now:** `docs/EMBO_UAS_CV_Technical_Advisory.txt` (and this project's own earlier rules) held UAS/turbidity/force to "diagnostic-only until an empirical correlation check proves it" — and until the 9-syringe bench dataset existed, nobody had that proof. Collecting that dataset is what changes them from diagnostic to trustworthy; see `calib_estimate_particle_size_um()` in `calibration.cpp`, which independently checks each channel's calibration curve for monotonicity and excludes any channel that doesn't pass, rather than blindly trusting whatever's plugged in.
 
@@ -31,46 +39,64 @@ See [FIRMWARE_TODO.md](../FIRMWARE_TODO.md) for the full build-up task list and 
 
 ## Operational workflow
 
-The UI is now a menu tree, driven by both the EC11 knob (rotate + press) and the XPT2046 touchscreen — a redesign from the earlier two-screen (set-target/loading) UI, per a new UX flowchart. Live sensor data is still a BLE-only, diagnostics-only concern for the mixing loop itself (`FORCE ON`/`TURB ON`/`UAS ON`/`FIT`, see below) — the one exception is Developer Mode, which does show a live telemetry readout on-screen (see below).
+The UI is a menu tree (`src/ui.cpp`, `src/ui/screens/*`), driven **by the EC11 knob** (rotate to move a selection or adjust a value, short-press to select/confirm, long-press for a context action) **and BTN1** (Back on menu screens, stop/e-stop on the running screen — see "BTN1's second job" below). Every screen also has touch (XPT2046) handlers for Back/Toggle/Pause/Stop, but **touch is currently non-functional on real hardware** — the SPI bus was reverted to write-only (no MISO) after a boot hang (see "SPI bus" below), so `LGFX::getTouch()` always returns false and `ui_input_poll_touch_tap()` never fires a tap, no matter how complete the per-screen touch code looks. No screen is a dead end because of this: the encoder/BTN1 path covers every navigation action on its own, which is exactly why touch being dark right now isn't currently blocking anything.
 
-**Screen tree:**
+Live sensor data stays a BLE-only, diagnostics-only concern for the mixing loop itself (`FORCE ON`/`TURB ON`/`UAS ON`/`FIT`, see below) — the one on-screen exception is the Telemetry screen (Settings > Developer mode > Telemetry), which shows a live readout (load cell, turbidity, UAS, motor position) directly on the TFT.
+
+**Screen tree, as actually wired in `ui.cpp`:**
 
 ```
-Insert syringe (boot)
+Insert syringe (boot placeholder)
  └─ Start Menu
-     ├─ Start ─────────► Mixing Menu ───► Warning (mount check) ───► Mixing Running ───► End ──► (back to Start Menu)
-     │                                                                                            
+     ├─ Start ──► Agent Selection (Gelfoam/Lyostypt)
+     │             └─► Syringe Type (Terumo/Nipro)
+     │                   └─► Target Type (Size/Viscosity)
+     │                         └─► Mixing Menu ──► Warning (mount check) ──► Mixing Running ──► End ──► (back to Start Menu)
+     │
      ├─ Settings
-     │   ├─ Presets ──────────► (stub — "feature idea developing in progress")
-     │   └─ Developer mode ───► UAS debug mode (BLE on/off toggle)
+     │   ├─ Sound toggle
+     │   ├─ Motion ──┬─ Home Motors
+     │   │            ├─ Move Left Motor (discrete 10-step nudge)
+     │   │            ├─ Move Right Motor (discrete 10-step nudge)
+     │   │            └─ Stroke Testing (see "Stroke test" below)
+     │   └─ Developer mode ──┬─ Telemetry (live on-screen sensor readout)
+     │                        └─ UAS Debug Mode (BLE on/off toggle)
      │
      └─ Camera feature ──► mount-check prompt ──► (stub — "feature idea developing in progress")
 ```
 
-**Touchscreen currently unavailable — see "SPI bus" section below (reverted after a boot hang).** No screen is a dead end without it: every "Back" also works via **BTN1** (short press — see "BTN1's second job" below) on every non-running screen, and via encoder long-press on the screens where that's free (everywhere except Mixing Menu and End, where long-press is already "verify with camera").
+Any screen can reach **VerifyingScreen** (RPi camera capture, `rpi_request_capture()`) via encoder long-press from the Mixing Menu, Warning, or End screens.
+
+Agent (Gelfoam/Lyostypt), Syringe Type, and Target Type (`src/mixing_options.cpp`) are **session-only labels with no calibration effect** — confirmed nothing in `calibration.cpp`/`calibration.h` reads them, and no viscosity-based calibration path exists anywhere in the codebase; Target Type = Viscosity is UI-selectable but not functionally different from Size today.
+
+**Two screen source files exist but are dead code — not reachable from `ui.cpp`'s actual graph above:** `src/ui/screens/developer_mode_screen.*` (an older, self-contained Developer Mode screen with its own inline telemetry — superseded by the plain menu + separate `TelemetryScreen` shown in the tree above) and `src/ui/screens/jog_motor_screen.*` (a continuous encoder-jog screen — superseded by the inline discrete 10-step nudge used by Move Left/Right Motor). Neither is instantiated anywhere; leave them if you're grepping for behavior that doesn't match what you see on the board, or delete them in a future cleanup pass.
+
+**A bench-only back door exists outside this tree:** `ui_open_bench_diagnostics_menu()` (recalibrate UAS baseline, reset the breakage-model fit) is pushed on top of whatever screen is showing, but only in response to the BLE `MENU` command — it's not reachable from any on-screen menu item.
 
 | Stage | Trigger | What happens | Hardware involved |
 |---|---|---|---|
-| **1. Boot / self-test** | Power on | TMC2209 UART init + SpreadCycle write/readback, AD9833 + UAS baseline sample, turbidity I2C scan, HX711 pin init, then straight to the "Put in syringe?" screen — **no homing happens automatically at boot, and BLE is off by default** (see Developer Mode below). Any `BLOCKING` check failing (see `FIRMWARE_TODO.md`) should halt — no silent bad-data path into the scheduler. | Both TMC2209 modules, AD9833, turbidity sensors, status LED |
-| **2. Homing** | **Press EC11 knob** on the Mixing Menu while it reads "NOT HOMED" (or the BLE `HOME` command) | `motors_home()` drives both motors to their limit switches and backs off; stroke counter resets to 0. Blocking for the duration of the attempt (same tradeoff already accepted for BLE `HOME`) — nothing can be running yet, since a run itself requires being homed first. On failure, `ui_show_error()` puts the TFT into a persistent fault screen — no way to start a run until the board is rebooted and the fault investigated. | M1/M2 steppers, limit switches (J6/J7), TFT |
-| **3. Mixing Menu** | Start Menu > Start | Adjust target size (encoder rotation, 5µm steps, 50–1000µm) and the syringe preset (touch — Terumo/Nipro, **cosmetic only for now**, no calibration effect yet). Touch Back returns to Start Menu. | TFT, touchscreen, EC11 |
-| **3b. Optional: verify current size** | **Hold EC11 knob** (Mixing Menu or End screen) | Requests one RPi capture+CV pass (`rpi_request_capture()`) and shows the median/IQR result on-screen once it replies, color-coded IN SPEC / OUT OF SPEC against the target — an independent double-check, not something that runs automatically, and unrelated to the separate (stub) "Camera feature" menu item. See §"Camera verification" below. | EC11 push-switch, RPi camera, TFT |
-| **4. Warning / mount check** | Encoder press on Mixing Menu (once homed) | "Ensure syringe is properly mounted inside" — confirm (encoder press) starts the run; touch Back returns to the Mixing Menu without starting anything. | TFT, touchscreen |
-| **5. Running** | Encoder confirm on the Warning screen | Closed loop: the scheduler strokes continuously, and after every stroke reads UAS + both turbidity channels + force, converts each through its own 9-point calibration curve, and fuses the trustworthy ones (median) into one size estimate — see `calibration.h`'s `calib_estimate_particle_size_um()`. Touch **Pause** holds the run mid-stroke, resumable (`scheduler_pause()`/`scheduler_resume()`) — distinct from Stop, which ends it. Touch **Stop** calls the same `scheduler_stop()` as BTN1's short-press. | Both motors, UAS chain, turbidity sensors, HX711 x2, TMC2209 UART, TFT, touchscreen |
-| **6. Stop** | **BTN1 (short press) or touch Stop** | Graceful stop — finishes the in-progress stroke (or, if paused, stops immediately since nothing's in progress), then holds. | BTN1 or touchscreen, both motors |
-| **6b. Emergency stop** | **BTN1 (held ≥800ms) OR automatic HX711 over-force** | Immediate — kills motor power mid-step, same code path (`scheduler_emergency_stop()`) regardless of trigger source. This is a hard safety threshold, separate from force's role as a fusion input, and BTN1's emergency-stop function is unchanged by anything in this redesign — see `CALIBRATION.md` §4 and §8. | BTN1 or HX711 x2, both motors |
-| **7. Target reached / End screen** | Automatic | The fused sensor estimate reads within `TARGET_TOLERANCE_UM` of the target for `FUSION_CONSECUTIVE_CHECKS_REQUIRED` consecutive stroke-checks in a row (debounced against a single noisy reading), and the scheduler stops itself. If the fusion never converges, a hard `MIXING_MAX_STROKES_SAFETY_CAP` stops the run anyway and flags it as a safety-cap stop, not a confirmed one (`scheduler_hit_safety_cap()`) — a sign to check calibration, not a normal completion. Either way, press-and-hold the encoder knob on the End screen to independently confirm the achieved size with a camera capture, or touch "Back to menu" to return to the Start Menu. | TFT, touchscreen |
+| **1. Boot / self-test** | Power on | TMC2209 UART init + SpreadCycle write/readback, AD9833 + UAS baseline sample, HX711 init + fresh tare, then straight to the "Insert syringe" placeholder screen — **no homing happens automatically at boot, and BLE is off by default**. Turbidity init/update are currently commented out in `main.cpp` (sensors not physically connected on the bench) — see "What this firmware does" above. Any `BLOCKING` check failing (see `FIRMWARE_TODO.md`) should halt — no silent bad-data path into the scheduler. | Both TMC2209 modules, AD9833, HX711 x2, status LED |
+| **2. Homing** | **Press EC11 knob** on the Mixing Menu while it reads "NOT HOMED" (or the BLE `HOME` command) | `motors_home()` drives both motors to their limit switches and backs off; stroke counter resets to 0. Blocking for the duration of the attempt (same tradeoff already accepted for BLE `HOME`) — nothing can be running yet, since a run itself requires being homed first. On failure, `ui_show_error()` puts the TFT into a persistent fault screen — no way to start a run until the board is rebooted and the fault investigated. The `embo_bench` build (see "Bench testing" below) fakes this step instantly instead and shows a loud on-screen banner so it's never mistaken for a real homed board. | M1/M2 steppers, limit switches (J6/J7), TFT |
+| **3. Setup flow** | Start Menu > Start | Agent Selection → Syringe Type → Target Type (all session-only labels, see above) → Mixing Menu, where the encoder adjusts target size (5µm steps, 50–1000µm). | TFT, EC11 |
+| **3b. Optional: verify current size** | **Hold EC11 knob** (Mixing Menu, Warning, or End screen) | Requests one RPi capture+CV pass (`rpi_request_capture()`) and shows the median/IQR result on-screen once it replies, color-coded IN SPEC / OUT OF SPEC against the target — an independent double-check, not something that runs automatically, and unrelated to the separate (stub) "Camera feature" menu item. See §"Camera verification" below. | EC11 push-switch, RPi camera, TFT |
+| **4. Warning / mount check** | Encoder press on Mixing Menu (once homed) | "Ensure syringe is properly mounted inside" — confirm (encoder press) starts the run; Back (BTN1 short press; the screen's touch Back handler exists but is currently dark, see touch note above) returns to the Mixing Menu without starting anything. | TFT, EC11, BTN1 |
+| **5. Running** | Encoder confirm on the Warning screen | Closed loop: the scheduler strokes continuously, and after every stroke reads UAS + force (+ turbidity once re-enabled), converts each through its own 9-point calibration curve, and fuses the trustworthy ones (median) into one size estimate — see `calibration.h`'s `calib_estimate_particle_size_um()`. The screen has a touch **Pause** (holds the run mid-stroke, resumable via `scheduler_pause()`/`scheduler_resume()`) and touch **Stop** (calls the same `scheduler_stop()` as BTN1's short-press) — both currently unreachable with touch dark; **BTN1 short-press (Stop) and long-press (e-stop) are the only ways to affect a running mix today, there is no pause without touch.** | Both motors, UAS chain, HX711 x2, TMC2209 UART, TFT |
+| **6. Stop** | **BTN1 short press** (touch Stop exists in code, currently non-functional) | Graceful stop — finishes the in-progress stroke, then holds. | BTN1, both motors |
+| **6b. Emergency stop** | **BTN1 held ≥800ms — the ONLY e-stop path.** | Immediate — kills motor power mid-step (`scheduler_emergency_stop()`). **The automatic HX711 over-force e-stop has been removed**: `force_sensor_estop_tripped()`/`HX711_ESTOP_GRAMS` (`calibration.h`) still exist and are still correct as *code*, but `main.cpp`'s `loop()` no longer calls the tripped-check, by deliberate decision — see the comment there. Force readings still feed sensor fusion; they no longer trigger an automatic stop. There is currently **no automatic overforce/jam protection** — a manual BTN1 hold is required. Flag this to whoever owns the safety case before relying on it clinically; see `CALIBRATION.md` §4/§8 for the (currently inert) threshold. | BTN1, both motors |
+| **7. Target reached / End screen** | Automatic | The fused sensor estimate reads within `TARGET_TOLERANCE_UM` of the target for `FUSION_CONSECUTIVE_CHECKS_REQUIRED` consecutive stroke-checks in a row (debounced against a single noisy reading), and the scheduler stops itself. If the fusion never converges, a hard `MIXING_MAX_STROKES_SAFETY_CAP` stops the run anyway and flags it as a safety-cap stop, not a confirmed one (`scheduler_hit_safety_cap()`) — a sign to check calibration, not a normal completion. **With turbidity disabled and `SENSOR_CAL_TABLE` unpopulated (see "What this firmware does"), every run currently ends via the safety cap, not a confirmed fusion stop, until both are addressed.** Either way, press-and-hold the encoder knob on the End screen independently confirms the achieved size with a camera capture; BTN1 short-press returns to the Start Menu (the screen's touch "Back to menu" is currently non-functional, same as elsewhere). | TFT |
+
+**Stroke test** (Settings > Motion > Stroke Testing, `stroke_test_screen.cpp`): a bench diagnostic, unrelated to the mixing scheduler's own stroke counter. Drives M1 alone, then M1+M2 concurrently, using its own speed/count/stall-threshold constants (`MOTOR_STROKE_TEST_HZ`, `STROKE_TEST_COUNT_MIN/MAX/DEFAULT`, `STROKE_TEST_STALL_SG_THRESHOLD` — the last is currently 0/disabled, see `config.h`) — for checking mechanical health, not for producing a mixed batch.
 
 **Button/encoder/touch summary** (see `include/config.h` and `src/ui.cpp`):
 
 | Control | Function |
 |---|---|
-| EC11 rotary | Adjust target particle size (50–1000µm), Mixing Menu only |
-| EC11 push-switch (short press) | Context-dependent: home (if not yet homed) or continue to Warning (Mixing Menu); confirm and start (Warning); select a menu item (Start/Settings Menu, Developer Mode); toggle (UAS debug mode) |
-| EC11 push-switch (held ≥800ms) | Request an optional camera size verification (Mixing Menu or End screen) |
-| Touchscreen (XPT2046) | Menu navigation (Back buttons throughout), syringe preset cycling, Pause/Stop on the running screen, the UAS debug mode toggle — see the screen tree above |
+| EC11 rotary | Adjust target particle size (50–1000µm) on the Mixing Menu; move the selection on menu/list screens |
+| EC11 push-switch (short press) | Context-dependent: home (if not yet homed) or continue to Warning (Mixing Menu); confirm and start (Warning); select a menu item; toggle (UAS debug mode, sound) |
+| EC11 push-switch (held ≥800ms) | Request an optional camera size verification (Mixing Menu, Warning, or End screen) |
+| Touchscreen (XPT2046) | Secondary/supplementary — Back, Pause/Stop on the running screen, toggle taps — see individual screens; not required for any navigation path |
 | BTN1 (short press) | **Two roles, on mutually exclusive screens** — see "BTN1's second job" below |
-| BTN1 (held ≥800ms) | Emergency stop — **only does anything on the Mixing Running screen**; a no-op everywhere else |
+| BTN1 (held ≥800ms) | Emergency stop — **only does anything on the Mixing Running screen**; the only e-stop path in this firmware (see 6b above); a no-op everywhere else |
 
 ### BTN1's second job
 
@@ -80,11 +106,11 @@ The new touch Pause/Stop buttons on the running screen are additional ways to re
 
 ### Developer Mode / BLE
 
-BLE is **off by default** — `ble_debug_init()` sets up the NimBLE stack but does not advertise. Turn it on from Start Menu > Settings > Developer mode > UAS debug mode (shown on-screen: "turning this mode on will enable Bluetooth"); the same screen shows the current on/off state and lets you toggle it back off. Developer Mode itself shows a live telemetry readout (load cells, turbidity, UAS reading) directly on the TFT — the only screen in this design where raw sensor values are shown on-device rather than BLE-only.
+BLE is **off by default** — `ble_debug_init()` sets up the NimBLE stack but does not advertise. Turn it on from Start Menu > Settings > Developer mode > UAS Debug Mode (shown on-screen: "turning this mode on will enable Bluetooth"); the same screen shows the current on/off state and lets you toggle it back off. The sibling **Telemetry** screen (Settings > Developer mode > Telemetry, `telemetry_screen.cpp`) shows a live readout (load cells, turbidity, UAS reading, motor position) directly on the TFT — the only screen in this design where raw sensor values are shown on-device rather than BLE-only. (An older, self-contained `developer_mode_screen.cpp` also exists in the source tree with similar inline telemetry, but it's dead code — not reached from `ui.cpp`'s actual menu wiring, see the screen-tree section above.)
 
 ### Camera verification (optional, on-demand — independent of the fusion loop)
 
-CV is **never a fusion input** (see above) — it's an **operator-triggered, single-shot check** the doctor can run any time from the Mixing Menu or End screen (encoder long-press), to independently confirm what the four onboard sensors already decided. This is unrelated to the Start Menu's separate "Camera feature" item, which is a stub per the current UX design (not yet developed):
+CV is **never a fusion input** (see above) — it's an **operator-triggered, single-shot check** the doctor can run any time from the Mixing Menu, Warning, or End screen (encoder long-press), to independently confirm what the four onboard sensors already decided. This is unrelated to the Start Menu's separate "Camera feature" item, which is a stub per the current UX design (not yet developed):
 
 1. ESP32 sends `CAPTURE` to the RPi over UART (`rpi_request_capture()`).
 2. RPi captures one frame, runs CV once, and replies with `SIZE <median_um> <iqr_um>`.
@@ -179,7 +205,7 @@ Note: this is a separate BLE service (`EMBO-Debug`, Nordic UART Service) from `t
 | `MOVE <motor> <steps>` | `MOVE 1 400` | Moves motor 1 forward 400 steps at 500 Hz. Use negative steps for reverse: `MOVE 2 -200`. Stops automatically on completion or limit trip. |
 | `UAS ON` / `UAS OFF` | `UAS ON` | Streams per-frequency attenuation + the most recent on-demand CV capture's median/IQR (if any) every 200ms — useful for cross-checking UAS against CV independently of the fusion estimate. Trigger captures with `CAPTURE` (below) while this is running to populate the CV side of the log. |
 | `FORCE ON` / `FORCE OFF` | `FORCE ON` | Streams calibrated grams for both HX711 channels every 200ms — see `CALIBRATION.md` §4 before trusting the grams figure (tare/scale are still placeholders). |
-| `TURB ON` / `TURB OFF` | `TURB ON` | Streams raw APDS9960 ALS + MAX30102 IR/RED counts, plus whether each sensor responded on the I2C bus. |
+| `TURB ON` / `TURB OFF` | `TURB ON` | Streams raw APDS9960 ALS + MAX30102 IR/RED counts, plus whether each sensor responded on the I2C bus. **Currently reads stale/zero values** — `turbidity_update()` isn't called from `main.cpp`'s `loop()` right now (sensors not physically connected on the bench, see "What this firmware does"), so this stream just reflects whatever the last real reading was before it got disabled. |
 | `FUSION` | `FUSION` | **One-shot, not a stream.** Prints the CURRENT live value of all four fusion channels plus the resulting fused estimate and per-channel trust flags — this is the exact command to run during the 9-syringe bench session: hold a known-size syringe steady, run `FUSION`, copy the printed values into that syringe's row in `SENSOR_CAL_TABLE` (`calibration.cpp`). See `CALIBRATION.md` §5. |
 | `CAPTURE` | `CAPTURE` | Manually triggers the same on-demand RPi capture+CV the UI's encoder long-press does — for bench testing without the physical knob. Result arrives as an `RPi: median=... iqr=...` log line once the RPi replies (or a timeout log after `RPI_CAPTURE_TIMEOUT_MS`). |
 | `FIT` | `FIT` | Dumps the DIAGNOSTIC-ONLY breakage-model fit (`k`, `D0`, verification point count) plus the current run's stroke count, last fused estimate, and whether the safety cap was hit. Does not reflect what's actually driving the stop condition — that's `FUSION`. |
@@ -200,6 +226,21 @@ Sending an unrecognised command prints the command list back.
 | StallGuard | While a `MOVE` is running | `SG M1: 512` | 200ms |
 
 StallGuard (`SG_RESULT`) streams automatically whenever a `MOVE` command is in progress — no separate command needed. Higher value = less load on the motor. Valid only while SpreadCycle is active (confirmed at boot via BLE log).
+
+## BLE binary telemetry (second, separate service — undocumented until now)
+
+`src/ble_binary_telemetry.cpp` runs a **second NimBLE service on the same server** as the text-console `EMBO-Debug` service above, with its own custom UUIDs, gated by the same enable/disable toggle (`ble_debug_set_enabled()` — Settings > Developer mode > UAS Debug Mode turns both on together). It exists to drive a specific bench HTML dashboard (`index_logging_to_record_UAS_csv_data.html`, not `testing/PCB_Test_Firmware_v3_4`'s dashboard) rather than a human typing commands:
+
+| Characteristic | Direction | Purpose |
+|---|---|---|
+| `MOTOR_CMD` | write | Jog a motor (same underlying action as the text console's `MOVE`) |
+| `HOME_CMD` | write | Trigger homing (same underlying action as `HOME`) |
+| `FREQ_CMD` | write | Manual UAS frequency override (same underlying action as `UASFREQ`) |
+| `LOG_CTRL` | write | `0`=stop, `1`=start, `2`=clear, `3`=dump — controls the flash-backed load-cell logger (`src/data_logger.cpp`, writes `/loadcell.csv` to LittleFS) |
+| `LOG_DATA` | notify | Chunked read-back of the logged CSV once a `LOG_CTRL` dump (`3`) is requested |
+| `TelemetryPacket` | notify, ~40ms | A packed 41-byte struct: UAS volts/frequency, StallGuard results, motor positions, homing/limit-switch flags, raw force counts, ALS/IR/RED turbidity counts, turbidity sensor-ok flags |
+
+**Why a flash-backed logger instead of just streaming:** `data_logger.cpp`'s buffered CSV is a more trustworthy record than the live 40ms notify stream, which can drop packets over a lossy BLE link — start a session, run the test, then dump and inspect the file rather than trying to reconstruct results from the live stream alone.
 
 ### Safety
 
@@ -267,7 +308,7 @@ That bench rig's headline feature — retuning the AD9833 to an arbitrary freque
 
 **Safety:** a sweep or manual override is also auto-cancelled if a run somehow starts while one is active (belt-and-braces — `scheduler_start()` already clears any override itself before a run begins, so attenuation fusion during an actual mix can never read a leftover bench frequency), and on BLE disconnect, same as an in-progress `MOVE`.
 
-**Dashboard:** `web/uas_debug_dashboard.html` — open in Chrome/Edge (Web Bluetooth), connect to `EMBO-Debug`, and it gives you quick-command buttons, a manual-frequency card, and a sweep card with a live results table + CSV download (`freq_hz, mean_mv, std_mv, n`) — the same workflow as the bench rig's dashboard, adapted to this project's plain-text NUS console instead of a custom binary telemetry characteristic.
+**Dashboard:** `web/uas_debug_dashboard.html` — open in Chrome/Edge (Web Bluetooth), connect to `EMBO-Debug`, and it gives you quick-command buttons, a manual-frequency card, and a sweep card with a live results table + CSV download (`freq_hz, mean_mv, std_mv, n`) — the same workflow as the bench rig's dashboard, adapted to this project's plain-text NUS console. This is a *different* dashboard from the one driving the binary telemetry service (`index_logging_to_record_UAS_csv_data.html`, see "BLE binary telemetry" above) — the two connect to different characteristics on the same `EMBO-Debug` server and aren't interchangeable.
 
 ## UART assignment
 

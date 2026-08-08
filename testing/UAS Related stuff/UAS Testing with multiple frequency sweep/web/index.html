@@ -380,33 +380,34 @@ function setBadge(el, state) {
 
 // TelemetryPacket layout (little-endian, matches ble_service.h, pack(1)):
 // float    uasVolts        @0
-// uint16   sgResultM1      @4
-// uint16   sgResultM2      @6
-// int32    positionM1      @8
-// int32    positionM2      @12
-// uint8    homingFlags     @16
-// uint8    limitFlags      @17
-// int32    forceRaw1       @18
-// int32    forceRaw2       @22
-// uint16   alsClear        @26
-// uint32   irRaw           @28
-// uint32   redRaw          @32
-// uint8    turbidityFlags  @36
+// float    uasFreqHz       @4   (added for the frequency-sweep build)
+// uint16   sgResultM1      @8
+// uint16   sgResultM2      @10
+// int32    positionM1      @12
+// int32    positionM2      @16
+// uint8    homingFlags     @20
+// uint8    limitFlags      @21
+// int32    forceRaw1       @22
+// int32    forceRaw2       @26
+// uint16   alsClear        @30
+// uint32   irRaw           @32
+// uint32   redRaw          @36
+// uint8    turbidityFlags  @40
 function onTelemetry(event) {
   const dv = event.target.value;
   const uas = dv.getFloat32(0, true);
-  const sg1 = dv.getUint16(4, true);
-  const sg2 = dv.getUint16(6, true);
-  const pos1 = dv.getInt32(8, true);
-  const pos2 = dv.getInt32(12, true);
-  const homingFlags = dv.getUint8(16);
-  const limitFlags = dv.getUint8(17);
-  const force1 = dv.getInt32(18, true);
-  const force2 = dv.getInt32(22, true);
-  const als = dv.getUint16(26, true);
-  const ir = dv.getUint32(28, true);
-  const red = dv.getUint32(32, true);
-  const turbidityFlags = dv.getUint8(36);
+  const sg1 = dv.getUint16(8, true);
+  const sg2 = dv.getUint16(10, true);
+  const pos1 = dv.getInt32(12, true);
+  const pos2 = dv.getInt32(16, true);
+  const homingFlags = dv.getUint8(20);
+  const limitFlags = dv.getUint8(21);
+  const force1 = dv.getInt32(22, true);
+  const force2 = dv.getInt32(26, true);
+  const als = dv.getUint16(30, true);
+  const ir = dv.getUint32(32, true);
+  const red = dv.getUint32(36, true);
+  const turbidityFlags = dv.getUint8(40);
 
   document.getElementById('uasValue').textContent = uas.toFixed(3);
   document.getElementById('uasBar').style.width = Math.min(100, (uas / 3.3) * 100) + '%';
