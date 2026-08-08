@@ -19,14 +19,9 @@ static void _resetBreakageFit(ScreenManager &mgr) {
     mgr.pop();
 }
 
-static void _back(ScreenManager &mgr) {
-    mgr.pop();
-}
-
 static const MenuItem kBenchItems[] = {
     { "Recal. UAS baseline", _recalUasBaseline },
     { "Reset breakage fit",  _resetBreakageFit },
-    { "Back",                _back },
 };
 
 MenuScreen &bench_diagnostics_menu() {

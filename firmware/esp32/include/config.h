@@ -2,6 +2,9 @@
 
 #include <cstdint>
 
+// ── Firmware version ─────────────────────────────────────────────────────────
+#define FIRMWARE_VERSION "0.5.1"
+
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
 // CHANGED FROM v2.4: GPIO21/37/42 used to be touch pins — they are now HX711

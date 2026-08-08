@@ -1,0 +1,20 @@
+Firmware development history
+
+Previously existing functionality
+- homing, with edge cases handled 
+- testing for strokes 
+- main ui framework
+- loadcell data logging via serial
+- uas data logging via ble and html
+- motor limits (in steps)
+- working buzzer 
+
+v0.5.1 (yet to test)
+- added firmware version numbering in settings ui
+- removed inconsistent "back" buttons in some menus
+- included uas tx and rx in serial data collection
+
+v0.5.2 (goal) - to change units from steps into mm, hz into mm/s
+
+v0.6.0 (goal) - to a way to take in calibration data and form the motor stopping loop
+

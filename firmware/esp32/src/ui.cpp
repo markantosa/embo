@@ -130,7 +130,6 @@ static void _motionHome(ScreenManager &mgr) {
     }
     mgr.pop();
 }
-static void _motionBack(ScreenManager &mgr) { mgr.pop(); }
 static void _motionMoveLeft(ScreenManager &mgr)  { mgr.push(&_moveLeftMenuScreen); }
 static void _motionMoveRight(ScreenManager &mgr) { mgr.push(&_moveRightMenuScreen); }
 
@@ -143,7 +142,6 @@ static const MenuItem kMotionItems[] = {
     { "Move Left Motor",  _motionMoveLeft },
     { "Move Right Motor", _motionMoveRight },
     { "Stroke Testing",   _motionTestBoth },
-    { "Back",             _motionBack },
 };
 static MenuScreen _motionMenuScreen("Motion", kMotionItems,
                                      sizeof(kMotionItems) / sizeof(kMotionItems[0]));
@@ -153,12 +151,10 @@ static MenuScreen _motionMenuScreen("Motion", kMotionItems,
 // as the rest of this file). ────────────────────────────────────────────
 static void _devGoTelemetry(ScreenManager &mgr) { mgr.push(&_telemetryScreen); }
 static void _devGoUasDebug(ScreenManager &mgr)  { mgr.push(&_uasDebugToggleScreen); }
-static void _devBack(ScreenManager &mgr)        { mgr.pop(); }
 
 static const MenuItem kDeveloperModeItems[] = {
     { "Telemetry",     _devGoTelemetry },
     { "UAS Debug Mode", _devGoUasDebug },
-    { "Back",          _devBack },
 };
 static MenuScreen _developerModeMenuScreen("Developer Mode", kDeveloperModeItems,
                                             sizeof(kDeveloperModeItems) / sizeof(kDeveloperModeItems[0]));
@@ -171,16 +167,15 @@ static MenuScreen _developerModeMenuScreen("Developer Mode", kDeveloperModeItems
 static void _settingsGoSound(ScreenManager &mgr)     { mgr.push(&_soundToggleScreen); }
 static void _settingsGoMotion(ScreenManager &mgr)    { mgr.push(&_motionMenuScreen); }
 static void _settingsGoDeveloper(ScreenManager &mgr) { mgr.push(&_developerModeMenuScreen); }
-static void _settingsBack(ScreenManager &mgr)        { mgr.pop(); }
 
 static const MenuItem kSettingsItems[] = {
     { "Sound",          _settingsGoSound },
     { "Motion",         _settingsGoMotion },
     { "Developer mode", _settingsGoDeveloper },
-    { "Back",           _settingsBack },
 };
 static MenuScreen _settingsMenuScreen("Settings", kSettingsItems,
-                                       sizeof(kSettingsItems) / sizeof(kSettingsItems[0]));
+                                       sizeof(kSettingsItems) / sizeof(kSettingsItems[0]),
+                                       "v" FIRMWARE_VERSION);
 
 // ── Target Type — Start > Agent selection > here > Mixing Menu. Defined
 // before Agent Selection since Agent Selection's items need to reference

@@ -8,13 +8,14 @@
 //   void myAction(ScreenManager &mgr) { ...; mgr.pop(); }
 //   static const MenuItem kMyItems[] = {
 //       { "Do the thing", myAction },
-//       { "Back",         [](ScreenManager &mgr) { mgr.pop(); } },
 //   };
-//   static MenuScreen myMenu("My Menu", kMyItems, 2);
+//   static MenuScreen myMenu("My Menu", kMyItems, 1);
 //
 // then mgr.push(&myMenu) from wherever it should open. No new Screen
 // subclass needed for a simple list — see bench_diagnostics_menu.cpp for a worked
-// example wired to real backend calls.
+// example wired to real backend calls. Don't add a "Back" item — BTN1 is
+// already wired as Back for every MenuScreen (see update() below), so an
+// explicit row for it is redundant.
 
 class ScreenManager;
 
@@ -25,7 +26,10 @@ struct MenuItem {
 
 class MenuScreen : public Screen {
 public:
-    MenuScreen(const char *title, const MenuItem *items, uint8_t count);
+    // subtitle is optional (nullptr = none) — small text drawn just under
+    // the title, e.g. Settings uses it for the firmware version. Every
+    // other menu leaves this at the default and shows nothing extra.
+    MenuScreen(const char *title, const MenuItem *items, uint8_t count, const char *subtitle = nullptr);
 
     void onEnter() override;
     void update(ScreenManager &mgr, bool forceFull) override;
@@ -34,6 +38,7 @@ private:
     const char *_title;
     const MenuItem *_items;
     uint8_t _count;
+    const char *_subtitle;
     uint8_t _selected = 0;
 
     void _draw(bool forceFull);

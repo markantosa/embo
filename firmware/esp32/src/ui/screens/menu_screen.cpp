@@ -4,8 +4,8 @@
 #include "ui_display.h"
 #include "scheduler.h"
 
-MenuScreen::MenuScreen(const char *title, const MenuItem *items, uint8_t count)
-    : _title(title), _items(items), _count(count) {}
+MenuScreen::MenuScreen(const char *title, const MenuItem *items, uint8_t count, const char *subtitle)
+    : _title(title), _items(items), _count(count), _subtitle(subtitle) {}
 
 void MenuScreen::onEnter() {
     _selected = 0;
@@ -17,6 +17,10 @@ void MenuScreen::_draw(bool forceFull) {
         tft.fillScreen(TFT_WHITE); // background colour 
         tft.setFont(&fonts::FreeSansBold12pt7b); // setting the font
         ui_display_draw_centered(_title, 24, TFT_BLACK, 1); // drawing 
+        if (_subtitle) {
+            tft.setFont(&fonts::FreeSans9pt7b);
+            ui_display_draw_centered(_subtitle, 48, COLOR_LUNAR_ROCK, 1);
+        }
         tft.drawFastHLine(30, 62, tft.width() - 60, TFT_BLACK); // line below title line 
     }
 

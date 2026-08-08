@@ -8,6 +8,7 @@
 #include "ui.h"
 #include "ble_debug.h"
 #include "force_sensor.h"
+#include "uas.h"
 #include <stdio.h>
 
 // Set by _driveBothConcurrent()/the stroke-1 loop on failure, read by
@@ -16,6 +17,22 @@
 // complete" every failure used to show, regardless of whether it was
 // actually a stall or a genuine timeout.
 static char _lastFailureReason[80];
+
+// Structured CSV data output, requested separately from the prose
+// ble_log() lines above (which stay as-is for human skim-reading) —
+// "ST," prefix follows the same filterable-by-grep convention as the
+// "LC," load cell stream in main.cpp. uas_tx = the frequency currently
+// being driven (uas_get_current_frequency_hz()), uas_rx = the measured
+// return voltage (uas_read_mv()) — "tx/rx" isn't existing terminology in
+// this codebase, this is the most sensible mapping onto what's actually
+// available; say if something else was meant.
+static void _logCsvRow() {
+    Serial.printf("ST,%lu,%ld,%ld,%.2f,%.2f,%.1f,%lu\n",
+                  (unsigned long)millis(),
+                  (long)motor_get_position(1), (long)motor_get_position(2),
+                  force_sensor_get_grams_1(), force_sensor_get_grams_2(),
+                  uas_get_current_frequency_hz(), (unsigned long)uas_read_mv());
+}
 
 void StrokeTestScreen::_draw(bool forceFull) {
     if (!forceFull) return;  // nothing here changes except via encoder rotation, handled below
@@ -81,6 +98,7 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
     bool m1Done = false, m2Done = false;
     uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
     uint32_t lastProgressMs = millis();
+    uint32_t lastCsvMs = millis();
     while ((!m1Done || !m2Done) && millis() < deadline) {
         // If a limit-switch flag tripped but wasn't a genuine closure
         // (electrical noise from the stepper's own step pulses — more
@@ -146,12 +164,18 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
                         stroke, (long)p2, force_sensor_get_grams_2());
             }
         }
-        // force_sensor_update() normally runs every loop() iteration in
-        // main.cpp — but loop() is entirely frozen for the duration of
-        // this blocking test, so force_sensor_get_grams_1/2() would
+        // force_sensor_update()/uas_update() normally run every loop()
+        // iteration in main.cpp — but loop() is entirely frozen for the
+        // duration of this blocking test, so their getters would
         // otherwise return whatever they were the instant the test
-        // started. Calling it here keeps readings genuinely live.
+        // started. Calling them here keeps readings genuinely live.
         force_sensor_update();
+        uas_update();
+
+        if (millis() - lastCsvMs >= 50) {
+            lastCsvMs = millis();
+            _logCsvRow();
+        }
 
         // Throttled progress log — every 300ms while this leg is still
         // running, so a mid-leg anomaly (unexpected jump, one motor
@@ -209,6 +233,8 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
         return;
     }
 
+    Serial.println("ST,timestamp_ms,motor1_pos,motor2_pos,loadcell1_g,loadcell2_g,uas_tx_hz,uas_rx_mv");
+
     for (int stroke = 1; stroke <= _strokeCount; stroke++) {
         force_sensor_update();  // fresh reading for this log line — see note above
         ble_log("=== Motion > Stroke Testing: BEGIN stroke %d/%d (left=%ld right=%ld force1=%.2fg force2=%.2fg) ===",
@@ -230,6 +256,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
 
             uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
             uint32_t lastProgressMs = millis();
+            uint32_t lastCsvMs = millis();
             bool stalled = false;
             while (motor_get_position(1) < MOTOR1_SOFT_LIMIT_MAX && millis() < deadline) {
                 // Same noise check/resume as _driveBothConcurrent() below —
@@ -246,10 +273,16 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
                     break;
                 }
                 // Same reasoning as _driveBothConcurrent() — loop() (and
-                // its force_sensor_update() call) is frozen for the whole
-                // blocking test, so this has to be called here directly
-                // to get genuinely live readings, not stale ones.
+                // its force_sensor_update()/uas_update() calls) is frozen
+                // for the whole blocking test, so this has to be called
+                // here directly to get genuinely live readings, not stale
+                // ones.
                 force_sensor_update();
+                uas_update();
+                if (millis() - lastCsvMs >= 50) {
+                    lastCsvMs = millis();
+                    _logCsvRow();
+                }
                 if (millis() - lastProgressMs >= 300) {
                     lastProgressMs = millis();
                     ble_log("Motion > Stroke Testing: stroke %d progress - left=%ld - force1=%.2fg force2=%.2fg",
