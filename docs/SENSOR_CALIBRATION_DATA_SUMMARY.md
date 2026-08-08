@@ -24,6 +24,30 @@ section added once it lands, and §6's proposal already carries a forward
 note (§6c) on how it should slot in. Re-check this doc after that upload
 rather than treating turbidity as a permanent gap.
 
+**UPDATE 2026-08-08 (later same day):** a teammate added a substantial new
+UAS analysis batch — see new §2e — that directly fills part of the
+"nothing is joined" gap above for Nipro/Gelfoam specifically, plus real
+statistical work on resonance-band frequency selection and syringe-brand
+significance. It also surfaces a stroke-counting correction that likely
+affects how every earlier section in this doc should be read — see the
+flag immediately below before trusting any stroke-count figure in §1/§2.
+
+> ⚠️ **Stroke-counting unit — flagged, not yet independently verified by
+> Claude.** Per `UAS Analysis explanation.docx` (new, §2e's source): the
+> "stroke" label used across **all existing UAS and microscope data**
+> (i.e. §1 and §2a–§2d below, not just §3's load-cell data, which already
+> carried this caveat) means one full left+right pump pair — the *true*
+> stroke count under the current firmware definition
+> (`motor_increment_stroke()`, one forward+return cycle) is **2× the
+> labeled value**. This was extracted from a docx by an agent, not
+> independently cross-checked against the raw data or the original
+> experimenters — treat as a strong signal to confirm with whoever
+> generated §1/§2's data, not yet a settled correction. If confirmed, every
+> stroke-count axis in §1 and §2a–§2d needs relabeling (e.g. §1's "stroke
+> 25" would become "stroke 50"), which would also change how those trends
+> compare against real target stroke counts elsewhere in the project
+> (`config.h`'s stroke-based constants, `MIXING_MAX_STROKES_SAFETY_CAP`, etc).
+
 ---
 
 ## 1. Particle size vs. stroke count (microscope, ground truth)
@@ -155,6 +179,88 @@ priority if Lyostypt is still an active target material (per
 `firmware/esp32/include/calibration.h`'s comment, Lyostypt needs its own
 `SENSOR_CAL_TABLE`, not a shared one with Gelfoam).
 
+### 2e. Nipro syringe, 26× gain — resonance band, syringe-brand significance,
+and UAS-vs-CV correlation (NEW, added by teammate 2026-08-08)
+
+Path: `testing/UAS Related stuff/UAS datas/` (top-level files) and
+`.../nipro syringe data and analysis/` (per-analysis subfiles). Source
+explanation: `UAS Analysis explanation.docx`. **This is a separate, denser
+26×-gain campaign from §2b's 10×-gain data — it doesn't add points to or
+replace §2b's sweep, it's independent.** Apply the stroke-unit caveat
+flagged above to every stroke number in this section too.
+
+**Resonance band determination** — swept 0.9–2.0MHz in 10kHz steps (111
+points), comparing ambient noise floor (`.../26 gain/ambient data, when rx
+isnt receiving from tx/`, TX off, pure electrical baseline ~1.50–1.57V,
+near-zero std) against Nipro and BD strokes 0–40. Peak dynamic range
+**1.7183V at 1.01MHz**; half-max **0.8592V**; resulting usable band
+**0.94–1.06MHz** (`transducer_snr_by_frequency.csv`, 112 rows 0.90–2.00MHz,
+this is the widest contiguous "usable" stretch — an isolated usable point
+at 0.92MHz was excluded as non-contiguous).
+
+**Syringe-brand significance within that band** — paired t-test (BD −
+Nipro), n=40 paired strokes, at the 13 in-band frequencies
+(`syringe_pvalue_by_frequency.csv`). Practical-significance threshold
+0.0587V (median off-resonance voltage swing). Result: **5 of 13 (38%)
+frequencies both statistically significant and practically meaningful**,
+concentrated at the band edges/upper end — 0.94MHz (Δ −0.1847V), 0.97MHz
+(Δ −0.0604V), 1.04MHz (Δ +0.1844V), 1.05MHz (Δ +0.3481V), 1.06MHz
+(Δ +0.4315V). **The middle of the band (0.96, 0.98–1.03MHz) is
+syringe-brand-safe** — i.e. that sub-range doesn't need a separate
+per-brand calibration, consistent with and reinforcing this doc's existing
+§6a proposal to key calibration by syringe, just narrowing exactly which
+frequencies actually need it.
+
+**UAS-vs-CV size correlation** — the actual join this document's §4 flags
+as missing, at least for Nipro/Gelfoam: `uas_vs_cv_correlation_data.csv`
+pairs §1's microscope CV median size against 0.96MHz UAS voltage
+(in-band, syringe-brand-safe frequency), by stroke count:
+
+| Stroke (as labeled — see unit caveat above) | CV median size (µm) | UAS voltage @ 0.96MHz (V) |
+|---|---|---|
+| 0  | 5194.9 | 1.4528 |
+| 1  | 1072.75 | 2.0249 |
+| 5  | 794.2  | 2.2924 |
+| 10 | 680.45 | 2.4039 |
+| 15 | 557.2  | 2.7035 |
+| 20 | 543.15 | 2.8066 |
+| 25 | 562.5  | 2.7745 |
+
+The size column here is identical to §1's table — **this confirms §1's
+Gelfoam microscope data and this UAS campaign are the same underlying
+stroke series**, not independently-matched data (worth confirming with
+whoever ran both, since that's a stronger and more useful claim than "we
+inferred a rough correspondence by stroke count").
+
+`validate_uas_vs_cv_correlation.py` deliberately does **not** compute
+Pearson r — its own comment states the relationship is non-linear (power
+law, not linear), so a linear-correlation stat would be misleading. Instead,
+`determine_relationship_shape.py` fits multiple candidate functional forms
+(`shape_fit_comparison.csv`, R² per shape):
+
+| Shape | R² (voltage → size, direct) |
+|---|---|
+| power | **0.9906** (best) |
+| exponential | 0.9791 |
+| inverse | 0.8985 |
+| logarithmic | 0.8332 |
+| linear | 0.7539 |
+
+**Result: `size_um = 23423 × voltage^-4.05`, R² = 0.991** — a strong,
+non-linear, power-law relationship, physically consistent with expected
+ultrasound-scattering behavior (also cross-checked via the two intermediate
+fits: stroke→size is best-fit exponential, R²=0.885
+(`shape_fit_stroke_vs_size.csv`); stroke→voltage is best-fit logarithmic,
+R²=0.953 (`shape_fit_stroke_vs_voltage.csv`) — both weaker than the direct
+voltage→size power fit, as expected since chaining two imperfect fits
+compounds error).
+
+**Caveat inherited from §1/§4, not resolved by this analysis:** this is
+still one stroke series, at one gain setting, one syringe, one batch — it's
+a real functional-form finding, not yet the multi-batch validation §4 says
+is needed before trusting a fusion table. It also doesn't fix §2b's Nipro
+10×-gain sparsity, since it's a different gain setting entirely.
+
 ---
 
 ## 3. Load-cell force / viscosity data
@@ -200,8 +306,18 @@ that doesn't appear anywhere in the UAS or microscope datasets above.
 
 ## 4. Cross-referencing across sections — read this before using anything above together
 
-**No shared sample ID exists between §1, §2, and §3.** Every attempt to
-line these up by stroke count alone is an inference, not a measurement:
+**Updated 2026-08-08: §2e is a partial exception to the rest of this
+section** — its UAS-vs-CV correlation table uses the exact same size
+values as §1's Gelfoam microscope table, strongly suggesting a real shared
+stroke series for Nipro/Gelfoam specifically, not just an inferred
+correspondence. That's real progress on the gap below, but it's still one
+series, one gain, one batch — the caveats below still apply to §3 (load
+cell) entirely, and to any attempt to bring BD or Lyostypt data into the
+same comparison.
+
+**No shared sample ID exists between §1, §2, and §3 otherwise.** Every
+other attempt to line these up by stroke count alone is an inference, not
+a measurement:
 
 - Different campaigns ran on different dates, almost certainly different
   material batches (gelatin is hand-prepared per `software/SOFTWARE_TODO.md`
@@ -247,11 +363,20 @@ a lower gain before it's usable at all).
   thinnest-covered material across every sensor.
 - **"China foam" material** (force baseline only) has no UAS or microscope
   counterpart anywhere.
-- **No particle-size ground truth is joined to any sensor reading** — this
-  is the single blocking gap before `SENSOR_CAL_TABLE` can be populated with
-  real (not placeholder) values.
+- **No particle-size ground truth is joined to any sensor reading, EXCEPT
+  Nipro/Gelfoam UAS (§2e, new 2026-08-08)** — that pairing is the first
+  real progress on what was previously the single blocking gap. Still
+  missing: any equivalent join for load-cell force, BD or Lyostypt UAS, or
+  a second independent batch to confirm §2e's fit isn't specific to one
+  sample.
 - **`uas_cv_calibration.py`**, referenced in the microscope dataset's
-  README as the intended pairing script, does not exist in the repo yet.
+  README as the intended pairing script, still does not exist as a
+  standalone script — §2e's `validate_uas_vs_cv_correlation.py` and
+  `determine_relationship_shape.py` appear to be the real (differently
+  named) implementation of that intent, at least for Nipro/Gelfoam.
+- **Stroke-counting unit correction (flagged at the top of this doc) is
+  unverified** — if true, it invalidates every stroke-count label in §1
+  and §2 as currently written (off by 2×), including §2e's new data.
 
 ---
 
@@ -426,6 +551,7 @@ Once it lands, it should extend this proposal rather than sit outside it:
 | UAS — Nipro syringe | `testing/UAS Related stuff/UAS datas/nipro syringe data and analysis/` |
 | UAS — Terumo syringe | `testing/UAS Related stuff/UAS datas/Temuro syringe data and analysis/test_results/` |
 | UAS — Lyostypt | `testing/UAS Related stuff/UAS datas/previous UAS data lyostyph/jely_pump_1MHz/` |
+| UAS — resonance band, significance, UAS-vs-CV correlation (§2e, new) | `testing/UAS Related stuff/UAS datas/UAS Analysis explanation.docx`, `.../nipro syringe data and analysis/uas_vs_cv_correlation_data.csv`, `shape_fit_*.csv`, `syringe_pvalue_by_frequency.csv`, `transducer_snr_by_frequency.csv` |
 | Load cell / viscosity | `testing/loadcell_viscosity/cleaned data/`, `readme.md` |
 | Force baseline (incl. Lyostypt, china foam) | `testing/syringe_force_baseline/test_results/`, `readme.md` |
 | Firmware calibration target format | `firmware/CALIBRATION.md` §5, `firmware/esp32/include/calibration.h` (`SensorCalibrationPoint`, `SENSOR_CAL_TABLE`) |

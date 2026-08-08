@@ -17,13 +17,18 @@ import sys
 import time
 from pathlib import Path
 
+from PIL import Image
+
 # ../cv-pipeline holds detection.py/sizing.py — see module docstring above
-# for why these are imported rather than copied.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cv-pipeline"))
+# for why these are imported rather than copied. Appended, not inserted at
+# index 0 — cv-pipeline has its own config.py, and this folder's own
+# modules (including config.py) must resolve first, not be shadowed by it.
+sys.path.append(str(Path(__file__).resolve().parent.parent / "cv-pipeline"))
 
 import config
 from capture import Camera
 from link import FirmwareLink
+from preprocessing import enhance_for_display
 from detection import ParticleDetector  # from ../cv-pipeline, stub for now
 from sizing import compute_ecd_stats     # from ../cv-pipeline, stub for now
 
@@ -36,17 +41,37 @@ def handle_capture(camera: Camera, link: FirmwareLink, detector: ParticleDetecto
     """
     started = time.monotonic()
 
-    frame = camera.read_frame()
-    if frame is None:
+    # Median-stack (cancels sensor noise) + flat-field + clarity boost
+    # (removes the glare gradient, then locally boosts what contrast is
+    # left) before detection — validated interactively against real
+    # low-contrast frames during bring-up, see config.py's Preprocessing
+    # section. Not optional polish: the open-top syringe mount caps how
+    # far dark-field lighting alone can go, so software has to make up the
+    # rest of the gap.
+    raw = camera.read_frame_stack()
+    if raw is None:
         link.send_status("CV: bad frame, capture aborted")
         return
+    frame = enhance_for_display(raw)
+
+    # Saved unconditionally (success or NotImplementedError below) — this
+    # is the "processed image" half of the eventual verification-screen
+    # display (median/histogram on one side, this image on the other, per
+    # project direction). Firmware/UI wiring for that isn't built yet;
+    # this just makes sure the file exists and is always current so that
+    # work has something real to point at instead of starting from zero.
+    try:
+        Image.fromarray(frame).save(config.LAST_CAPTURE_IMAGE_PATH)
+    except OSError as e:
+        print(f"WARNING: could not save processed image: {e}", file=sys.stderr)
 
     try:
         masks = detector.detect(frame)
-        # TODO: um_per_pixel=1.0 is a placeholder — needs real calibration
-        # against a known reference before this number means anything
-        # (SOFTWARE_TODO.md task 8 verification gate).
-        stats = compute_ecd_stats(masks, um_per_pixel=1.0)
+        # UM_PER_PIXEL measured 2026-08-08 against a ruler at the working
+        # distance — see config.py's Pixel-to-micron calibration section
+        # for the measurement and its caveats (rough bench value, not the
+        # formal Track 1 validation from master_experiment1_validation_protocol.md).
+        stats = compute_ecd_stats(masks, um_per_pixel=config.UM_PER_PIXEL)
         link.send_size(stats.median_um, stats.iqr_um)
     except NotImplementedError:
         link.send_status("CV: detection/sizing not implemented yet")

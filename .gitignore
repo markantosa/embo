@@ -18,6 +18,15 @@ weights/
 *.onnx
 *.engine
 
+# cv_verify — bulk captured data, not source. Raw/enhanced training
+# captures live on the Pi + local disk as working data; the actual
+# versioned destination for annotated images is Roboflow, not git (kept
+# out to avoid permanently bloating repo history — 400MB+ as of the first
+# 100-image collection). scratch/ is throwaway debug captures from bring-up,
+# never meant to be committed.
+software/cv_verify/training_data/
+software/cv_verify/scratch/
+
 # Arduino / PlatformIO
 firmware/esp32/.pio/
 firmware/esp32/build/
