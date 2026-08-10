@@ -174,6 +174,14 @@ FusedSizeEstimate calib_estimate_particle_size_um(float uasAttenuation, float tu
     return result;
 }
 
+float calib_estimate_particle_size_from_uas_voltage_um(float voltageVolts) {
+    // pow() with a negative fractional exponent is undefined for
+    // voltageVolts <= 0 — a genuine zero/negative reading means "no valid
+    // signal" (sensor fault, disconnected, etc.), not "infinite size."
+    if (voltageVolts <= 0.0f) return 0.0f;
+    return UAS_SIZE_EQ_COEFFICIENT * powf(voltageVolts, UAS_SIZE_EQ_EXPONENT);
+}
+
 // ---------------------------------------------------------------------------
 // Breakage kinetics — online linear-regression fit of the linearized model
 // ---------------------------------------------------------------------------

@@ -3,28 +3,39 @@
 #include "calibration.h"
 #include "motors.h"
 #include "uas.h"
-#include "turbidity.h"
-#include "force_sensor.h"
 #include "ble_debug.h"
 #include <Arduino.h>
 #include <math.h>
 
-// See scheduler.h for the closed-loop, four-sensor-fusion stop-condition
-// design rationale — that part is UNCHANGED. What changed here: the motor
-// motion pattern now matches Stroke Testing's mechanism (stroke_test_screen.cpp)
-// instead of the old synchronized same-direction timed strokes — motor 1
-// (left) and motor 2 (right) move CONCURRENTLY in OPPOSITE directions,
-// driven to actual soft-limit POSITIONS rather than a fixed elapsed time,
-// alternating who's headed to max vs returning to min each half-stroke.
-// scheduler_start() also now auto-homes if not already homed, rather than
-// refusing — see there.
+// See scheduler.h for why this isn't a PID (breakage is monotonic and
+// irreversible, "keep stroking or stop" is the only real control action).
 //
-// One "stroke" (for MIXING_MAX_STROKES_SAFETY_CAP / motor_increment_stroke()
-// / the post-stroke fusion check) = one full left round-trip (0->max->0),
-// with right doing the opposite each time — same accounting as Stroke
-// Testing. The very first half-stroke of a run is special: right is
-// already at its home position (0) with nothing to do concurrently, so
-// left runs alone for that one half only.
+// STOP CONDITION: a direct UAS-voltage-to-size equation
+// (calib_estimate_particle_size_from_uas_voltage_um(), calibration.h) —
+// replaced the old 4-sensor fusion here specifically, by product decision.
+// That fusion function (calib_estimate_particle_size_um()) still exists and
+// is still used for bench calibration data collection (BLE FUSION/FIT
+// commands, ble_debug.cpp), just not for this actual stop decision anymore.
+// The check runs EVERY scheduler_update() call — "always", per product
+// decision — not just once per completed stroke, so mixing can stop as
+// soon as the target is CONFIRMED rather than waiting on the current
+// stroke and risking overshoot on an irreversible process. "Confirmed"
+// still means debounced (UAS_SIZE_IN_SPEC_HOLD_MS, config.h) — a single
+// instantaneous in-tolerance reading isn't trusted to stop on its own.
+//
+// MOTION PATTERN: matches Stroke Testing's mechanism
+// (stroke_test_screen.cpp) — motor 1 (left) and motor 2 (right) move
+// CONCURRENTLY in OPPOSITE directions, driven to actual soft-limit
+// POSITIONS rather than a fixed elapsed time, alternating who's headed to
+// max vs returning to min each half-stroke. scheduler_start() also
+// auto-homes if not already homed, rather than refusing.
+//
+// One "stroke" (for MIXING_MAX_STROKES_SAFETY_CAP / motor_increment_stroke())
+// = one full left round-trip (0->max->0), with right doing the opposite
+// each time — same accounting as Stroke Testing. The very first
+// half-stroke of a run is special: right is already at its home position
+// (0) with nothing to do concurrently, so left runs alone for that one
+// half only.
 //
 // This being NON-blocking (scheduler_update() is called every loop(), no
 // delay()s allowed) is the real difference from Stroke Testing's
@@ -45,8 +56,11 @@ static uint16_t _target_um = TARGET_SIZE_UM_DEFAULT;
 static bool _stopRequested = false;   // graceful stop — finish current half-stroke, then hold
 
 static uint32_t _strokesDone = 0;
-static uint8_t _consecutiveInSpec = 0;
 static bool _hitSafetyCap = false;
+
+// Continuous UAS-voltage size check state.
+static float _lastMeasuredUm = 0.0f;
+static uint32_t _inSpecSinceMs = 0;   // 0 = not currently in spec; else timestamp it FIRST became in-spec
 
 // Current half-stroke bookkeeping.
 static bool _leftForward = true;      // true = left heading to MAX (right heading to MIN, unless _firstStroke); false = left heading to MIN (right heading to MAX)
@@ -57,8 +71,6 @@ static uint32_t _phaseDeadlineMs = 0;
 // Set by scheduler_pause(), consumed by scheduler_resume().
 static RunState _pausedFromState = RunState::IDLE;
 static bool _pausedM1Active = false, _pausedM2Active = false;
-
-static FusedSizeEstimate _lastFused{};
 
 static void _stopMotorsHold() {
     motor_set_speed(1, 0);
@@ -95,21 +107,6 @@ static void _beginHalfStroke(bool leftForward) {
     _state = RunState::STROKING;
 }
 
-// Reads the current live value of each of the four fusion channels and
-// returns the fused size estimate — see calibration.h.
-static FusedSizeEstimate _readFusedEstimate() {
-    float uasAtten = 0.0f;
-    uint8_t numFreq = uas_get_num_frequencies();
-    for (uint8_t i = 0; i < numFreq; i++) uasAtten += uas_get_attenuation(i);
-    if (numFreq > 0) uasAtten /= (float)numFreq;
-
-    float apdsRatio = calib_turbidity_ratio_als(turbidity_get_als_clear());
-    float maxRatio = calib_turbidity_ratio_backscatter_ir(turbidity_get_ir_raw());
-    float forceG = (force_sensor_get_grams_1() + force_sensor_get_grams_2()) / 2.0f;
-
-    return calib_estimate_particle_size_um(uasAtten, apdsRatio, maxRatio, forceG);
-}
-
 void scheduler_init() {
     _state = RunState::IDLE;
     _stopRequested = false;
@@ -133,13 +130,13 @@ bool scheduler_start() {
     }
 
     _strokesDone = 0;
-    _consecutiveInSpec = 0;
     _hitSafetyCap = false;
     _stopRequested = false;
-    _lastFused = FusedSizeEstimate{};
+    _lastMeasuredUm = 0.0f;
+    _inSpecSinceMs = 0;
     _firstStroke = true;
 
-    ble_log("Scheduler: run started, target=%u um (closed-loop, 4-sensor fusion)", _target_um);
+    ble_log("Scheduler: run started, target=%u um (UAS voltage equation, checked continuously)", _target_um);
     _beginHalfStroke(true);
     return true;
 }
@@ -191,6 +188,7 @@ void scheduler_resume() {
         motor_set_speed(2, STROKE_RUN_HZ);
     }
     _phaseDeadlineMs = millis() + HOMING_TIMEOUT_MS;  // fresh timeout window from the resume point
+    _inSpecSinceMs = 0;  // fresh debounce window too — don't resume already "half-confirmed" from before the pause
     _state = _pausedFromState;
     ble_log("Scheduler: resumed");
 }
@@ -215,8 +213,12 @@ void scheduler_set_target_um(uint16_t target_um) {
 uint16_t scheduler_get_target_um()    { return _target_um; }
 uint32_t scheduler_get_strokes_done() { return _strokesDone; }
 
-float   scheduler_get_last_fused_size_um()        { return _lastFused.sizeUm; }
-uint8_t scheduler_get_last_fused_num_channels()    { return _lastFused.numChannelsUsed; }
+// "numChannels" is always 0 or 1 now (no reading yet, or the one UAS
+// voltage reading) — kept for API compatibility with existing callers
+// (BLE FIT command, ble_debug.cpp), not because multiple channels are
+// fused anymore.
+float   scheduler_get_last_fused_size_um()      { return _lastMeasuredUm; }
+uint8_t scheduler_get_last_fused_num_channels() { return _lastMeasuredUm > 0.0f ? 1 : 0; }
 
 float   scheduler_get_fit_k()          { return calib_breakage_get_fit().k; }
 float   scheduler_get_fit_d0_um()      { return calib_breakage_get_fit().d0Um; }
@@ -258,6 +260,33 @@ void scheduler_update() {
             return;
         }
 
+        // Continuous UAS-voltage-based size check — evaluated every call,
+        // independent of stroke/half-stroke boundaries, so mixing stops
+        // as soon as the target is CONFIRMED (debounced by
+        // UAS_SIZE_IN_SPEC_HOLD_MS) rather than waiting for the current
+        // stroke to finish and risking overshoot on this irreversible
+        // process. Stops the motors wherever they currently are —
+        // mid-half-stroke is fine, same _stopMotorsHold() used elsewhere.
+        {
+            float voltageVolts = uas_read_mv() / 1000.0f;
+            _lastMeasuredUm = calib_estimate_particle_size_from_uas_voltage_um(voltageVolts);
+            bool inSpec = fabsf(_lastMeasuredUm - (float)_target_um) <= TARGET_TOLERANCE_UM;
+            if (inSpec) {
+                if (_inSpecSinceMs == 0) _inSpecSinceMs = millis();
+                if (millis() - _inSpecSinceMs >= UAS_SIZE_IN_SPEC_HOLD_MS) {
+                    _stopMotorsHold();
+                    _hitSafetyCap = false;
+                    _state = RunState::DONE;
+                    ble_log("Scheduler: target confirmed by UAS voltage equation "
+                            "(measured=%.1fum, target=%uum, voltage=%.3fV) at %lu strokes",
+                            _lastMeasuredUm, _target_um, voltageVolts, (unsigned long)_strokesDone);
+                    return;
+                }
+            } else {
+                _inSpecSinceMs = 0;  // reset debounce on any out-of-spec reading
+            }
+        }
+
         if (!_m1Done) {
             int32_t p1 = motor_get_position(1);
             bool reached = _leftForward ? (p1 >= MOTOR1_SOFT_LIMIT_MAX) : (p1 <= MOTOR1_SOFT_LIMIT_MIN);
@@ -283,40 +312,30 @@ void scheduler_update() {
         _firstStroke = false;
         if (_leftForward) {
             // Just finished heading to max — second half of the stroke
-            // (left back to min, right to max) always follows immediately,
-            // no fusion check yet (that happens once the FULL stroke
-            // completes, below).
+            // (left back to min, right to max) always follows immediately.
             _beginHalfStroke(false);
             return;
         }
 
         // Just finished heading back to min — this completes one full
-        // stroke (same accounting as Stroke Testing).
+        // stroke (same accounting as Stroke Testing). The UAS voltage
+        // check above already runs every call regardless, so nothing
+        // size-related needs re-checking here — this is just the
+        // safety-cap backstop and graceful-stop handling.
         motor_increment_stroke();
         _strokesDone++;
-
-        _lastFused = _readFusedEstimate();
-        bool inSpec = (_lastFused.numChannelsUsed >= FUSION_MIN_CHANNELS_REQUIRED)
-                      && (fabsf(_lastFused.sizeUm - (float)_target_um) <= TARGET_TOLERANCE_UM);
-        _consecutiveInSpec = inSpec ? (_consecutiveInSpec + 1) : 0;
 
         if (_stopRequested) {
             _state = RunState::IDLE;
             _stopRequested = false;
-            ble_log("Scheduler: stopped (graceful) at %lu strokes, last fused=%.1fum (n=%u)",
-                    (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed);
-        } else if (_consecutiveInSpec >= FUSION_CONSECUTIVE_CHECKS_REQUIRED) {
-            _hitSafetyCap = false;
-            _state = RunState::DONE;
-            ble_log("Scheduler: target confirmed by sensor fusion at %lu strokes "
-                    "(fused=%.1fum, n=%u channels, target=%uum)",
-                    (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed, _target_um);
+            ble_log("Scheduler: stopped (graceful) at %lu strokes, last measured=%.1fum",
+                    (unsigned long)_strokesDone, _lastMeasuredUm);
         } else if (_strokesDone >= MIXING_MAX_STROKES_SAFETY_CAP) {
             _hitSafetyCap = true;
             _state = RunState::DONE;
-            ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before sensor fusion "
-                    "confirmed target; last fused=%.1fum (n=%u). Check calibration.",
-                    MIXING_MAX_STROKES_SAFETY_CAP, _lastFused.sizeUm, _lastFused.numChannelsUsed);
+            ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before UAS voltage equation "
+                    "confirmed target; last measured=%.1fum. Check calibration.",
+                    MIXING_MAX_STROKES_SAFETY_CAP, _lastMeasuredUm);
         } else {
             _beginHalfStroke(true);  // next stroke's first half
         }

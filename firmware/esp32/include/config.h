@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.0"
+#define FIRMWARE_VERSION "0.6.1"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -199,6 +199,15 @@
 // "In spec" window half-width around the setpoint. Placeholder — see
 // firmware/CALIBRATION.md §8 before trusting for auto-stop.
 #define TARGET_TOLERANCE_UM     25
+// How long the UAS-voltage size estimate must read continuously within
+// TARGET_TOLERANCE_UM before the mixing loop actually stops (scheduler.cpp)
+// — the check itself runs every scheduler_update() call ("always", per
+// product decision), but a single instantaneous in-tolerance reading isn't
+// trusted to stop an irreversible process; this is the debounce. PLACEHOLDER
+// — not measured against real noise characteristics of the UAS voltage
+// signal yet, pick a value and tune from there once you have real
+// in-tolerance sensor traces.
+#define UAS_SIZE_IN_SPEC_HOLD_MS   1000
 
 // ── UI input timing (used by ui.cpp) ────────────────────────────────────────
 // BTN1 is dedicated to stop/e-stop only (no start function) — the encoder's

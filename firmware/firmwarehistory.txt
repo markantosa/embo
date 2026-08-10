@@ -19,6 +19,14 @@ v0.5.2 (goal)- to change units from steps into mm, hz into mm/s
 - retained steps due to some math errors, will change units in later version
 
 v0.6.0 (goal) - to a way to take in calibration data and form the motor stopping loop, and add necessary ui elements to that
+- added ui elements for menu
+
+v0.6.1
+- added calibration equation for uas 
+
+v0.6.2
+- change ui colours for main mixing loop
+- home before mixing run
 
 v0.7.0 (goal) - acceleration ramp to improve motion, add dynamic speeds to improve torque performance during first few strokes and auto detect syringe inside using uas
 

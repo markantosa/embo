@@ -138,6 +138,19 @@ struct FusedSizeEstimate {
 FusedSizeEstimate calib_estimate_particle_size_um(float uasAttenuation, float turbApdsRatio,
                                                    float turbMaxRatio, float forceGrams);
 
+// ── Direct UAS-voltage-to-size equation ──────────────────────────────────────
+// Replaces the 4-sensor fusion above as the MIXING LOOP's actual stop
+// condition (scheduler.cpp) — the function above stays available for bench
+// calibration data collection (BLE FUSION/FIT commands, ble_debug.cpp),
+// unrelated to this. Real measured calibration, not a placeholder:
+//   size_um = UAS_SIZE_EQ_COEFFICIENT * voltage_volts ^ UAS_SIZE_EQ_EXPONENT
+// voltage is in VOLTS — uas_read_mv() (uas.h) returns millivolts, divide by
+// 1000 before calling this.
+#define UAS_SIZE_EQ_COEFFICIENT   8476.5f
+#define UAS_SIZE_EQ_EXPONENT      -2.75f
+
+float calib_estimate_particle_size_from_uas_voltage_um(float voltageVolts);
+
 // ---------------------------------------------------------------------------
 // Mixing stop condition — debounce, see CALIBRATION.md §6
 // ---------------------------------------------------------------------------
