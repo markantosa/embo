@@ -173,9 +173,8 @@ static const MenuItem kSettingsItems[] = {
     { "Motion",         _settingsGoMotion },
     { "Developer mode", _settingsGoDeveloper },
 };
-static MenuScreen _settingsMenuScreen("Settings", kSettingsItems,
-                                       sizeof(kSettingsItems) / sizeof(kSettingsItems[0]),
-                                       "v" FIRMWARE_VERSION);
+static MenuScreen _settingsMenuScreen("Settings v" FIRMWARE_VERSION, kSettingsItems,
+                                       sizeof(kSettingsItems) / sizeof(kSettingsItems[0]));
 
 // ── Target Type — Start > Agent selection > here > Mixing Menu. Defined
 // before Agent Selection since Agent Selection's items need to reference
