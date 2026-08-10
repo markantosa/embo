@@ -39,6 +39,9 @@ v0.6.4
 - increased stepper current to 700mA for more torque
 - homing hz to 2000hz
 
+v0.6.5
+- motor stroke speed 8000hz
+- stroke test speed to 4000hz
 
 v0.7.0 (goal) - acceleration ramp to improve motion, add dynamic speeds to improve torque performance during first few strokes and auto detect syringe inside using uas
 

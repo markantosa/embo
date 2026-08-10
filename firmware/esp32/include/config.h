@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.4"
+#define FIRMWARE_VERSION "0.6.5"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -107,7 +107,7 @@
 // these are real calibrated values, not the raw IHOLD/IRUN register
 // guesses this used to use.
 #define TMC_R_SENSE           0.11f
-#define TMC_RUN_CURRENT_MA    700
+#define TMC_RUN_CURRENT_MA    1000
 #define TMC_HOLD_CURRENT_MA   300
 
 // Soft motion limits — fixed firmware config, not runtime-settable. Steps
@@ -128,10 +128,7 @@
 #define STROKE_TEST_COUNT_MIN       1
 #define STROKE_TEST_COUNT_MAX       50
 #define STROKE_TEST_COUNT_DEFAULT   5
-// Double MOTOR_JOG_HZ for this test specifically — doesn't change jog
-// speed anywhere else (BLE MOVE, the Jog Motor screens still use
-// MOTOR_JOG_HZ directly).
-#define MOTOR_STROKE_TEST_HZ        (MOTOR_JOG_HZ * 2)
+#define MOTOR_STROKE_TEST_HZ        4000 //4000Hz 
 // SG_RESULT (motor_sg_result(), motors.h) is 0-1023, HIGHER = LESS load —
 // a value below this is treated as a stall (either TMC torque loss or a
 // genuine mechanical jam) and stops the motor(s) immediately with a
@@ -231,7 +228,7 @@
 // are motion-profile constants (how a stroke is physically executed), as
 // opposed to calibration.h's sensor/model constants (how strokes map to
 // particle size) — kept separate on purpose.
-#define STROKE_RUN_HZ        4000   // step rate during a stroke
+#define STROKE_RUN_HZ        8000   // step rate during a stroke 8000
 #define MOTOR_JOG_HZ         2000    // step rate for manual jog moves — BLE MOVE and Settings > Motion > Jog
 
 // ── Sensor-to-physical-unit and control-loop calibration ────────────────────
