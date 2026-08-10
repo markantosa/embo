@@ -172,7 +172,7 @@
 // consistent starting condition regardless of where the motor happened to
 // be sitting at boot (position is unknown pre-home). Both motors nudge
 // CONCURRENTLY, same as the real approach.
-#define HOMING_PRE_NUDGE_STEPS 500
+#define HOMING_PRE_NUDGE_STEPS 200
 // Abort homing if limit not reached within this time.
 #define HOMING_TIMEOUT_MS    30000
 // Direction toward the limit switch, intended to be anticlockwise —

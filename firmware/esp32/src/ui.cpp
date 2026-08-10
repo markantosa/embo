@@ -73,17 +73,19 @@ static StrokeTestScreen      _strokeTestScreen;
 // documented in motors.cpp/config.h (HOMING_FORWARD=false is
 // anticlockwise). Defined before Motion Menu since it references these by
 // address (same ordering rule as the rest of this file). ──────────────────
-#define MOVE_MOTOR_STEP_COUNT 10
+#define MOVE_MOTOR_STEP_COUNT 1000
 
 static void _moveMotorSteps(uint8_t motor, bool clockwise) {
     if (scheduler_is_running()) {
         ble_log("Motion > Move Motor: refused - a run is in progress");
         return;
     }
-    // Blocking for the short duration of the nudge — same tradeoff
-    // already accepted for every other Motion menu action (Home Motors,
-    // Stroke Testing) — this is brief enough (10 steps) that it's not
-    // meaningfully different from those.
+    // Blocking for the duration of the move — same tradeoff already
+    // accepted for every other Motion menu action (Home Motors, Stroke
+    // Testing). At MOVE_MOTOR_STEP_COUNT=1000 and MOTOR_JOG_HZ this is
+    // ~half a second per press, not the ~5ms it was at the old 10-step
+    // count — noticeable but still a normal, bounded UI-blocking duration,
+    // not a concern like a homing-length wait would be.
     motor_set_dir(motor, clockwise);
     motor_enable(motor, true);
     motor_set_speed(motor, MOTOR_JOG_HZ);
