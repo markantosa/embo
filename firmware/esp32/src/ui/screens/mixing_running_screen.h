@@ -4,14 +4,13 @@
 
 class EndScreen;
 
-// "mixing screen" — replaces the old RunningScreen. Adds touch Pause/Stop
-// buttons on top of everything the old screen already did. BTN1 is
-// UNCHANGED and still the authoritative safety control (short = graceful
-// stop, held = emergency stop, see ui.h's rationale) — the touch Stop
-// button calls the exact same scheduler_stop() BTN1's short-press already
-// called, it's just an additional way to reach it, not a replacement.
-// Touch Pause is new capability (scheduler_pause()/resume()), independent
-// of Stop — pausing does not end the run.
+// "mixing screen" — replaces the old RunningScreen. ANY input at all
+// during mixing — BTN1 (either press length), the encoder knob (either
+// press length), or the on-screen EMERGENCY STOP touch button — triggers
+// scheduler_emergency_stop() immediately. Deliberately simplified: no
+// more graceful-stop-vs-emergency-stop distinction and no pause
+// capability on this screen, exactly one outcome for any operator
+// interaction while mixing is active.
 //
 // onEnter() draws this screen immediately, THEN calls scheduler_start()
 // (which homes, blocking, unconditionally — see scheduler.cpp) — in that

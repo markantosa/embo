@@ -6,18 +6,20 @@
 #include "scheduler.h"
 #include "ui.h"
 
-// [0] Pause/Resume (label swaps with state), [1] Stop.
-static const TouchButton kButtons[] = {
-    { 30,  260,  90, 40, "Pause" },
-    { 140, 260,  90, 40, "Stop"  },
-};
+// Single large E-STOP button — ANY input at all (this button, BTN1
+// short/long press, or the encoder knob short/long press) triggers
+// scheduler_emergency_stop() immediately during mixing. No more
+// distinction between graceful stop, pause, and emergency stop on this
+// screen — deliberately simplified so there's exactly one outcome for any
+// operator interaction while mixing is active: stop now.
+static const TouchButton kStopButton = { 60, 255, 200, 45, "EMERGENCY STOP" };
 
 void MixingRunningScreen::onEnter() {
     // Draw the Mixing screen itself FIRST, before the blocking homing call
-    // below — so the operator sees this screen (spinner, buttons, "Mixing"
+    // below — so the operator sees this screen (spinner, button, "Mixing"
     // title) rather than staying on the Warning screen for the whole
     // homing wait. forceFull=true forces the full static content (title,
-    // buttons) to draw, matching what a normal first-update() would do.
+    // button) to draw, matching what a normal first-update() would do.
     _draw(true);
 
     if (!scheduler_start()) {
@@ -27,59 +29,37 @@ void MixingRunningScreen::onEnter() {
 
 void MixingRunningScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
-    bool paused = scheduler_is_paused();
 
     if (forceFull) {
         tft.fillScreen(TFT_WHITE);
         tft.setFont(&fonts::FreeSansBold12pt7b);
         ui_display_draw_centered("Mixing", 70, TFT_BLACK, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
-        ui_display_draw_centered("Hold BTN1 for emergency stop", 220, COLOR_ASH, 1);
+        ui_display_draw_centered("Press any button to emergency stop", 220, COLOR_ASH, 1);
+        ui_display_draw_touch_button(kStopButton.x, kStopButton.y, kStopButton.w, kStopButton.h,
+                                      kStopButton.label, COLOR_CLOWN_NOSE, TFT_WHITE);
     }
 
-    // The pause/resume label can change without anything else on screen
-    // changing, so redraw just that button whenever paused state might
-    // have changed (forceFull, or right after we act on a tap/BTN1 below).
-    // Text color follows the background: COLOR_BRIGHT_BLUE (Resume) is dark
-    // enough for white text, COLOR_LUNAR_ROCK (Pause) is light and needs
-    // dark text instead.
-    ui_display_draw_touch_button(kButtons[0].x, kButtons[0].y, kButtons[0].w, kButtons[0].h,
-                                  paused ? "Resume" : "Pause", paused ? COLOR_BRIGHT_BLUE : COLOR_LUNAR_ROCK,
-                                  paused ? TFT_WHITE : TFT_BLACK);
-    ui_display_draw_touch_button(kButtons[1].x, kButtons[1].y, kButtons[1].w, kButtons[1].h,
-                                  "Stop", COLOR_CLOWN_NOSE, TFT_WHITE);
-
-    if (paused) {
-        if (forceFull) {
-            tft.fillRect(0, 130, tft.width(), 30, TFT_WHITE);
-            ui_display_draw_centered("PAUSED", 140, COLOR_ASH, 1);
-        }
-    } else {
-        ui_display_draw_spinner(160);
-    }
+    ui_display_draw_spinner(160);
 }
 
 void MixingRunningScreen::update(ScreenManager &mgr, bool forceFull) {
     if (!_endScreen) return;  // not wired — see ui.cpp
 
-    // BTN1 stays exactly as it was — see this screen's header comment.
-    ButtonEvent btn = ui_input_poll_btn1();
-    if (btn == ButtonEvent::LONG_PRESS) {
+    // ANY input during mixing is an emergency stop — BTN1 (either press
+    // length), the encoder knob (either press length), or the touch
+    // button all lead here the same way. No graceful stop, no pause, on
+    // this screen — deliberately simplified for maximum responsiveness.
+    bool anyInput = false;
+    if (ui_input_poll_btn1() != ButtonEvent::NONE) anyInput = true;
+    if (ui_input_poll_enc_sw() != ButtonEvent::NONE) anyInput = true;
+    if (ui_input_poll_touch_tap(&kStopButton, 1) == 0) anyInput = true;
+
+    if (anyInput) {
         scheduler_emergency_stop();
         _endScreen->setResult("STOPPED (e-stop)");
         mgr.goTo(_endScreen);
         return;
-    } else if (btn == ButtonEvent::SHORT_PRESS) {
-        scheduler_stop();
-    }
-
-    int tap = ui_input_poll_touch_tap(kButtons, 2);
-    if (tap == 0) {
-        if (scheduler_is_paused()) scheduler_resume();
-        else scheduler_pause();
-        forceFull = true;  // reflect the new pause/resume label and PAUSED banner
-    } else if (tap == 1) {
-        scheduler_stop();
     }
 
     if (scheduler_target_reached()) {
@@ -98,10 +78,12 @@ void MixingRunningScreen::update(ScreenManager &mgr, bool forceFull) {
     }
 
     if (!scheduler_is_running()) {
-        // Graceful stop finished taking effect (scheduler_is_running() is
-        // false for both IDLE and — deliberately — never for PAUSED, so
-        // this only fires once a stop has actually completed, not merely
-        // paused).
+        // Defensive fallback — nothing on this screen calls a graceful
+        // scheduler_stop() anymore (that's what the "any input" branch
+        // above replaced), so this shouldn't normally fire, but stopping
+        // running without landing anywhere would leave the operator
+        // stuck if scheduler_is_running() ever goes false for an
+        // unanticipated reason.
         _endScreen->setResult("Stopped");
         mgr.goTo(_endScreen);
         return;

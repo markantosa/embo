@@ -29,6 +29,12 @@ v0.6.2
 - home before mixing run 
 - fixed uas frequency to 0.96MHz
 
+v0.6.3
+- fixed ui text bugs
+- made ui all readable colours
+- fixed homing bugs for main mixing loop
+- changed to any button e stop on press during mixing
+
 v0.7.0 (goal) - acceleration ramp to improve motion, add dynamic speeds to improve torque performance during first few strokes and auto detect syringe inside using uas
 
 

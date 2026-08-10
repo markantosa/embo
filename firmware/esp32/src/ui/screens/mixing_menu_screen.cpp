@@ -40,7 +40,7 @@ void MixingMenuScreen::_draw(bool forceFull) {
     // No homed/not-homed distinction here anymore — scheduler_start()
     // homes unconditionally every time a run actually starts, regardless
     // of anything done on this screen, so there's nothing to gate here.
-    ui_display_draw_centered("Press knob to continue", 225, COLOR_ASH, 2);
+    ui_display_draw_centered("Press knob to continue", 225, COLOR_ASH, 1);
 }
 
 void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {

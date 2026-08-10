@@ -18,17 +18,19 @@
 // Button mapping (see config.h for timing constants):
 //   EC11 rotary       — adjust target particle size (Mixing Menu)
 //   EC11 push-switch  — context-dependent: home/continue, confirm/start,
-//                        menu-select, toggle — see each screen
+//                        menu-select, toggle — see each screen. On the
+//                        Mixing Running screen specifically: ANY press
+//                        (short or long) = emergency stop, same as BTN1.
 //                     — held >= EC11_SW_LONGPRESS_MS = request an optional
 //                        camera size verification (Mixing Menu or End screen)
 //   BTN1               — two roles, never both at once because they're on
 //                        different screens:
 //                          On the Mixing Running screen ONLY: dedicated
-//                          stop button, no other function —
-//                            short press = graceful stop (finish current
-//                            stroke, then hold)
-//                            held >= BTN1_LONGPRESS_MS = emergency stop
-//                            (kills motor power immediately)
+//                          stop button, no other function — ANY press
+//                          (short or long) = emergency stop (kills motor
+//                          power immediately). No separate graceful-stop
+//                          behavior on this screen anymore — see
+//                          mixing_running_screen.h.
 //                          On every other (non-running) screen: short
 //                          press = Back — same as that screen's touch Back
 //                          button / encoder long-press fallback. This is
