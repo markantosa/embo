@@ -1,0 +1,13 @@
+source,identifier,cv_median_size_um,delta_voltage_v
+main_dataset,stroke 0,5194.9,0.0
+independent_session,sample5,1101.8,0.9193
+main_dataset,stroke 1,1072.75,0.5721
+independent_session,sample1,1003.5,0.5903
+independent_session,sample4,963.0,0.506
+independent_session,sample3,929.1,0.7136000000000002
+independent_session,sample2,828.8,0.9707
+main_dataset,stroke 5,794.2,0.8396000000000001
+main_dataset,stroke 10,680.45,0.9511
+main_dataset,stroke 25,562.5,1.3217
+main_dataset,stroke 15,557.2,1.2507
+main_dataset,stroke 20,543.1500000000001,1.3538
