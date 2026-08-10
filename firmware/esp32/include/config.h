@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.3"
+#define FIRMWARE_VERSION "0.6.4"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -107,7 +107,7 @@
 // these are real calibrated values, not the raw IHOLD/IRUN register
 // guesses this used to use.
 #define TMC_R_SENSE           0.11f
-#define TMC_RUN_CURRENT_MA    600
+#define TMC_RUN_CURRENT_MA    700
 #define TMC_HOLD_CURRENT_MA   300
 
 // Soft motion limits — fixed firmware config, not runtime-settable. Steps
@@ -166,7 +166,7 @@
 
 // ── Homing ───────────────────────────────────────────────────────────────────
 // Slow approach speed — gentle enough to avoid impact damage on limit trip.
-#define HOMING_STEP_HZ       1000
+#define HOMING_STEP_HZ       2000
 // Steps to back off from the limit switch after trip (8 microsteps per full step).
 // 200 steps @ 8µstep = 25 full steps. Tune to suit the lead screw pitch.
 #define HOMING_BACKOFF_STEPS 200

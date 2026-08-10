@@ -4,6 +4,8 @@
 #include "ui_input.h"
 #include "ui_display.h"
 #include "scheduler.h"
+#include "motors.h"
+#include "ui.h"
 #include <string.h>
 
 static const TouchButton kBackButton = { 20, 260, 140, 40, "Back to menu" };
@@ -11,6 +13,17 @@ static const TouchButton kBackButton = { 20, 260, 140, 40, "Back to menu" };
 void EndScreen::setResult(const char *msg) {
     strncpy(_resultMsg, msg, sizeof(_resultMsg) - 1);
     _resultMsg[sizeof(_resultMsg) - 1] = '\0';
+}
+
+void EndScreen::onEnter() {
+    // Draw the result FIRST, before the blocking re-home below — so the
+    // operator sees what actually happened (target reached, e-stop, etc.)
+    // rather than a stale Mixing-screen frame during the homing wait.
+    _draw();
+
+    if (!motors_home()) {
+        ui_show_error("HOMING FAILED - check limit switches");
+    }
 }
 
 void EndScreen::_draw() {
