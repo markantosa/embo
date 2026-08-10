@@ -1,6 +1,7 @@
 #include "motors.h"
 #include "config.h"
 #include "ble_debug.h"
+#include "force_sensor.h"
 #include <Arduino.h>
 #include <TMCStepper.h>
 #include <esp_timer.h>
@@ -326,6 +327,7 @@ bool motors_home() {
     ble_log("Homing: *** THIS IS A BENCH-ONLY BUILD — DO NOT USE WITH REAL HARDWARE ***");
     motor_reset_position(1);
     motor_reset_position(2);
+    force_sensor_tare();  // auto-tare after every home — see the real path below for why
     _homed = true;
     _stroke_count = 0;
     return true;
@@ -395,6 +397,14 @@ bool motors_home() {
     // real configured limits.
     motor_set_soft_limits(1, MOTOR1_SOFT_LIMIT_MIN, MOTOR1_SOFT_LIMIT_MAX);
     motor_set_soft_limits(2, MOTOR2_SOFT_LIMIT_MIN, MOTOR2_SOFT_LIMIT_MAX);
+    // Auto-tare after every home — the plunger mechanism is now at a
+    // known, repeatable reference position (freshly homed), which is
+    // exactly the "unloaded, at rest" condition force_sensor_tare()
+    // assumes (see its own docs in force_sensor.h). Re-taring here means
+    // load cell readings stay correctly zeroed relative to THIS run's
+    // actual homed position, not just whatever the boot-time tare
+    // happened to capture.
+    force_sensor_tare();
     _homed = true;
     _stroke_count = 0;
     ble_log("Homing: complete");

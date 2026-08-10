@@ -56,12 +56,14 @@ void setup() {
     Serial.println("BOOT: scheduler_init done");
 
     // Deliberately NOT homing here. Startup only brings hardware/UI up —
-    // homing is an explicit operator action from the set-target screen
-    // (short-press the knob while it reads "NOT HOMED", see
-    // mixing_menu_screen.cpp) or the BLE `HOME` command. scheduler_start()
-    // independently refuses to start a run while !motors_is_homed(), so
-    // there's no path to running un-homed regardless of when homing happens.
-    Serial.println("BOOT: setup() complete, entering loop() (not homed yet — home from the UI or BLE)");
+    // homing can still be done explicitly beforehand (Settings > Motion >
+    // Home Motors, the Mixing Menu's own homing gate, or the BLE `HOME`
+    // command), but it's no longer required before starting a mix:
+    // scheduler_start() (scheduler.cpp) auto-homes itself if needed, and
+    // fails cleanly (surfaced as a fault screen from warning_screen.cpp)
+    // if that auto-home doesn't succeed — there's still no path to
+    // running un-homed.
+    Serial.println("BOOT: setup() complete, entering loop() (not homed yet — home from the UI or BLE, or it'll auto-home on mixing start)");
 
     // Load cell data over Serial, ~20Hz — see the CSV header printed once
     // in setup(). Deliberately NOT gated on BLE/ble_log() at all, unlike

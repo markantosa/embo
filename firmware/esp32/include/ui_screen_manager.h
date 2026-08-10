@@ -28,7 +28,7 @@ public:
     void pop();  // no-op if there's nothing to pop back to
 
 private:
-    static constexpr uint8_t MAX_STACK = 4;  // plenty for foreseeable nesting (screen -> menu -> submenu)
+    static constexpr uint8_t MAX_STACK = 8;  // deepest real chain is 6 (Start->Agent->Syringe->TargetType->MixingMenu->Warning) — was 4, which silently blocked navigation past exactly that depth (push() no-ops rather than corrupting the stack, so this failed completely silently). Headroom for future additions without hitting this again.
     Screen  *_stack[MAX_STACK] = {};
     uint8_t  _depth            = 0;
     bool     _forceFull        = true;  // true for the update() right after any nav change

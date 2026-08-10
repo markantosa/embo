@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.5.1"
+#define FIRMWARE_VERSION "0.6.0"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -133,17 +133,18 @@
 // MOTOR_JOG_HZ directly).
 #define MOTOR_STROKE_TEST_HZ        (MOTOR_JOG_HZ * 2)
 // SG_RESULT (motor_sg_result(), motors.h) is 0-1023, HIGHER = LESS load —
-// a value below this during the stroke test is treated as a stall
-// (either TMC torque loss or a genuine mechanical jam) and stops that
-// motor immediately with a specific diagnosis, instead of waiting the
-// full HOMING_TIMEOUT_MS for a generic timeout. PLACEHOLDER — SG_RESULT's
-// baseline depends on current/speed/microstepping and needs measuring on
-// the actual bench (watch it during a few known-good runs, then set this
-// comfortably below the lowest normal value seen) before this is
-// trustworthy; not a calibrated number.
+// a value below this is treated as a stall (either TMC torque loss or a
+// genuine mechanical jam) and stops the motor(s) immediately with a
+// specific diagnosis, instead of waiting for a generic timeout. Shared
+// between Stroke Testing and the real mixing scheduler (scheduler.cpp) —
+// same physical mechanism, same failure mode, one threshold. PLACEHOLDER —
+// SG_RESULT's baseline depends on current/speed/microstepping and needs
+// measuring on the actual bench (watch it during a few known-good runs,
+// then set this comfortably below the lowest normal value seen) before
+// this is trustworthy; not a calibrated number.
 // TEMPORARILY DISABLED (0 = never trips, motor_sg_result() is unsigned so
 // it can never read below 0) — restore a real threshold once tuned.
-#define STROKE_TEST_STALL_SG_THRESHOLD  0
+#define MOTOR_STALL_SG_THRESHOLD  0
 
 // ── ADC ──────────────────────────────────────────────────────────────────────
 // GPIO1 = ADC1_CH0. Use ADC_ATTEN_DB_12 (0–3.1V range, ~0.757 mV/LSB).
@@ -225,8 +226,6 @@
 // particle size) — kept separate on purpose.
 #define STROKE_RUN_HZ        4000   // step rate during a stroke
 #define MOTOR_JOG_HZ         2000    // step rate for manual jog moves — BLE MOVE and Settings > Motion > Jog
-#define STROKE_FORWARD_MS    400    // forward phase duration
-#define STROKE_RETURN_MS     400    // return phase duration
 
 // ── Sensor-to-physical-unit and control-loop calibration ────────────────────
 // Every value that needs measuring on real hardware (HX711 tare/scale,

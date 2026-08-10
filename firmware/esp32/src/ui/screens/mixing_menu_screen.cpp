@@ -14,21 +14,26 @@
 
 static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 
-void MixingMenuScreen::_draw() {
+void MixingMenuScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
-    tft.fillScreen(TFT_BLACK);
-#ifdef BENCH_NO_HOMING
-    tft.fillRect(0, 0, tft.width(), 20, COLOR_CLOWN_NOSE);
-    tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered("BENCH BUILD - NO HOMING", 2, TFT_WHITE, 1);
-#endif
-    tft.setFont(&fonts::FreeSansBold12pt7b);
-    ui_display_draw_centered(mixing_options_target_type_label(), 26, TFT_WHITE, 1);
-    tft.setFont(&fonts::FreeSans9pt7b);
-    char agentLine[24];
-    snprintf(agentLine, sizeof(agentLine), "Agent: %s", mixing_options_agent_label());
-    ui_display_draw_centered(agentLine, 60, COLOR_LUNAR_ROCK, 1);
 
+    if (forceFull) {
+        tft.fillScreen(TFT_BLACK);
+        tft.setFont(&fonts::FreeSansBold12pt7b);
+        ui_display_draw_centered(mixing_options_target_type_label(), 26, TFT_WHITE, 1);
+        tft.setFont(&fonts::FreeSans9pt7b);
+        char agentLine[24];
+        snprintf(agentLine, sizeof(agentLine), "Agent: %s", mixing_options_agent_label());
+        ui_display_draw_centered(agentLine, 60, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
+                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
+        ui_display_draw_centered("(or press BTN1)", 245, COLOR_LUNAR_ROCK, 1);
+    }
+
+    // Dynamic content — redrawn every call that reaches here, not just on
+    // forceFull, since the target value changes with encoder rotation and
+    // homed status can change after a successful in-place home.
+    tft.fillRect(0, 80, tft.width(), 100, TFT_BLACK);
     char buf[16];
     snprintf(buf, sizeof(buf), "%u um", scheduler_get_target_um());
     tft.setFont(&fonts::FreeSansBold24pt7b);
@@ -38,15 +43,12 @@ void MixingMenuScreen::_draw() {
     bool homed = motors_is_homed();
     ui_display_draw_centered(homed ? "Press knob to continue" : "NOT HOMED - press knob to home", 225,
                               homed ? COLOR_LUNAR_ROCK : COLOR_CLOWN_NOSE, homed ? 2 : 1);
-
-    ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
-                                  kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
-    ui_display_draw_centered("(or press BTN1)", 245, COLOR_LUNAR_ROCK, 1);
 }
 
 void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {
-    int step = ui_input_read_encoder_step();
     bool needsRedraw = forceFull;
+
+    int step = ui_input_read_encoder_step();
     if (step != 0) {
         int32_t newTarget = (int32_t)scheduler_get_target_um() + step * TARGET_SIZE_UM_STEP;
         if (newTarget < TARGET_SIZE_UM_MIN) newTarget = TARGET_SIZE_UM_MIN;
@@ -55,6 +57,10 @@ void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {
         needsRedraw = true;
     }
 
+    // Every branch below that navigates or takes a real action returns
+    // immediately — nothing falls through into an unrelated check further
+    // down (e.g. a long homing wait finishing and then accidentally also
+    // being interpreted as a BTN1-back on the same call).
     ButtonEvent ev = ui_input_poll_enc_sw();
     if (ev == ButtonEvent::SHORT_PRESS) {
         if (!motors_is_homed()) {
@@ -64,21 +70,25 @@ void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {
                 ui_show_error("HOMING FAILED - check limit switches");
                 return;
             }
-            needsRedraw = true;
-        } else if (_warningScreen) {
-            mgr.push(_warningScreen);
+            _draw(false);  // reflect the new homed status immediately
             return;
         }
-    } else if (ev == ButtonEvent::LONG_PRESS && _verifyingScreen) {
+        if (_warningScreen) {
+            mgr.push(_warningScreen);
+        }
+        return;
+    }
+    if (ev == ButtonEvent::LONG_PRESS) {
         // Kept from the old set-target screen — an independent camera-based
         // size check, unrelated to the Start Menu's separate (stub) Camera
         // feature item. Not shown on the flowchart, not contradicted by it.
-        mgr.push(_verifyingScreen);
+        if (_verifyingScreen) {
+            mgr.push(_verifyingScreen);
+        }
         return;
     }
 
-    int tap = ui_input_poll_touch_tap(&kBackButton, 1);
-    if (tap == 0) {
+    if (ui_input_poll_touch_tap(&kBackButton, 1) == 0) {
         mgr.pop();
         return;
     }
@@ -93,5 +103,5 @@ void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {
         return;
     }
 
-    if (needsRedraw) _draw();
+    if (needsRedraw) _draw(forceFull);
 }

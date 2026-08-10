@@ -119,9 +119,9 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
         // torque loss or a genuine mechanical jam, either way something's
         // actually wrong, not just "still moving, not there yet"). Stop
         // immediately rather than continuing to push against it for up to
-        // 30 more seconds — see STROKE_TEST_STALL_SG_THRESHOLD (config.h)
+        // 30 more seconds — see MOTOR_STALL_SG_THRESHOLD (config.h)
         // for why that number isn't fully trustworthy yet.
-        if (!m1Done && motor_sg_result(1) < STROKE_TEST_STALL_SG_THRESHOLD) {
+        if (!m1Done && motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) {
             motor_set_speed(1, 0);
             motor_enable(1, false);
             motor_set_speed(2, 0);
@@ -131,7 +131,7 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
             ble_log("Motion > Stroke Testing: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
             return false;
         }
-        if (!m2Done && motor_sg_result(2) < STROKE_TEST_STALL_SG_THRESHOLD) {
+        if (!m2Done && motor_sg_result(2) < MOTOR_STALL_SG_THRESHOLD) {
             motor_set_speed(1, 0);
             motor_enable(1, false);
             motor_set_speed(2, 0);
@@ -268,7 +268,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
                 // for why this matters (catches a TMC torque loss or a
                 // genuine mechanical jam fast, instead of waiting the full
                 // 30s timeout regardless of which one it actually is).
-                if (motor_sg_result(1) < STROKE_TEST_STALL_SG_THRESHOLD) {
+                if (motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) {
                     stalled = true;
                     break;
                 }

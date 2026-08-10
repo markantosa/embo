@@ -4,6 +4,7 @@
 #include "ui_input.h"
 #include "ui_display.h"
 #include "scheduler.h"
+#include "ui.h"
 
 static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 
@@ -25,7 +26,13 @@ void WarningScreen::update(ScreenManager &mgr, bool forceFull) {
 
     ButtonEvent ev = ui_input_poll_enc_sw();
     if (ev == ButtonEvent::SHORT_PRESS && _runningScreen) {
-        scheduler_start();
+        // scheduler_start() now auto-homes if needed (blocking, like every
+        // other homing call site) — it can genuinely fail, unlike before
+        // when this screen could only be reached already-homed.
+        if (!scheduler_start()) {
+            ui_show_error("HOMING FAILED - check limit switches");
+            return;
+        }
         mgr.goTo(_runningScreen);
         return;
     }

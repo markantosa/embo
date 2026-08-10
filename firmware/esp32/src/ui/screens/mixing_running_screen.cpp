@@ -4,6 +4,7 @@
 #include "ui_input.h"
 #include "ui_display.h"
 #include "scheduler.h"
+#include "ui.h"
 
 // [0] Pause/Resume (label swaps with state), [1] Stop.
 static const TouchButton kButtons[] = {
@@ -67,6 +68,15 @@ void MixingRunningScreen::update(ScreenManager &mgr, bool forceFull) {
     if (scheduler_target_reached()) {
         _endScreen->setResult(scheduler_hit_safety_cap() ? "Stopped: safety cap" : "Target size reached");
         mgr.goTo(_endScreen);
+        return;
+    }
+
+    // Check BEFORE the generic !scheduler_is_running() below — a fault
+    // also makes scheduler_is_running() false (motors are stopped either
+    // way), but it needs the persistent fault screen, not a normal "the
+    // run finished" result on the End screen.
+    if (scheduler_hit_fault()) {
+        ui_show_error("MIXING FAULT - stall or timeout detected, check motors");
         return;
     }
 

@@ -30,7 +30,12 @@
 // a PID: the only real "control action" is "keep stroking or stop," not a
 // proportional correction, and an integral term in particular risks
 // pushing past a target that can't be un-passed. Instead:
-//   1. Stroke continuously at a fixed rate once a run starts.
+//   1. Stroke continuously once a run starts — motor 1 (left) and motor 2
+//      (right) move concurrently in opposite directions, driven to actual
+//      soft-limit positions (not a fixed elapsed time), alternating who's
+//      headed to max vs returning to min each half-stroke. Same mechanism
+//      as Stroke Testing (stroke_test_screen.cpp), which this scheduler's
+//      stroke pattern was deliberately made to match.
 //   2. After every completed stroke, compute the fused size estimate.
 //   3. Stop once the estimate reads within TARGET_TOLERANCE_UM (config.h)
 //      of the target for FUSION_CONSECUTIVE_CHECKS_REQUIRED checks in a
@@ -53,7 +58,12 @@ void scheduler_update();   // call every loop()
 // scheduler_set_target_um()). Resets the consecutive-in-spec debounce
 // counter. Does NOT reset the breakage-model fit (calibration.h) — that
 // accumulates across runs, see calib_breakage_reset().
-void scheduler_start();
+//
+// Auto-homes first if not already homed (blocking, like every other
+// homing call site in this firmware) — returns false without starting if
+// that homing attempt fails, so the caller can show a fault rather than
+// silently doing nothing.
+bool scheduler_start();
 
 // Graceful stop: finishes the in-progress stroke, then holds. Use for a
 // normal doctor-initiated stop.
@@ -94,6 +104,13 @@ bool scheduler_target_reached();
 // rather than the fused estimate actually converging — a sign the
 // calibration or fusion setup needs attention, not a normal completion.
 bool scheduler_hit_safety_cap();
+
+// True if a stall (StallGuard) or a motor timing out mid-half-stroke
+// stopped the run unexpectedly — a genuine hardware fault, not a normal
+// completion or a graceful/emergency stop. Motors are already stopped by
+// the time this is true; the caller (mixing_running_screen.cpp) is
+// responsible for surfacing this to the operator (ui_show_error()).
+bool scheduler_hit_fault();
 
 // Setpoint, clamped to [TARGET_SIZE_UM_MIN, TARGET_SIZE_UM_MAX] from
 // config.h. Rejected (no-op) while a run is in progress.

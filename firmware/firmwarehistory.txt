@@ -14,9 +14,12 @@ v0.5.1
 - removed inconsistent "back" buttons in some menus
 - included uas tx and rx in serial data collection
 
-v0.5.2 (goal) - to change units from steps into mm, hz into mm/s
+v0.5.2 (goal)- to change units from steps into mm, hz into mm/s
+- add auto tare after each home for both loadcells
+- retained steps due to some math errors, will change units in later version
 
 v0.6.0 (goal) - to a way to take in calibration data and form the motor stopping loop, and add necessary ui elements to that
 
-v0.7.0 (goal) - t
+v0.7.0 (goal) - acceleration ramp to improve motion, add dynamic speeds to improve torque performance during first few strokes and auto detect syringe inside using uas
+
 

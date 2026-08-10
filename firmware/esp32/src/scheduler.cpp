@@ -9,48 +9,90 @@
 #include <Arduino.h>
 #include <math.h>
 
-// See scheduler.h for the closed-loop, four-sensor-fusion design rationale.
+// See scheduler.h for the closed-loop, four-sensor-fusion stop-condition
+// design rationale — that part is UNCHANGED. What changed here: the motor
+// motion pattern now matches Stroke Testing's mechanism (stroke_test_screen.cpp)
+// instead of the old synchronized same-direction timed strokes — motor 1
+// (left) and motor 2 (right) move CONCURRENTLY in OPPOSITE directions,
+// driven to actual soft-limit POSITIONS rather than a fixed elapsed time,
+// alternating who's headed to max vs returning to min each half-stroke.
+// scheduler_start() also now auto-homes if not already homed, rather than
+// refusing — see there.
+//
+// One "stroke" (for MIXING_MAX_STROKES_SAFETY_CAP / motor_increment_stroke()
+// / the post-stroke fusion check) = one full left round-trip (0->max->0),
+// with right doing the opposite each time — same accounting as Stroke
+// Testing. The very first half-stroke of a run is special: right is
+// already at its home position (0) with nothing to do concurrently, so
+// left runs alone for that one half only.
+//
+// This being NON-blocking (scheduler_update() is called every loop(), no
+// delay()s allowed) is the real difference from Stroke Testing's
+// implementation — same logic (noise-resume, stall detection, position
+// targets), adapted into single-check-per-call state machine form instead
+// of a blocking while loop.
 
 enum class RunState {
     IDLE,
-    STROKE_FORWARD, // executing one stroke's forward phase
-    STROKE_RETURN,  // executing one stroke's return phase
-    PAUSED,         // holding mid-stroke, resumable — see scheduler_pause()
+    STROKING,  // driving toward this half-stroke's target(s) — see _leftForward for which direction left is heading
+    PAUSED,    // holding mid-half-stroke, resumable — see scheduler_pause()
     DONE,
+    FAULT,     // stall or timeout detected mid-run — motors stopped, needs operator attention (see scheduler_hit_fault())
 };
 
 static RunState _state = RunState::IDLE;
 static uint16_t _target_um = TARGET_SIZE_UM_DEFAULT;
-static bool _stopRequested = false;   // graceful stop — finish current stroke, then hold
+static bool _stopRequested = false;   // graceful stop — finish current half-stroke, then hold
 
 static uint32_t _strokesDone = 0;
-static uint32_t _phaseStartMs = 0;
 static uint8_t _consecutiveInSpec = 0;
 static bool _hitSafetyCap = false;
 
-// Set by scheduler_pause(), consumed by scheduler_resume() — which phase to
-// resume into, and how far into it we already were.
+// Current half-stroke bookkeeping.
+static bool _leftForward = true;      // true = left heading to MAX (right heading to MIN, unless _firstStroke); false = left heading to MIN (right heading to MAX)
+static bool _firstStroke = true;      // true only for the very first half-stroke of a run — right is already at 0, nothing to do concurrently yet
+static bool _m1Done = false, _m2Done = false;
+static uint32_t _phaseDeadlineMs = 0;
+
+// Set by scheduler_pause(), consumed by scheduler_resume().
 static RunState _pausedFromState = RunState::IDLE;
-static uint32_t _pausedElapsedMs = 0;
+static bool _pausedM1Active = false, _pausedM2Active = false;
 
 static FusedSizeEstimate _lastFused{};
-
-static void _beginStroke() {
-    motor_enable(1, true);
-    motor_enable(2, true);
-    motor_set_dir(1, true);
-    motor_set_dir(2, true);
-    motor_set_speed(1, STROKE_RUN_HZ);
-    motor_set_speed(2, STROKE_RUN_HZ);
-    _phaseStartMs = millis();
-    _state = RunState::STROKE_FORWARD;
-}
 
 static void _stopMotorsHold() {
     motor_set_speed(1, 0);
     motor_set_speed(2, 0);
     motor_enable(1, false);
     motor_enable(2, false);
+}
+
+// Starts driving toward this half-stroke's target(s). leftForward=true:
+// left toward MAX (right toward MIN, unless _firstStroke, where right has
+// nothing to do). leftForward=false: left toward MIN, right toward MAX
+// (always concurrent — only the very first half-stroke of a run has
+// _firstStroke true).
+static void _beginHalfStroke(bool leftForward) {
+    _leftForward = leftForward;
+
+    motor_set_dir(1, leftForward);
+    motor_enable(1, true);
+    motor_set_speed(1, STROKE_RUN_HZ);
+    motor_clear_limit(1);
+    _m1Done = false;
+
+    if (_firstStroke) {
+        _m2Done = true;  // nothing for right to do concurrently this one time
+    } else {
+        motor_set_dir(2, !leftForward);
+        motor_enable(2, true);
+        motor_set_speed(2, STROKE_RUN_HZ);
+        motor_clear_limit(2);
+        _m2Done = false;
+    }
+
+    _phaseDeadlineMs = millis() + HOMING_TIMEOUT_MS;  // reused as a sane "something's wrong" ceiling, same as stroke_test_screen.cpp
+    _state = RunState::STROKING;
 }
 
 // Reads the current live value of each of the four fusion channels and
@@ -73,10 +115,13 @@ void scheduler_init() {
     _stopRequested = false;
 }
 
-void scheduler_start() {
+bool scheduler_start() {
     if (!motors_is_homed()) {
-        ble_log("Scheduler: refusing to start — not homed");
-        return;
+        ble_log("Scheduler: not homed — auto-homing before starting");
+        if (!motors_home()) {
+            ble_log("Scheduler: auto-home FAILED — cannot start");
+            return false;
+        }
     }
 
     if (uas_has_manual_override()) {
@@ -92,21 +137,23 @@ void scheduler_start() {
     _hitSafetyCap = false;
     _stopRequested = false;
     _lastFused = FusedSizeEstimate{};
+    _firstStroke = true;
 
     ble_log("Scheduler: run started, target=%u um (closed-loop, 4-sensor fusion)", _target_um);
-    _beginStroke();
+    _beginHalfStroke(true);
+    return true;
 }
 
 void scheduler_stop() {
     if (_state == RunState::PAUSED) {
         // Nothing in progress to finish — stop right away rather than
-        // waiting on a stroke that isn't happening.
+        // waiting on a half-stroke that isn't happening.
         _state = RunState::IDLE;
         _stopRequested = false;
         ble_log("Scheduler: stopped (was paused) at %lu strokes", (unsigned long)_strokesDone);
         return;
     }
-    _stopRequested = true;  // takes effect once the in-progress stroke finishes
+    _stopRequested = true;  // takes effect once the in-progress half-stroke's containing stroke finishes
 }
 
 void scheduler_emergency_stop() {
@@ -117,26 +164,33 @@ void scheduler_emergency_stop() {
 }
 
 void scheduler_pause() {
-    if (_state != RunState::STROKE_FORWARD && _state != RunState::STROKE_RETURN) return;
+    if (_state != RunState::STROKING) return;
     _pausedFromState = _state;
-    _pausedElapsedMs = millis() - _phaseStartMs;
+    _pausedM1Active = !_m1Done;
+    _pausedM2Active = !_m2Done;
     _stopMotorsHold();
     _state = RunState::PAUSED;
-    ble_log("Scheduler: paused (phase=%s, %lums into it)",
-            _pausedFromState == RunState::STROKE_FORWARD ? "forward" : "return",
-            (unsigned long)_pausedElapsedMs);
+    ble_log("Scheduler: paused (left %s, M1 active=%d M2 active=%d)",
+            _leftForward ? "->max" : "->min", _pausedM1Active, _pausedM2Active);
 }
 
 void scheduler_resume() {
     if (_state != RunState::PAUSED) return;
-    bool forward = (_pausedFromState == RunState::STROKE_FORWARD);
-    motor_enable(1, true);
-    motor_enable(2, true);
-    motor_set_dir(1, forward);
-    motor_set_dir(2, forward);
-    motor_set_speed(1, STROKE_RUN_HZ);
-    motor_set_speed(2, STROKE_RUN_HZ);
-    _phaseStartMs = millis() - _pausedElapsedMs;  // preserve remaining time in this phase
+    // Position-based, not time-based — resuming just means re-issuing the
+    // same direction/speed for whichever motor(s) hadn't yet reached their
+    // target; the ISR-tracked absolute position already tells us exactly
+    // where each motor is, nothing to reconstruct.
+    if (_pausedM1Active) {
+        motor_set_dir(1, _leftForward);
+        motor_enable(1, true);
+        motor_set_speed(1, STROKE_RUN_HZ);
+    }
+    if (_pausedM2Active) {
+        motor_set_dir(2, !_leftForward);
+        motor_enable(2, true);
+        motor_set_speed(2, STROKE_RUN_HZ);
+    }
+    _phaseDeadlineMs = millis() + HOMING_TIMEOUT_MS;  // fresh timeout window from the resume point
     _state = _pausedFromState;
     ble_log("Scheduler: resumed");
 }
@@ -144,11 +198,12 @@ void scheduler_resume() {
 bool scheduler_is_paused() { return _state == RunState::PAUSED; }
 
 bool scheduler_is_running() {
-    return _state == RunState::STROKE_FORWARD || _state == RunState::STROKE_RETURN || _state == RunState::PAUSED;
+    return _state == RunState::STROKING || _state == RunState::PAUSED;
 }
 
 bool scheduler_target_reached() { return _state == RunState::DONE; }
 bool scheduler_hit_safety_cap()  { return _hitSafetyCap; }
+bool scheduler_hit_fault()       { return _state == RunState::FAULT; }
 
 void scheduler_set_target_um(uint16_t target_um) {
     if (scheduler_is_running()) return;  // lock the setpoint for the duration of a run
@@ -171,52 +226,101 @@ void scheduler_update() {
     switch (_state) {
     case RunState::IDLE:
     case RunState::DONE:
+    case RunState::FAULT:
     case RunState::PAUSED:  // motors already held by scheduler_pause(); nothing to advance
         return;
 
-    case RunState::STROKE_FORWARD:
-        if (millis() - _phaseStartMs >= STROKE_FORWARD_MS) {
-            motor_set_dir(1, false);
-            motor_set_dir(2, false);
-            _phaseStartMs = millis();
-            _state = RunState::STROKE_RETURN;
+    case RunState::STROKING: {
+        // Limit-switch noise check/resume — a tripped flag might be
+        // electrical noise from the stepper's own step pulses, not a
+        // genuine closure; the ISR already stopped that motor's step
+        // timer unconditionally either way. Same pattern as
+        // stroke_test_screen.cpp/motors_home().
+        if (!_m1Done && motor_limit_hit(1) && !motor_limit_hit_debounced(1)) {
+            motor_set_speed(1, STROKE_RUN_HZ);
+        }
+        if (!_m2Done && motor_limit_hit(2) && !motor_limit_hit_debounced(2)) {
+            motor_set_speed(2, STROKE_RUN_HZ);
+        }
+
+        // Stall check — SG_RESULT below threshold means high load (TMC
+        // torque loss or a genuine mechanical jam). This is REAL mixing,
+        // not a bench test — an undetected stall here means silently
+        // failing to mix material while nothing on screen shows a
+        // problem, so this stops immediately into a real fault state
+        // rather than continuing or waiting for a timeout.
+        if ((!_m1Done && motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) ||
+            (!_m2Done && motor_sg_result(2) < MOTOR_STALL_SG_THRESHOLD)) {
+            _stopMotorsHold();
+            _state = RunState::FAULT;
+            ble_log("Scheduler: STALL DETECTED during mixing (M1 SG=%u M2 SG=%u) at %lu strokes — motors stopped",
+                    motor_sg_result(1), motor_sg_result(2), (unsigned long)_strokesDone);
+            return;
+        }
+
+        if (!_m1Done) {
+            int32_t p1 = motor_get_position(1);
+            bool reached = _leftForward ? (p1 >= MOTOR1_SOFT_LIMIT_MAX) : (p1 <= MOTOR1_SOFT_LIMIT_MIN);
+            if (reached) { motor_set_speed(1, 0); motor_enable(1, false); _m1Done = true; }
+        }
+        if (!_m2Done) {
+            int32_t p2 = motor_get_position(2);
+            bool reached = _leftForward ? (p2 <= MOTOR2_SOFT_LIMIT_MIN) : (p2 >= MOTOR2_SOFT_LIMIT_MAX);
+            if (reached) { motor_set_speed(2, 0); motor_enable(2, false); _m2Done = true; }
+        }
+
+        if ((!_m1Done || !_m2Done) && millis() > _phaseDeadlineMs) {
+            _stopMotorsHold();
+            _state = RunState::FAULT;
+            ble_log("Scheduler: TIMED OUT during mixing half-stroke at %lu strokes (M1 done=%d M2 done=%d) — motors stopped",
+                    (unsigned long)_strokesDone, _m1Done, _m2Done);
+            return;
+        }
+
+        if (!_m1Done || !_m2Done) return;  // still in progress, check again next update()
+
+        // Half-stroke complete.
+        _firstStroke = false;
+        if (_leftForward) {
+            // Just finished heading to max — second half of the stroke
+            // (left back to min, right to max) always follows immediately,
+            // no fusion check yet (that happens once the FULL stroke
+            // completes, below).
+            _beginHalfStroke(false);
+            return;
+        }
+
+        // Just finished heading back to min — this completes one full
+        // stroke (same accounting as Stroke Testing).
+        motor_increment_stroke();
+        _strokesDone++;
+
+        _lastFused = _readFusedEstimate();
+        bool inSpec = (_lastFused.numChannelsUsed >= FUSION_MIN_CHANNELS_REQUIRED)
+                      && (fabsf(_lastFused.sizeUm - (float)_target_um) <= TARGET_TOLERANCE_UM);
+        _consecutiveInSpec = inSpec ? (_consecutiveInSpec + 1) : 0;
+
+        if (_stopRequested) {
+            _state = RunState::IDLE;
+            _stopRequested = false;
+            ble_log("Scheduler: stopped (graceful) at %lu strokes, last fused=%.1fum (n=%u)",
+                    (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed);
+        } else if (_consecutiveInSpec >= FUSION_CONSECUTIVE_CHECKS_REQUIRED) {
+            _hitSafetyCap = false;
+            _state = RunState::DONE;
+            ble_log("Scheduler: target confirmed by sensor fusion at %lu strokes "
+                    "(fused=%.1fum, n=%u channels, target=%uum)",
+                    (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed, _target_um);
+        } else if (_strokesDone >= MIXING_MAX_STROKES_SAFETY_CAP) {
+            _hitSafetyCap = true;
+            _state = RunState::DONE;
+            ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before sensor fusion "
+                    "confirmed target; last fused=%.1fum (n=%u). Check calibration.",
+                    MIXING_MAX_STROKES_SAFETY_CAP, _lastFused.sizeUm, _lastFused.numChannelsUsed);
+        } else {
+            _beginHalfStroke(true);  // next stroke's first half
         }
         return;
-
-    case RunState::STROKE_RETURN:
-        if (millis() - _phaseStartMs >= STROKE_RETURN_MS) {
-            motor_increment_stroke();
-            _strokesDone++;
-
-            _lastFused = _readFusedEstimate();
-            bool inSpec = (_lastFused.numChannelsUsed >= FUSION_MIN_CHANNELS_REQUIRED)
-                          && (fabsf(_lastFused.sizeUm - (float)_target_um) <= TARGET_TOLERANCE_UM);
-            _consecutiveInSpec = inSpec ? (_consecutiveInSpec + 1) : 0;
-
-            if (_stopRequested) {
-                _stopMotorsHold();
-                _state = RunState::IDLE;
-                _stopRequested = false;
-                ble_log("Scheduler: stopped (graceful) at %lu strokes, last fused=%.1fum (n=%u)",
-                        (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed);
-            } else if (_consecutiveInSpec >= FUSION_CONSECUTIVE_CHECKS_REQUIRED) {
-                _stopMotorsHold();
-                _hitSafetyCap = false;
-                _state = RunState::DONE;
-                ble_log("Scheduler: target confirmed by sensor fusion at %lu strokes "
-                        "(fused=%.1fum, n=%u channels, target=%uum)",
-                        (unsigned long)_strokesDone, _lastFused.sizeUm, _lastFused.numChannelsUsed, _target_um);
-            } else if (_strokesDone >= MIXING_MAX_STROKES_SAFETY_CAP) {
-                _stopMotorsHold();
-                _hitSafetyCap = true;
-                _state = RunState::DONE;
-                ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before sensor fusion "
-                        "confirmed target; last fused=%.1fum (n=%u). Check calibration.",
-                        MIXING_MAX_STROKES_SAFETY_CAP, _lastFused.sizeUm, _lastFused.numChannelsUsed);
-            } else {
-                _beginStroke();  // next stroke
-            }
-        }
-        return;
+    }
     }
 }
