@@ -4,21 +4,20 @@
 #include "ui_input.h"
 #include "ui_display.h"
 #include "scheduler.h"
-#include "ui.h"
 
 static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 
 void WarningScreen::_draw() {
     LGFX &tft = ui_display_tft();
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(TFT_WHITE);
     tft.fillRect(0, 0, tft.width(), 30, COLOR_CLOWN_NOSE);
     tft.setFont(&fonts::FreeSansBold12pt7b);
-    ui_display_draw_centered("WARNING", 4, TFT_WHITE, 1);
+    ui_display_draw_centered("WARNING", 4, TFT_BLACK, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered("Ensure syringe is properly", 90, TFT_WHITE, 1);
-    ui_display_draw_centered("mounted inside", 115, TFT_WHITE, 1);
-    ui_display_draw_centered("Press knob to confirm and start", 200, COLOR_LUNAR_ROCK, 1);
-    ui_display_draw_centered("(hold knob to go back)", 245, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("Ensure syringe is properly", 90, TFT_BLACK, 1);
+    ui_display_draw_centered("mounted inside", 115, TFT_BLACK, 1);
+    ui_display_draw_centered("Press knob to confirm and start", 200, COLOR_ASH, 1);
+    ui_display_draw_centered("(hold knob to go back)", 245, COLOR_ASH, 1);
 }
 
 void WarningScreen::update(ScreenManager &mgr, bool forceFull) {
@@ -26,13 +25,9 @@ void WarningScreen::update(ScreenManager &mgr, bool forceFull) {
 
     ButtonEvent ev = ui_input_poll_enc_sw();
     if (ev == ButtonEvent::SHORT_PRESS && _runningScreen) {
-        // scheduler_start() now auto-homes if needed (blocking, like every
-        // other homing call site) — it can genuinely fail, unlike before
-        // when this screen could only be reached already-homed.
-        if (!scheduler_start()) {
-            ui_show_error("HOMING FAILED - check limit switches");
-            return;
-        }
+        // Homing (and scheduler_start() itself) now happens from
+        // MixingRunningScreen::onEnter(), AFTER the screen has actually
+        // switched — not here, blocking on this screen. Just navigate.
         mgr.goTo(_runningScreen);
         return;
     }

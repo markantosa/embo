@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.1"
+#define FIRMWARE_VERSION "0.6.2"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -161,10 +161,8 @@
 //
 // PLACEHOLDER SPACING: +/-10% around the nominal 1MHz transducer frequency.
 // See firmware/CALIBRATION.md §2 before trusting the off-center points.
-#define UAS_NUM_FREQUENCIES  3
-#define UAS_FREQ_HZ_0        900000.0f
-#define UAS_FREQ_HZ_1        1000000.0f   // matches original single-tone design
-#define UAS_FREQ_HZ_2        1100000.0f
+#define UAS_NUM_FREQUENCIES  1
+#define UAS_FREQ_HZ_0        960000.0f   // 0.96 MHz — single-frequency production setting
 
 // ── Homing ───────────────────────────────────────────────────────────────────
 // Slow approach speed — gentle enough to avoid impact damage on limit trip.

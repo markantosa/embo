@@ -15,13 +15,13 @@ void EndScreen::setResult(const char *msg) {
 
 void EndScreen::_draw() {
     LGFX &tft = ui_display_tft();
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(TFT_WHITE);
     tft.setFont(&fonts::FreeSansBold12pt7b);
-    ui_display_draw_centered("Results", 30, TFT_WHITE, 1);
+    ui_display_draw_centered("Results", 30, TFT_BLACK, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
     ui_display_draw_centered(_resultMsg, 100, COLOR_BRIGHT_BLUE, 1);
-    ui_display_draw_centered("Hold knob to verify with camera", 220, COLOR_LUNAR_ROCK, 1);
-    ui_display_draw_centered("(or press BTN1)", 245, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("Hold knob to verify with camera", 220, COLOR_ASH, 1);
+    ui_display_draw_centered("(or press BTN1)", 245, COLOR_ASH, 1);
 }
 
 void EndScreen::update(ScreenManager &mgr, bool forceFull) {

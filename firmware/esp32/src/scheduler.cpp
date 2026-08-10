@@ -28,7 +28,7 @@
 // CONCURRENTLY in OPPOSITE directions, driven to actual soft-limit
 // POSITIONS rather than a fixed elapsed time, alternating who's headed to
 // max vs returning to min each half-stroke. scheduler_start() also
-// auto-homes if not already homed, rather than refusing.
+// homes unconditionally every time, regardless of any prior homing.
 //
 // One "stroke" (for MIXING_MAX_STROKES_SAFETY_CAP / motor_increment_stroke())
 // = one full left round-trip (0->max->0), with right doing the opposite
@@ -113,12 +113,16 @@ void scheduler_init() {
 }
 
 bool scheduler_start() {
-    if (!motors_is_homed()) {
-        ble_log("Scheduler: not homed — auto-homing before starting");
-        if (!motors_home()) {
-            ble_log("Scheduler: auto-home FAILED — cannot start");
-            return false;
-        }
+    // Unconditional — homes every single time a run starts, regardless of
+    // any homing already done via other functions (Settings > Motion >
+    // Home Motors, the Mixing Menu's own manual homing prompt, etc.).
+    // Deliberate: a real mix always begins from a known, freshly-confirmed
+    // reference position, not whatever homing state happened to already
+    // be true from something else earlier in the session.
+    ble_log("Scheduler: homing before starting (always, regardless of prior homing)");
+    if (!motors_home()) {
+        ble_log("Scheduler: homing FAILED — cannot start");
+        return false;
     }
 
     if (uas_has_manual_override()) {

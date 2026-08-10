@@ -19,7 +19,7 @@ void MenuScreen::_draw(bool forceFull) {
         ui_display_draw_centered(_title, 24, TFT_BLACK, 1); // drawing 
         if (_subtitle) {
             tft.setFont(&fonts::FreeSans9pt7b);
-            ui_display_draw_centered(_subtitle, 48, COLOR_LUNAR_ROCK, 1);
+            ui_display_draw_centered(_subtitle, 48, COLOR_ASH, 1);
         }
         tft.drawFastHLine(30, 62, tft.width() - 60, TFT_BLACK); // line below title line 
     }

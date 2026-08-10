@@ -21,21 +21,21 @@ void PlaceholderScreen::onEnter() {}
 
 void PlaceholderScreen::_draw() {
     LGFX &tft = ui_display_tft();
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(TFT_WHITE);
     int16_t y = 80;
     if (_title[0] != '\0') {
         tft.setFont(&fonts::FreeSansBold12pt7b);
-        ui_display_draw_centered(_title, y, TFT_WHITE, 1);
+        ui_display_draw_centered(_title, y, TFT_BLACK, 1);
         y += 40;
     }
-    ui_display_draw_centered(_message, y, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(_message, y, COLOR_ASH, 1);
     if (_confirmTarget) {
-        ui_display_draw_centered("Press knob to continue", 220, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered("Press knob to continue", 220, COLOR_ASH, 1);
     }
     if (_showBack) {
         ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
-                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
-        ui_display_draw_centered("(or hold knob)", 245, COLOR_LUNAR_ROCK, 1);
+                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_BLACK);
+        ui_display_draw_centered("(or hold knob)", 245, COLOR_ASH, 1);
     }
 }
 

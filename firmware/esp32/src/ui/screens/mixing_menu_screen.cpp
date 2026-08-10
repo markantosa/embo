@@ -5,9 +5,7 @@
 #include "ui_input.h"
 #include "ui_display.h"
 #include "scheduler.h"
-#include "motors.h"
 #include "config.h"
-#include "ui.h"
 #include "mixing_options.h"
 #include <stdio.h>
 #include <string.h>
@@ -18,31 +16,31 @@ void MixingMenuScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
 
     if (forceFull) {
-        tft.fillScreen(TFT_BLACK);
+        tft.fillScreen(TFT_WHITE);
         tft.setFont(&fonts::FreeSansBold12pt7b);
-        ui_display_draw_centered(mixing_options_target_type_label(), 26, TFT_WHITE, 1);
+        ui_display_draw_centered(mixing_options_target_type_label(), 26, TFT_BLACK, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
         char agentLine[24];
         snprintf(agentLine, sizeof(agentLine), "Agent: %s", mixing_options_agent_label());
-        ui_display_draw_centered(agentLine, 60, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered(agentLine, 60, COLOR_ASH, 1);
         ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
-                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
-        ui_display_draw_centered("(or press BTN1)", 245, COLOR_LUNAR_ROCK, 1);
+                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_BLACK);
+        ui_display_draw_centered("(or press BTN1)", 245, COLOR_ASH, 1);
     }
 
     // Dynamic content — redrawn every call that reaches here, not just on
-    // forceFull, since the target value changes with encoder rotation and
-    // homed status can change after a successful in-place home.
-    tft.fillRect(0, 80, tft.width(), 100, TFT_BLACK);
+    // forceFull, since the target value changes with encoder rotation.
+    tft.fillRect(0, 80, tft.width(), 100, TFT_WHITE);
     char buf[16];
     snprintf(buf, sizeof(buf), "%u um", scheduler_get_target_um());
     tft.setFont(&fonts::FreeSansBold24pt7b);
-    ui_display_draw_centered(buf, 95, TFT_WHITE, 1);
+    ui_display_draw_centered(buf, 95, TFT_BLACK, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
 
-    bool homed = motors_is_homed();
-    ui_display_draw_centered(homed ? "Press knob to continue" : "NOT HOMED - press knob to home", 225,
-                              homed ? COLOR_LUNAR_ROCK : COLOR_CLOWN_NOSE, homed ? 2 : 1);
+    // No homed/not-homed distinction here anymore — scheduler_start()
+    // homes unconditionally every time a run actually starts, regardless
+    // of anything done on this screen, so there's nothing to gate here.
+    ui_display_draw_centered("Press knob to continue", 225, COLOR_ASH, 2);
 }
 
 void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {
@@ -63,16 +61,9 @@ void MixingMenuScreen::update(ScreenManager &mgr, bool forceFull) {
     // being interpreted as a BTN1-back on the same call).
     ButtonEvent ev = ui_input_poll_enc_sw();
     if (ev == ButtonEvent::SHORT_PRESS) {
-        if (!motors_is_homed()) {
-            // Blocking, same tradeoff already accepted for the BLE
-            // console's own HOME command — nothing can be running yet.
-            if (!motors_home()) {
-                ui_show_error("HOMING FAILED - check limit switches");
-                return;
-            }
-            _draw(false);  // reflect the new homed status immediately
-            return;
-        }
+        // No homing gate here anymore — scheduler_start() (via the
+        // Warning screen -> Mixing Running screen) homes unconditionally
+        // every time a run actually starts, so this just navigates.
         if (_warningScreen) {
             mgr.push(_warningScreen);
         }

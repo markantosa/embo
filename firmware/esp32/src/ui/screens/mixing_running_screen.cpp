@@ -12,30 +12,47 @@ static const TouchButton kButtons[] = {
     { 140, 260,  90, 40, "Stop"  },
 };
 
+void MixingRunningScreen::onEnter() {
+    // Draw the Mixing screen itself FIRST, before the blocking homing call
+    // below — so the operator sees this screen (spinner, buttons, "Mixing"
+    // title) rather than staying on the Warning screen for the whole
+    // homing wait. forceFull=true forces the full static content (title,
+    // buttons) to draw, matching what a normal first-update() would do.
+    _draw(true);
+
+    if (!scheduler_start()) {
+        ui_show_error("HOMING FAILED - check limit switches");
+    }
+}
+
 void MixingRunningScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
     bool paused = scheduler_is_paused();
 
     if (forceFull) {
-        tft.fillScreen(TFT_BLACK);
+        tft.fillScreen(TFT_WHITE);
         tft.setFont(&fonts::FreeSansBold12pt7b);
-        ui_display_draw_centered("Mixing", 70, TFT_WHITE, 1);
+        ui_display_draw_centered("Mixing", 70, TFT_BLACK, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
-        ui_display_draw_centered("Hold BTN1 for emergency stop", 220, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered("Hold BTN1 for emergency stop", 220, COLOR_ASH, 1);
     }
 
     // The pause/resume label can change without anything else on screen
     // changing, so redraw just that button whenever paused state might
     // have changed (forceFull, or right after we act on a tap/BTN1 below).
+    // Text color follows the background: COLOR_BRIGHT_BLUE (Resume) is dark
+    // enough for white text, COLOR_LUNAR_ROCK (Pause) is light and needs
+    // dark text instead.
     ui_display_draw_touch_button(kButtons[0].x, kButtons[0].y, kButtons[0].w, kButtons[0].h,
-                                  paused ? "Resume" : "Pause", paused ? COLOR_BRIGHT_BLUE : COLOR_LUNAR_ROCK, TFT_WHITE);
+                                  paused ? "Resume" : "Pause", paused ? COLOR_BRIGHT_BLUE : COLOR_LUNAR_ROCK,
+                                  paused ? TFT_WHITE : TFT_BLACK);
     ui_display_draw_touch_button(kButtons[1].x, kButtons[1].y, kButtons[1].w, kButtons[1].h,
                                   "Stop", COLOR_CLOWN_NOSE, TFT_WHITE);
 
     if (paused) {
         if (forceFull) {
-            tft.fillRect(0, 130, tft.width(), 30, TFT_BLACK);
-            ui_display_draw_centered("PAUSED", 140, COLOR_LUNAR_ROCK, 1);
+            tft.fillRect(0, 130, tft.width(), 30, TFT_WHITE);
+            ui_display_draw_centered("PAUSED", 140, COLOR_ASH, 1);
         }
     } else {
         ui_display_draw_spinner(160);

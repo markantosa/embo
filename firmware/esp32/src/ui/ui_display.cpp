@@ -26,11 +26,11 @@ void ui_display_draw_spinner(int16_t cy) {
 
     LGFX &tft = ui_display_tft();
     int16_t cx = tft.width() / 2;
-    tft.fillRect(cx - 40, cy - 10, 80, 20, TFT_BLACK);
+    tft.fillRect(cx - 40, cy - 10, 80, 20, TFT_WHITE);
     char dots[5] = "";
     for (uint8_t i = 0; i < _spinnerFrame; i++) dots[i] = '.';
     dots[_spinnerFrame] = '\0';
-    ui_display_draw_centered(dots, cy - 8, TFT_WHITE, 2);
+    ui_display_draw_centered(dots, cy - 8, TFT_BLACK, 2);
 }
 
 void ui_display_draw_touch_button(int16_t x, int16_t y, int16_t w, int16_t h,

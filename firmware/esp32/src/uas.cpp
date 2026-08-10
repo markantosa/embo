@@ -38,10 +38,10 @@ static AD9833 _dds(PIN_AD9833_CS);
 static esp_adc_cal_characteristics_t _adc_chars;
 
 static const float _freq_hz[UAS_NUM_FREQUENCIES] = {
-    UAS_FREQ_HZ_0, UAS_FREQ_HZ_1, UAS_FREQ_HZ_2
+    UAS_FREQ_HZ_0
 };
 static float _baseline_mv[UAS_NUM_FREQUENCIES]    = {0};
-static float _last_attenuation[UAS_NUM_FREQUENCIES] = {1.0f, 1.0f, 1.0f};
+static float _last_attenuation[UAS_NUM_FREQUENCIES] = {1.0f};
 
 // Manual frequency override, for bench/bring-up use only — see uas.h and
 // ble_debug.cpp's UASFREQ/UASSWEEP commands.
@@ -119,8 +119,10 @@ void uas_update() {
             _last_attenuation[i] = (float)mv / _baseline_mv[i];
         }
     }
-    // Leaves the DDS tuned to the last swept frequency (UAS_FREQ_HZ_2) until
-    // the next uas_update() call — uas_read_mv() reads whatever that is.
+    // With UAS_NUM_FREQUENCIES=1, this just re-reads the same single
+    // frequency (UAS_FREQ_HZ_0) every call — the "leaves the DDS tuned to
+    // the last swept frequency" behavior this comment used to describe
+    // only mattered when there were multiple frequencies to sweep through.
 }
 
 uint8_t uas_get_num_frequencies() { return UAS_NUM_FREQUENCIES; }

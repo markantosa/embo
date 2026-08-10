@@ -12,10 +12,18 @@ class EndScreen;
 // called, it's just an additional way to reach it, not a replacement.
 // Touch Pause is new capability (scheduler_pause()/resume()), independent
 // of Stop — pausing does not end the run.
+//
+// onEnter() draws this screen immediately, THEN calls scheduler_start()
+// (which homes, blocking, unconditionally — see scheduler.cpp) — in that
+// order deliberately, so the operator sees the Mixing screen itself
+// before the homing wait, not stuck looking at the Warning screen while
+// it happens. WarningScreen just navigates here; it doesn't call
+// scheduler_start() itself anymore.
 class MixingRunningScreen : public Screen {
 public:
     void wire(EndScreen &endScreen) { _endScreen = &endScreen; }
 
+    void onEnter() override;
     void update(ScreenManager &mgr, bool forceFull) override;
 
 private:

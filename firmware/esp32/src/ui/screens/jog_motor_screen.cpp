@@ -44,29 +44,29 @@ void JogMotorScreen::_stop() {
 void JogMotorScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
     if (forceFull) {
-        tft.fillScreen(TFT_BLACK);
+        tft.fillScreen(TFT_WHITE);
         tft.setFont(&fonts::FreeSansBold12pt7b);
         char title[24];
         snprintf(title, sizeof(title), "Move %s Motor", _motor == 1 ? "Left" : "Right");
-        ui_display_draw_centered(title, 30, TFT_WHITE, 1);
+        ui_display_draw_centered(title, 30, TFT_BLACK, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
-        ui_display_draw_centered("Turn knob: CW = forward", 90, COLOR_LUNAR_ROCK, 1);
-        ui_display_draw_centered("CCW = reverse (anticlockwise,", 112, COLOR_LUNAR_ROCK, 1);
-        ui_display_draw_centered("same direction homing uses)", 128, COLOR_LUNAR_ROCK, 1);
-        ui_display_draw_centered("Press knob to stop", 225, COLOR_LUNAR_ROCK, 1);
-        ui_display_draw_centered("(hold knob or press BTN1 to exit)", 245, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered("Turn knob: CW = forward", 90, COLOR_ASH, 1);
+        ui_display_draw_centered("CCW = reverse (anticlockwise,", 112, COLOR_ASH, 1);
+        ui_display_draw_centered("same direction homing uses)", 128, COLOR_ASH, 1);
+        ui_display_draw_centered("Press knob to stop", 225, COLOR_ASH, 1);
+        ui_display_draw_centered("(hold knob or press BTN1 to exit)", 245, COLOR_ASH, 1);
     }
     // Status line -- redrawn every call regardless of forceFull, so the
     // moving/idle state never lags behind reality.
-    tft.fillRect(0, 150, tft.width(), 60, TFT_BLACK);
+    tft.fillRect(0, 150, tft.width(), 60, TFT_WHITE);
     if (_active) {
         ui_display_draw_centered(_lastFwd ? "Moving: FORWARD" : "Moving: REVERSE", 160, COLOR_BRIGHT_BLUE, 1);
     } else {
-        ui_display_draw_centered("Idle", 160, COLOR_LUNAR_ROCK, 1);
+        ui_display_draw_centered("Idle", 160, COLOR_ASH, 1);
     }
     char posLine[24];
     snprintf(posLine, sizeof(posLine), "Position: %ld steps", (long)motor_get_position(_motor));
-    ui_display_draw_centered(posLine, 185, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(posLine, 185, COLOR_ASH, 1);
 }
 
 void JogMotorScreen::update(ScreenManager &mgr, bool forceFull) {

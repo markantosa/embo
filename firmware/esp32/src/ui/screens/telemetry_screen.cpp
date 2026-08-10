@@ -14,38 +14,38 @@ static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 void TelemetryScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
     if (forceFull) {
-        tft.fillScreen(TFT_BLACK);
+        tft.fillScreen(TFT_WHITE);
         tft.setFont(&fonts::FreeSansBold12pt7b);
-        ui_display_draw_centered("Telemetry", 15, TFT_WHITE, 1);
+        ui_display_draw_centered("Telemetry", 15, TFT_BLACK, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
         ui_display_draw_touch_button(kBackButton.x, kBackButton.y, kBackButton.w, kBackButton.h,
-                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_WHITE);
-        ui_display_draw_centered("(or hold knob)", 245, COLOR_LUNAR_ROCK, 1);
+                                      kBackButton.label, COLOR_LUNAR_ROCK, TFT_BLACK);
+        ui_display_draw_centered("(or hold knob)", 245, COLOR_ASH, 1);
     }
 
     // Live telemetry — refreshed every call, not just on forceFull (this is
     // the whole point of the screen). Cheap enough: a handful of fillRect +
     // text draws, same pattern as the spinner elsewhere. Bounded well
     // clear of the Back button/hint below it.
-    tft.fillRect(0, 55, tft.width(), 155, TFT_BLACK);
+    tft.fillRect(0, 55, tft.width(), 155, TFT_WHITE);
     char line[48];
     snprintf(line, sizeof(line), "Load cell 1: %.1f g", force_sensor_get_grams_1());
-    ui_display_draw_centered(line, 58, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 58, COLOR_ASH, 1);
     snprintf(line, sizeof(line), "Load cell 2: %.1f g", force_sensor_get_grams_2());
-    ui_display_draw_centered(line, 78, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 78, COLOR_ASH, 1);
     snprintf(line, sizeof(line), "Turbidity ALS: %u  (%s)",
              turbidity_get_als_clear(), turbidity_apds_ok() ? "ok" : "fault");
-    ui_display_draw_centered(line, 98, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 98, COLOR_ASH, 1);
     snprintf(line, sizeof(line), "Turbidity IR: %lu  (%s)",
              (unsigned long)turbidity_get_ir_raw(), turbidity_max_ok() ? "ok" : "fault");
-    ui_display_draw_centered(line, 118, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 118, COLOR_ASH, 1);
     snprintf(line, sizeof(line), "UAS reading: %lu mV", (unsigned long)uas_read_mv());
-    ui_display_draw_centered(line, 138, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 138, COLOR_ASH, 1);
     // Exact, interrupt-counted position — see motors.h.
     snprintf(line, sizeof(line), "Motors: %s  M1:%ld M2:%ld",
              motors_is_homed() ? "HOMED" : "NOT HOMED",
              (long)motor_get_position(1), (long)motor_get_position(2));
-    ui_display_draw_centered(line, 158, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered(line, 158, COLOR_ASH, 1);
 }
 
 void TelemetryScreen::update(ScreenManager &mgr, bool forceFull) {

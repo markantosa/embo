@@ -37,18 +37,18 @@ static void _logCsvRow() {
 void StrokeTestScreen::_draw(bool forceFull) {
     if (!forceFull) return;  // nothing here changes except via encoder rotation, handled below
     LGFX &tft = ui_display_tft();
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(TFT_WHITE);
     tft.setFont(&fonts::FreeSansBold12pt7b);
-    ui_display_draw_centered("Stroke Testing", 30, TFT_WHITE, 1);
+    ui_display_draw_centered("Stroke Testing", 30, TFT_BLACK, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered("Strokes to run", 90, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("Strokes to run", 90, COLOR_ASH, 1);
     char buf[8];
     snprintf(buf, sizeof(buf), "%d", _strokeCount);
     tft.setFont(&fonts::FreeSansBold24pt7b);
-    ui_display_draw_centered(buf, 120, TFT_WHITE, 1);
+    ui_display_draw_centered(buf, 120, TFT_BLACK, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
-    ui_display_draw_centered("Press knob to start", 225, COLOR_LUNAR_ROCK, 1);
-    ui_display_draw_centered("(hold knob or press BTN1 to cancel)", 245, COLOR_LUNAR_ROCK, 1);
+    ui_display_draw_centered("Press knob to start", 225, COLOR_ASH, 1);
+    ui_display_draw_centered("(hold knob or press BTN1 to cancel)", 245, COLOR_ASH, 1);
 }
 
 void StrokeTestScreen::update(ScreenManager &mgr, bool forceFull) {

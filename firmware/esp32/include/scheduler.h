@@ -69,10 +69,11 @@ void scheduler_update();   // call every loop()
 // state. Does NOT reset the breakage-model fit (calibration.h) — that
 // accumulates across runs, see calib_breakage_reset().
 //
-// Auto-homes first if not already homed (blocking, like every other
-// homing call site in this firmware) — returns false without starting if
-// that homing attempt fails, so the caller can show a fault rather than
-// silently doing nothing.
+// Homes first, UNCONDITIONALLY — every single time, regardless of any
+// homing already done via another function earlier in the session
+// (blocking, like every other homing call site in this firmware). Returns
+// false without starting if that homing attempt fails, so the caller can
+// show a fault rather than silently doing nothing.
 bool scheduler_start();
 
 // Graceful stop: finishes the in-progress stroke, then holds. Use for a
