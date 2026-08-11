@@ -1,0 +1,53 @@
+Firmware development history
+
+Previously existing functionality
+- homing, with edge cases handled 
+- testing for strokes 
+- main ui framework
+- loadcell data logging via serial
+- uas data logging via ble and html
+- motor limits (in steps)
+- working buzzer 
+
+v0.5.1 
+- added firmware version numbering in settings ui 
+- removed inconsistent "back" buttons in some menus
+- included uas tx and rx in serial data collection
+
+v0.5.2 (goal)- to change units from steps into mm, hz into mm/s
+- add auto tare after each home for both loadcells
+- retained steps due to some math errors, will change units in later version
+
+v0.6.0 (goal) - to a way to take in calibration data and form the motor stopping loop, and add necessary ui elements to that
+- added ui elements for menu
+
+v0.6.1
+- added calibration equation for uas 
+
+v0.6.2
+- change ui colours for main mixing loop
+- home before mixing run 
+- fixed uas frequency to 0.96MHz
+
+v0.6.3
+- fixed ui text bugs
+- made ui all readable colours
+- fixed homing bugs for main mixing loop
+- changed to any button e stop on press during mixing
+
+v0.6.4
+- increased stepper current to 700mA for more torque
+- homing hz to 2000hz
+
+v0.6.5
+- motor stroke speed 8000hz
+- stroke test speed to 4000hz
+- homing pre nudge to 200steps
+
+v0.6.6 (goal) - acceleration ramp to improve motion, add dynamic speeds to improve torque performance during first few strokes 
+- implemented adjustable acceleration ramp to improve motion system
+- current is now at 1000mA for torque and speed requirements
+
+v0.7.0 (goal) - auto detect syringe inside using uas
+
+

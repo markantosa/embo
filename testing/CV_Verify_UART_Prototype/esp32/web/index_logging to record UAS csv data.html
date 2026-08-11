@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EMBO UAS Frequency Sweep Dashboard</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1c20; --muted: #6b7280;
+    --accent: #2563eb; --accent-active: #1d4ed8; --danger: #dc2626; --ok: #16a34a; --warn: #f59e0b; --border: #e2e4e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15171a; --card:#1e2126; --text:#e8e9eb; --muted:#9aa1ab; --border:#2c3036; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 20px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; }
+  .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  button.connect {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 0.95rem; cursor: pointer;
+  }
+  button.connect:active { background: var(--accent-active); }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); display: inline-block; }
+  .status-dot.connected { background: var(--ok); }
+  .limit-banner {
+    display: none; align-items: center; gap: 10px; background: var(--danger); color: white;
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-weight: 600;
+    font-size: 0.95rem; animation: limit-pulse 1s ease-in-out infinite;
+  }
+  .limit-banner.show { display: flex; }
+  @keyframes limit-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .card.limit-active { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger) inset; }
+  .section-title { font-size: 0.95rem; color: var(--muted); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .section-title:first-of-type { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 4px; }
+  .card .unit { font-size: 0.75rem; color: var(--muted); margin: 0 0 10px; }
+  .reading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .reading .label { color: var(--muted); font-size: 0.85rem; }
+  .reading .value { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: var(--border); color: var(--muted); }
+  .badge.ok { background: var(--ok); color: white; }
+  .badge.bad { background: var(--danger); color: white; }
+  .badge.active { background: var(--warn); color: white; }
+  .spark-wrap { margin-top: 8px; }
+  canvas.spark { width: 100%; height: 56px; display: block; }
+  .bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s linear; }
+  .switch-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .motor-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .jog-btn {
+    flex: 1; padding: 18px 0; font-size: 1.4rem; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; user-select: none; touch-action: manipulation;
+  }
+  .jog-btn:active, .jog-btn.pressed { background: var(--accent); color: white; }
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .slider-row input[type=range] { flex: 1; }
+  .slider-row .pct { width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
+  .home-btn {
+    margin-top: 12px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; font-size: 0.9rem;
+  }
+  .home-btn.homing { background: var(--warn); color: white; }
+  .step-count { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
+  .step-count b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .footer-note { color: var(--muted); font-size: 0.75rem; margin-top: 24px; }
+  .log-card { grid-column: 1 / -1; }
+  .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .log-header button {
+    background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted);
+    padding: 4px 10px; font-size: 0.8rem; cursor: pointer;
+  }
+  #logView {
+    background: #0d0f12; color: #c9f7c9; font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.8rem; height: 220px; overflow-y: auto; border-radius: 8px; padding: 10px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  #logView .line.warn { color: #f59e0b; }
+</style>
+</head>
+<body>
+
+<h1>EMBO UAS Frequency Sweep Dashboard</h1>
+<div class="sub">Standalone UAS bench-test rig — run an automated frequency sweep and get both a pre-averaged summary and the full raw labelled data. Other v3.4 sensors are also shown for reference.</div>
+
+<div class="top-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusText">Disconnected</span>
+  <button class="connect" id="connectBtn">Connect BLE</button>
+  <button class="connect" id="downloadRawBtn" style="background:var(--muted)" disabled>Download Raw Data (0)</button>
+  <button class="connect" id="downloadAvgBtn" style="background:var(--muted)" disabled>Download Averaged Summary (0)</button>
+  <button class="connect" id="resetBtn" style="background:var(--danger)">Reset</button>
+  <a href="filter_preview.html" style="color: var(--accent); text-decoration: none; font-size: 0.85rem;">Sensor filter preview &rarr;</a>
+</div>
+
+<div class="limit-banner" id="limitBanner">&#9888;&#65039; <span id="limitBannerText">LIMIT SWITCH TRIGGERED</span></div>
+
+<div class="section-title">UAS Acoustic Chain</div>
+<div class="grid">
+  <div class="card">
+    <h2>UAS Envelope (GPIO1)</h2>
+    <div class="unit">Rectified envelope, ADC1_CH0</div>
+    <div class="reading">
+      <span class="label">Volts</span>
+      <span class="value" id="uasValue">--</span>
+    </div>
+    <div class="reading">
+      <span class="label">Drive frequency</span>
+      <span class="value" id="uasFreqValue" style="font-size:1rem">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="uasBar"></div></div>
+    <div class="spark-wrap"><canvas class="spark" id="uasSpark"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>Automated Frequency Sweep</h2>
+    <div class="unit">Steps through a frequency range, settles, averages the envelope reading at each step</div>
+    <div class="slider-row">
+      <span class="label" style="width:4em">Start</span>
+      <input type="number" id="sweepStart" value="0.900" step="0.001" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <span class="label">MHz</span>
+    </div>
+    <div class="slider-row">
+      <span class="label" style="width:4em">End</span>
+      <input type="number" id="sweepEnd" value="1.100" step="0.001" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <span class="label">MHz</span>
+    </div>
+    <div class="slider-row">
+      <span class="label" style="width:4em">Step</span>
+      <input type="number" id="sweepStep" value="0.010" step="0.001" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <span class="label">MHz — increment between points</span>
+    </div>
+    <div class="slider-row">
+      <span class="label" style="width:4em">Dwell</span>
+      <input type="number" id="sweepDwell" value="300" step="50" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+      <span class="label">ms/step — settle + average time</span>
+    </div>
+    <button class="home-btn" id="runSweepBtn" style="margin-top:12px">Run Sweep</button>
+    <div class="step-count" id="sweepStatus">Idle</div>
+  </div>
+</div>
+
+<div class="section-title">Load Cells (HX711, §10)</div>
+<div class="grid">
+  <div class="card">
+    <h2>Force — Channel 1</h2>
+    <div class="unit">Raw 24-bit signed counts, ch.A gain 128</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="force1Value">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="force1Spark"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Force — Channel 2</h2>
+    <div class="unit">Raw 24-bit signed counts, ch.A gain 128</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="force2Value">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="force2Spark"></canvas></div>
+  </div>
+</div>
+
+<div class="section-title">Turbidity Pair (§9)</div>
+<div class="grid">
+  <div class="card">
+    <h2>APDS9960 ALS <span class="badge" id="apdsBadge">--</span></h2>
+    <div class="unit">Clear channel, transmission mode, 0x39</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="alsValue">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="alsSpark"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>MAX30102 IR <span class="badge" id="maxBadge">--</span></h2>
+    <div class="unit">Backscatter, 18-bit, 0x57</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="irValue">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="irSpark"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>MAX30102 RED</h2>
+    <div class="unit">Backscatter, 18-bit, 0x57</div>
+    <div class="reading">
+      <span class="label">Counts</span>
+      <span class="value" id="redValue">--</span>
+    </div>
+    <div class="spark-wrap"><canvas class="spark" id="redSpark"></canvas></div>
+  </div>
+</div>
+
+<div class="section-title">Motors &amp; StallGuard</div>
+<div class="grid">
+
+  <div class="card" data-motor="0">
+    <h2>Motor 1</h2>
+    <div class="reading">
+      <span class="label">SG_RESULT</span>
+      <span class="value" id="sg1Value">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="sg1Bar"></div></div>
+    <div class="spark-wrap"><canvas class="spark" id="sg1Spark"></canvas></div>
+    <div class="switch-row" style="margin-top:10px">
+      <span class="label">Limit switch</span>
+      <span class="badge" id="limit1Badge">--</span>
+    </div>
+    <div class="switch-row">
+      <span class="label">Soft limit</span>
+      <span class="badge soft-limit-badge" id="softLimit1Badge">--</span>
+    </div>
+    <div class="motor-controls">
+      <button class="jog-btn" data-dir="-1">&#9664;</button>
+      <button class="jog-btn" data-dir="1">&#9654;</button>
+    </div>
+    <div class="slider-row">
+      <span class="label">Speed</span>
+      <input type="range" min="0" max="100" value="40" class="speed-slider">
+      <span class="pct">40%</span>
+    </div>
+    <button class="home-btn" data-home="0">Home Motor 1</button>
+    <div class="step-count">Position: <b class="pos-readout">0</b> steps <span class="homed-tag" style="display:none"> — homed &#10003;</span></div>
+  </div>
+
+  <div class="card" data-motor="1">
+    <h2>Motor 2</h2>
+    <div class="reading">
+      <span class="label">SG_RESULT</span>
+      <span class="value" id="sg2Value">--</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="sg2Bar"></div></div>
+    <div class="spark-wrap"><canvas class="spark" id="sg2Spark"></canvas></div>
+    <div class="switch-row" style="margin-top:10px">
+      <span class="label">Limit switch</span>
+      <span class="badge" id="limit2Badge">--</span>
+    </div>
+    <div class="switch-row">
+      <span class="label">Soft limit</span>
+      <span class="badge soft-limit-badge" id="softLimit2Badge">--</span>
+    </div>
+    <div class="motor-controls">
+      <button class="jog-btn" data-dir="-1">&#9664;</button>
+      <button class="jog-btn" data-dir="1">&#9654;</button>
+    </div>
+    <div class="slider-row">
+      <span class="label">Speed</span>
+      <input type="range" min="0" max="100" value="40" class="speed-slider">
+      <span class="pct">40%</span>
+    </div>
+    <button class="home-btn" data-home="1">Home Motor 2</button>
+    <div class="step-count">Position: <b class="pos-readout">0</b> steps <span class="homed-tag" style="display:none"> — homed &#10003;</span></div>
+  </div>
+
+</div>
+
+<button class="home-btn" id="homeBothBtn" style="max-width:320px; margin-top:16px">Home Both</button>
+
+<div class="section-title">Load Cell Push Test</div>
+<div class="card" style="max-width:480px">
+  <div class="unit">
+    Logs Force Channel 1 and Channel 2 together (plus position/StallGuard)
+    while running — use the Motor 1/2 jog buttons above, or the on-device
+    Test Both Motors feature, to actually move anything; this card is
+    logging only.
+  </div>
+  <div class="reading">
+    <span class="label">Recorded points</span>
+    <span class="value" id="pushCountValue">0</span>
+  </div>
+
+  <div class="motor-controls">
+    <button class="home-btn" id="pushRecordBtn" style="margin-top:0">Start Logging</button>
+  </div>
+  <div class="motor-controls">
+    <button class="connect" id="downloadPushBtn" style="background:var(--muted); flex:1" disabled>Download Push Test CSV (0)</button>
+    <button class="connect" id="clearPushBtn" style="background:var(--danger); flex:1">Clear</button>
+  </div>
+</div>
+
+<div class="section-title">Flash-Buffered Load Cell Log</div>
+<div class="card" style="max-width:480px">
+  <div class="unit">
+    More reliable than live streaming — samples are written to flash on
+    the board itself while capturing, so a BLE hiccup during capture can't
+    lose data. Start, do your test, Stop, then Dump to retrieve the
+    complete file. Each chunk is numbered; a dropped chunk is reported
+    instead of silently producing a corrupt file.
+  </div>
+  <div class="reading">
+    <span class="label">Status</span>
+    <span class="value" id="flashLogStatus">idle</span>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="flashLogStartBtn" style="flex:1">Start Capture</button>
+    <button class="home-btn" id="flashLogStopBtn" style="flex:1">Stop Capture</button>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="flashLogDumpBtn" style="flex:1">Dump &amp; Download</button>
+    <button class="connect" id="flashLogClearBtn" style="background:var(--danger); flex:1">Clear</button>
+  </div>
+  <div class="reading">
+    <span class="label">Dump progress</span>
+    <span class="value" id="flashLogProgress">--</span>
+  </div>
+</div>
+
+<div class="card" style="max-width:480px">
+  <div class="unit">
+    1. Remove all weight, click "Capture Tare" for each channel.<br>
+    2. Place a known weight, enter its mass in grams, click "Capture Loaded".<br>
+    3. This only computes a number — copy the resulting #define line into
+    <code>calibration.h</code> yourself and reflash; nothing here changes
+    firmware.
+  </div>
+
+  <div class="unit" style="margin-top:14px; font-weight:600">Channel 1</div>
+  <div class="reading">
+    <span class="label">Live raw</span>
+    <span class="value" id="calibLive1">--</span>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibTare1Btn" style="flex:1">Capture Tare</button>
+    <span class="value" id="calibTare1Value" style="flex:1; text-align:center">tare: --</span>
+  </div>
+  <div class="slider-row">
+    <span class="label" style="width:8em">Known weight (g)</span>
+    <input type="number" id="calibWeight1" placeholder="e.g. 100" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibLoaded1Btn" style="flex:1">Capture Loaded</button>
+  </div>
+  <div class="reading">
+    <span class="label">Result</span>
+    <span class="value" id="calibResult1">--</span>
+  </div>
+
+  <div class="unit" style="margin-top:18px; font-weight:600">Channel 2</div>
+  <div class="reading">
+    <span class="label">Live raw</span>
+    <span class="value" id="calibLive2">--</span>
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibTare2Btn" style="flex:1">Capture Tare</button>
+    <span class="value" id="calibTare2Value" style="flex:1; text-align:center">tare: --</span>
+  </div>
+  <div class="slider-row">
+    <span class="label" style="width:8em">Known weight (g)</span>
+    <input type="number" id="calibWeight2" placeholder="e.g. 100" style="flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text)">
+  </div>
+  <div class="motor-controls">
+    <button class="home-btn" id="calibLoaded2Btn" style="flex:1">Capture Loaded</button>
+  </div>
+  <div class="reading">
+    <span class="label">Result</span>
+    <span class="value" id="calibResult2">--</span>
+  </div>
+</div>
+
+<div class="card log-card" style="margin-top:16px">
+  <div class="log-header">
+    <h2 style="margin:0">Firmware Log</h2>
+    <button id="clearLogBtn">Clear</button>
+  </div>
+  <div id="logView"></div>
+</div>
+
+<div class="footer-note">
+  Requires Chrome or Edge with Web Bluetooth enabled. Every strip chart shows the
+  last ~30s of samples, auto-scaled to the data currently on screen — read the
+  numeric value for an exact figure. Jog buttons are press-and-hold — releasing
+  (mouse up / touch end / pointer leaving the button) immediately sends a stop
+  command. The firmware also auto-stops a jogging motor if no command is received
+  for 300ms, in case the BLE link drops mid-press.
+</div>
+
+<script>
+const SERVICE_UUID     = '8f6a2001-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const TELEMETRY_UUID   = '8f6a2002-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const MOTOR_CMD_UUID   = '8f6a2003-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const HOME_CMD_UUID    = '8f6a2004-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const LOG_UUID         = '8f6a2005-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const LOG_CTRL_UUID    = '8f6a2008-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const LOG_DATA_UUID    = '8f6a2009-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+const FREQ_CMD_UUID    = '8f6a2006-3b1a-4e3d-9f2e-6a2c6c9a9a10';
+
+let device, motorCmdChar, homeCmdChar, freqCmdChar, logCtrlChar;
+let connected = false;
+let latestUasVolts = null; // updated by onTelemetry, read by the sweep loop
+
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const connectBtn = document.getElementById('connectBtn');
+
+// ---- Raw data logging: only active WHILE a sweep is running (gated on
+// sweepRunning, set further down) — starts the instant Run Sweep is
+// clicked, stops when the sweep finishes. Both this raw log and the
+// sweep's averaged summary accumulate across multiple sweep runs until
+// Reset is clicked, so you can build up one file across several stroke
+// tests if you want, or reset between each. ----
+const downloadRawBtn = document.getElementById('downloadRawBtn');
+const downloadAvgBtn = document.getElementById('downloadAvgBtn');
+const resetBtn = document.getElementById('resetBtn');
+let rawRows = [];
+const RAW_CSV_HEADER = ['timestamp_iso', 'elapsed_ms', 'uas_volts', 'uas_freq_hz', 'force1', 'force2', 'als', 'ir', 'red'];
+let sessionStartMs = Date.now();
+
+function logRawRow(fields) {
+  if (!sweepRunning) return;
+  const now = Date.now();
+  rawRows.push([new Date(now).toISOString(), now - sessionStartMs, ...fields]);
+  downloadRawBtn.textContent = `Download Raw Data (${rawRows.length})`;
+  downloadRawBtn.disabled = false;
+}
+
+function downloadCsvFile(filenamePrefix, header, rows) {
+  const lines = [header.join(','), ...rows.map(r => r.join(','))];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  a.href = url;
+  a.download = `${filenamePrefix}_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+downloadRawBtn.addEventListener('click', () => {
+  if (rawRows.length === 0) return;
+  downloadCsvFile('uas_raw_data', RAW_CSV_HEADER, rawRows);
+});
+
+// ---- Load Cell Push Test: independent of the sweep-only recorder above —
+// gated on its own pushTestRunning flag. Two ways to drive it: manually
+// (jog buttons on the Motor 1/2 cards + Start/Stop Recording here), or
+// automatically (Start below drives the selected motor toward its
+// configured soft limit and records at the same time, stopping itself the
+// instant onTelemetry() sees that motor's soft-limit bit go active). ----
+const downloadPushBtn = document.getElementById('downloadPushBtn');
+const clearPushBtn = document.getElementById('clearPushBtn');
+const pushRecordBtn = document.getElementById('pushRecordBtn');
+const pushCountValue = document.getElementById('pushCountValue');
+let pushRows = [];
+let pushTestRunning = false;
+let pushSessionStartMs = 0;
+const PUSH_CSV_HEADER = ['timestamp_iso', 'elapsed_ms', 'force1', 'force2', 'position_m1', 'position_m2', 'sg1', 'sg2'];
+
+function logPushRow(fields) {
+  if (!pushTestRunning) return;
+  const now = Date.now();
+  pushRows.push([new Date(now).toISOString(), now - pushSessionStartMs, ...fields]);
+  pushCountValue.textContent = pushRows.length;
+  downloadPushBtn.textContent = `Download Push Test CSV (${pushRows.length})`;
+  downloadPushBtn.disabled = false;
+}
+
+function resetPushData() {
+  pushRows = [];
+  pushCountValue.textContent = '0';
+  downloadPushBtn.textContent = 'Download Push Test CSV (0)';
+  downloadPushBtn.disabled = true;
+}
+
+pushRecordBtn.addEventListener('click', () => {
+  pushTestRunning = !pushTestRunning;
+  if (pushTestRunning) {
+    pushSessionStartMs = Date.now();
+    pushRecordBtn.textContent = 'Stop Logging';
+    pushRecordBtn.classList.add('homing');  // reuse the existing "active" amber styling
+  } else {
+    pushRecordBtn.textContent = 'Start Logging';
+    pushRecordBtn.classList.remove('homing');
+  }
+});
+
+downloadPushBtn.addEventListener('click', () => {
+  if (pushRows.length === 0) return;
+  downloadCsvFile('load_cell_push_test', PUSH_CSV_HEADER, pushRows);
+  resetPushData();
+});
+
+clearPushBtn.addEventListener('click', () => resetPushData());
+
+// ---- Load Cell Calibration — purely a client-side calculator using the
+// raw counts already in telemetry. Computes HX711_SCALE_COUNTS_PER_GRAM_x
+// for you to paste into calibration.h; never writes anything to the
+// firmware itself, same "config in firmware, not the UI" approach used
+// for the soft motion limits. ----
+let lastForce1 = 0, lastForce2 = 0;
+let calibTare1 = null, calibTare2 = null;
+
+function wireCalibChannel(ch, tareBtnId, tareValueId, weightId, loadedBtnId, resultId, lastForceGetter) {
+  const tareBtn = document.getElementById(tareBtnId);
+  const tareValueEl = document.getElementById(tareValueId);
+  const weightInput = document.getElementById(weightId);
+  const loadedBtn = document.getElementById(loadedBtnId);
+  const resultEl = document.getElementById(resultId);
+  let tare = null;
+
+  tareBtn.addEventListener('click', () => {
+    tare = lastForceGetter();
+    tareValueEl.textContent = `tare: ${tare}`;
+    resultEl.textContent = '--';
+  });
+
+  loadedBtn.addEventListener('click', () => {
+    if (tare === null) {
+      appendLog(`WARN: capture tare for channel ${ch} first`);
+      return;
+    }
+    const weight = parseFloat(weightInput.value);
+    if (!weight || weight <= 0) {
+      appendLog(`WARN: enter a valid known weight (g) for channel ${ch} first`);
+      return;
+    }
+    const loaded = lastForceGetter();
+    const scale = (loaded - tare) / weight;
+    resultEl.textContent = `#define HX711_SCALE_COUNTS_PER_GRAM_${ch}    ${scale.toFixed(3)}f  (tare=${tare} loaded=${loaded} weight=${weight}g)`;
+    appendLog(`-- calibration ch${ch}: scale=${scale.toFixed(3)} (tare=${tare} loaded=${loaded} weight=${weight}g) --`);
+  });
+}
+
+wireCalibChannel(1, 'calibTare1Btn', 'calibTare1Value', 'calibWeight1', 'calibLoaded1Btn', 'calibResult1', () => lastForce1);
+wireCalibChannel(2, 'calibTare2Btn', 'calibTare2Value', 'calibWeight2', 'calibLoaded2Btn', 'calibResult2', () => lastForce2);
+
+resetBtn.addEventListener('click', () => {
+  rawRows = [];
+  sweepRows = [];
+  pushRows = [];
+  sessionStartMs = Date.now();
+  pushSessionStartMs = Date.now();
+  downloadRawBtn.textContent = 'Download Raw Data (0)';
+  downloadRawBtn.disabled = true;
+  downloadAvgBtn.textContent = 'Download Averaged Summary (0)';
+  downloadAvgBtn.disabled = true;
+  downloadPushBtn.textContent = 'Download Push Test CSV (0)';
+  downloadPushBtn.disabled = true;
+  pushCountValue.textContent = '0';
+  sweepStatus.textContent = 'Idle';
+  appendLog('-- data reset --');
+});
+
+function setConnected(isConnected) {
+  connected = isConnected;
+  statusDot.classList.toggle('connected', isConnected);
+  statusText.textContent = isConnected ? 'Connected' : 'Disconnected';
+  connectBtn.textContent = isConnected ? 'Disconnect' : 'Connect BLE';
+}
+
+// ---- Rolling strip-chart, one series per sensor (no legend needed — the
+// card heading + value readout already name the series). Auto-scales to
+// the min/max currently in the buffer so a bench-test reading is always
+// legible regardless of sensor units. ----
+class Sparkline {
+  constructor(canvas, maxPoints = 150) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.maxPoints = maxPoints;
+    this.data = [];
+    this.dpr = window.devicePixelRatio || 1;
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+  }
+  _resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.canvas.width = Math.max(1, rect.width * this.dpr);
+    this.canvas.height = Math.max(1, rect.height * this.dpr);
+    this._draw();
+  }
+  push(value) {
+    this.data.push(value);
+    if (this.data.length > this.maxPoints) this.data.shift();
+    this._draw();
+  }
+  _draw() {
+    const { ctx, canvas, data } = this;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (data.length < 2) return;
+
+    let min = Math.min(...data), max = Math.max(...data);
+    if (min === max) { min -= 1; max += 1; }
+    const pad = h * 0.12;
+    const scaleY = (v) => h - pad - ((v - min) / (max - min)) * (h - pad * 2);
+    const stepX = w / (this.maxPoints - 1);
+    const offset = this.maxPoints - data.length;
+
+    const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#2563eb';
+
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = (offset + i) * stepX;
+      const y = scaleY(v);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineWidth = 2 * this.dpr;
+    ctx.strokeStyle = accent;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // Light fill under the line for readability at a glance.
+    ctx.lineTo((offset + data.length - 1) * stepX, h);
+    ctx.lineTo(offset * stepX, h);
+    ctx.closePath();
+    ctx.fillStyle = accent + '22';
+    ctx.fill();
+  }
+}
+
+const sparks = {
+  uas: new Sparkline(document.getElementById('uasSpark')),
+  force1: new Sparkline(document.getElementById('force1Spark')),
+  force2: new Sparkline(document.getElementById('force2Spark')),
+  als: new Sparkline(document.getElementById('alsSpark')),
+  ir: new Sparkline(document.getElementById('irSpark')),
+  red: new Sparkline(document.getElementById('redSpark')),
+  sg1: new Sparkline(document.getElementById('sg1Spark')),
+  sg2: new Sparkline(document.getElementById('sg2Spark')),
+};
+
+async function connect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }]
+    });
+    device.addEventListener('gattserverdisconnected', () => setConnected(false));
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const telemetryChar = await service.getCharacteristic(TELEMETRY_UUID);
+    motorCmdChar = await service.getCharacteristic(MOTOR_CMD_UUID);
+    homeCmdChar = await service.getCharacteristic(HOME_CMD_UUID);
+    freqCmdChar = await service.getCharacteristic(FREQ_CMD_UUID);
+    logCtrlChar = await service.getCharacteristic(LOG_CTRL_UUID);
+    const logDataChar = await service.getCharacteristic(LOG_DATA_UUID);
+    const logCharacteristic = await service.getCharacteristic(LOG_UUID);
+
+    await telemetryChar.startNotifications();
+    telemetryChar.addEventListener('characteristicvaluechanged', onTelemetry);
+
+    await logDataChar.startNotifications();
+    logDataChar.addEventListener('characteristicvaluechanged', onLogDataChunk);
+
+    await logCharacteristic.startNotifications();
+    logCharacteristic.addEventListener('characteristicvaluechanged', onLogLine);
+
+    setConnected(true);
+    appendLog('-- connected --');
+  } catch (err) {
+    console.error('BLE connect failed:', err);
+    appendLog('ERROR: connect failed — ' + (err && err.message ? err.message : err));
+    setConnected(false);
+  }
+}
+
+function disconnect() {
+  if (device && device.gatt.connected) device.gatt.disconnect();
+  setConnected(false);
+}
+
+connectBtn.addEventListener('click', () => {
+  if (connected) disconnect(); else connect();
+});
+
+function setBadge(el, state) {
+  // state: 'ok' | 'bad' | 'active' | 'idle'
+  el.className = 'badge' + (state === 'ok' ? ' ok' : state === 'bad' ? ' bad' : state === 'active' ? ' active' : '');
+  el.textContent = state === 'ok' ? 'OK' : state === 'bad' ? 'NOT FOUND' : state === 'active' ? 'TRIGGERED' : 'clear';
+}
+
+// TelemetryPacket layout (little-endian, matches ble_service.h, pack(1)):
+// float    uasVolts        @0
+// float    uasFreqHz       @4
+// uint16   sgResultM1      @8
+// uint16   sgResultM2      @10
+// int32    positionM1      @12
+// int32    positionM2      @16
+// uint8    homingFlags     @20
+// uint8    limitFlags      @21
+// int32    forceRaw1       @22
+// int32    forceRaw2       @26
+// uint16   alsClear        @30
+// uint32   irRaw           @32
+// uint32   redRaw          @36
+// uint8    turbidityFlags  @40
+function onTelemetry(event) {
+  const dv = event.target.value;
+  const uas = dv.getFloat32(0, true);
+  const uasFreq = dv.getFloat32(4, true);
+  const sg1 = dv.getUint16(8, true);
+  const sg2 = dv.getUint16(10, true);
+  const pos1 = dv.getInt32(12, true);
+  const pos2 = dv.getInt32(16, true);
+  const homingFlags = dv.getUint8(20);
+  const limitFlags = dv.getUint8(21);
+  const force1 = dv.getInt32(22, true);
+  const force2 = dv.getInt32(26, true);
+  const als = dv.getUint16(30, true);
+  const ir = dv.getUint32(32, true);
+  const red = dv.getUint32(36, true);
+  const turbidityFlags = dv.getUint8(40);
+
+  latestUasVolts = uas;
+
+  document.getElementById('uasValue').textContent = uas.toFixed(3);
+  document.getElementById('uasFreqValue').textContent = (uasFreq / 1e6).toFixed(4) + ' MHz';
+  document.getElementById('uasBar').style.width = Math.min(100, (uas / 3.3) * 100) + '%';
+  sparks.uas.push(uas);
+
+  document.getElementById('sg1Value').textContent = sg1;
+  document.getElementById('sg1Bar').style.width = Math.min(100, (sg1 / 1023) * 100) + '%';
+  sparks.sg1.push(sg1);
+  document.getElementById('sg2Value').textContent = sg2;
+  document.getElementById('sg2Bar').style.width = Math.min(100, (sg2 / 1023) * 100) + '%';
+  sparks.sg2.push(sg2);
+
+  document.getElementById('force1Value').textContent = force1;
+  sparks.force1.push(force1);
+  document.getElementById('force2Value').textContent = force2;
+  sparks.force2.push(force2);
+
+  lastForce1 = force1;
+  lastForce2 = force2;
+  document.getElementById('calibLive1').textContent = force1;
+  document.getElementById('calibLive2').textContent = force2;
+
+  document.getElementById('alsValue').textContent = als;
+  sparks.als.push(als);
+  document.getElementById('irValue').textContent = ir;
+  sparks.ir.push(ir);
+  document.getElementById('redValue').textContent = red;
+  sparks.red.push(red);
+  setBadge(document.getElementById('apdsBadge'), (turbidityFlags & 0x01) ? 'ok' : 'bad');
+  setBadge(document.getElementById('maxBadge'), (turbidityFlags & 0x02) ? 'ok' : 'bad');
+
+  const limit1Active = !!(limitFlags & 0x01);
+  const limit2Active = !!(limitFlags & 0x02);
+  setBadge(document.getElementById('limit1Badge'), limit1Active ? 'active' : 'idle');
+  setBadge(document.getElementById('limit2Badge'), limit2Active ? 'active' : 'idle');
+
+  const softLimit1Active = !!(limitFlags & 0x04);
+  const softLimit2Active = !!(limitFlags & 0x08);
+  setBadge(document.getElementById('softLimit1Badge'), softLimit1Active ? 'active' : 'idle');
+  setBadge(document.getElementById('softLimit2Badge'), softLimit2Active ? 'active' : 'idle');
+
+  const motorCardsForLimits = document.querySelectorAll('.card[data-motor]');
+  motorCardsForLimits[0].classList.toggle('limit-active', limit1Active);
+  motorCardsForLimits[1].classList.toggle('limit-active', limit2Active);
+
+  const limitBanner = document.getElementById('limitBanner');
+  if (limit1Active || limit2Active) {
+    const which = limit1Active && limit2Active ? 'MOTOR 1 & MOTOR 2' : (limit1Active ? 'MOTOR 1' : 'MOTOR 2');
+    document.getElementById('limitBannerText').textContent = `LIMIT SWITCH TRIGGERED — ${which}`;
+    limitBanner.classList.add('show');
+  } else {
+    limitBanner.classList.remove('show');
+  }
+
+  const cards = document.querySelectorAll('.card[data-motor]');
+  cards[0].querySelector('.pos-readout').textContent = pos1;
+  cards[1].querySelector('.pos-readout').textContent = pos2;
+
+  const homingM1 = !!(homingFlags & 0x01), homingM2 = !!(homingFlags & 0x02);
+  cards[0].querySelector('.home-btn').classList.toggle('homing', homingM1);
+  cards[1].querySelector('.home-btn').classList.toggle('homing', homingM2);
+  if (homingFlags & 0x04) cards[0].querySelector('.homed-tag').style.display = 'inline';
+  if (homingFlags & 0x08) cards[1].querySelector('.homed-tag').style.display = 'inline';
+
+  logRawRow([uas.toFixed(4), uasFreq.toFixed(0), force1, force2, als, ir, red]);
+  logPushRow([force1, force2, pos1, pos2, sg1, sg2]);
+}
+
+const logView = document.getElementById('logView');
+const textDecoder = new TextDecoder('utf-8');
+
+function appendLog(text) {
+  const line = document.createElement('div');
+  line.className = 'line' + (/warn/i.test(text) ? ' warn' : '');
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = `[${ts}] ${text}`;
+  logView.appendChild(line);
+  logView.scrollTop = logView.scrollHeight;
+}
+
+function onLogLine(event) {
+  const text = textDecoder.decode(event.target.value);
+  appendLog(text);
+}
+
+document.getElementById('clearLogBtn').addEventListener('click', () => {
+  logView.innerHTML = '';
+});
+
+async function sendMotorCmd(motorId, dir, speedPct) {
+  if (!motorCmdChar) return;
+  // motorId here is 0-indexed (matches data-motor="0"/"1" on the Motor 1/2
+  // cards) — MotorCmdCB on the firmware side requires exactly 1 or 2, so
+  // +1 at the wire boundary rather than changing the 0-indexed convention
+  // used throughout the rest of the dashboard.
+  const buf = new ArrayBuffer(3);
+  const dv = new DataView(buf);
+  dv.setUint8(0, motorId + 1);
+  dv.setInt8(1, dir);
+  dv.setUint8(2, speedPct);
+  try { await motorCmdChar.writeValueWithoutResponse(buf); } catch (e) { console.warn(e); }
+}
+
+async function sendHomeCmd(motorId) {
+  if (!homeCmdChar) return;
+  const buf = new Uint8Array([motorId]);
+  try { await homeCmdChar.writeValueWithResponse(buf); } catch (e) { console.warn(e); }
+}
+
+// ---- UAS frequency control ----
+async function setFrequency(hz) {
+  if (!freqCmdChar) return;
+  const buf = new ArrayBuffer(4);
+  new DataView(buf).setFloat32(0, hz, true);
+  await freqCmdChar.writeValueWithResponse(buf);
+}
+
+// ---- Flash-Buffered Load Cell Log — start/stop a capture that's written
+// to flash on the board itself, then dump it back over BLE in numbered
+// chunks. A dropped chunk is detected and reported rather than silently
+// producing a corrupt file, which is the whole point vs. the plain live
+// stream this is meant to replace. ----
+const flashLogStatus = document.getElementById('flashLogStatus');
+const flashLogProgress = document.getElementById('flashLogProgress');
+let dumpChunks = null;       // Array, indexed by seq, filled in as chunks arrive
+let dumpTotalChunks = 0;
+let dumpReceivedCount = 0;
+
+async function sendLogCtrl(cmd) {
+  if (!logCtrlChar) return;
+  const buf = new Uint8Array([cmd]);
+  await logCtrlChar.writeValueWithResponse(buf);
+}
+
+document.getElementById('flashLogStartBtn').addEventListener('click', () => {
+  sendLogCtrl(1);
+  flashLogStatus.textContent = 'capturing';
+});
+document.getElementById('flashLogStopBtn').addEventListener('click', () => {
+  sendLogCtrl(0);
+  flashLogStatus.textContent = 'stopped';
+});
+document.getElementById('flashLogClearBtn').addEventListener('click', () => {
+  sendLogCtrl(2);
+  flashLogStatus.textContent = 'cleared';
+  flashLogProgress.textContent = '--';
+});
+document.getElementById('flashLogDumpBtn').addEventListener('click', () => {
+  dumpChunks = null;
+  dumpTotalChunks = 0;
+  dumpReceivedCount = 0;
+  flashLogProgress.textContent = 'requesting...';
+  sendLogCtrl(3);
+});
+
+function onLogDataChunk(event) {
+  const dv = event.target.value;
+  const seq = dv.getUint16(0, true);
+  const total = dv.getUint16(2, true);
+  const len = dv.getUint16(4, true);
+  const payload = new Uint8Array(dv.buffer, dv.byteOffset + 6, len);
+
+  if (dumpChunks === null || dumpTotalChunks !== total) {
+    dumpChunks = new Array(total).fill(null);
+    dumpTotalChunks = total;
+    dumpReceivedCount = 0;
+  }
+  if (dumpChunks[seq] === null) dumpReceivedCount++;
+  dumpChunks[seq] = payload;
+  flashLogProgress.textContent = `${dumpReceivedCount}/${dumpTotalChunks} chunks`;
+
+  if (dumpReceivedCount === dumpTotalChunks) {
+    const missing = [];
+    for (let i = 0; i < dumpTotalChunks; i++) {
+      if (dumpChunks[i] === null) missing.push(i);
+    }
+    if (missing.length > 0) {
+      flashLogProgress.textContent = `INCOMPLETE — missing chunk(s): ${missing.join(', ')}`;
+      appendLog(`-- log dump incomplete: missing chunks ${missing.join(', ')} — try Dump again --`);
+      return;
+    }
+    const totalLen = dumpChunks.reduce((sum, c) => sum + c.length, 0);
+    const combined = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const c of dumpChunks) { combined.set(c, offset); offset += c.length; }
+    const text = new TextDecoder().decode(combined);
+    const blob = new Blob([text], { type: 'text/csv' });
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = URL.createObjectURL(blob);
+    a.download = `flash_loadcell_log_${stamp}.csv`;
+    a.click();
+    flashLogProgress.textContent = `complete — ${dumpTotalChunks} chunks, ${totalLen} bytes`;
+    appendLog(`-- log dump complete: ${totalLen} bytes downloaded --`);
+    dumpChunks = null;
+  }
+}
+
+// ---- Automated sweep: step through [start, end] by `step` (all entered in
+// MHz on the page, converted to Hz here since that's what FREQ_CMD expects),
+// settle for `dwellMs`, then average whatever telemetry samples arrive
+// during a short capture window (telemetry updates every ~40ms) before
+// moving to the next step. Each averaged point goes into its own CSV,
+// separate from the raw continuous recorder above. ----
+let sweepRows = [];
+const sweepStatus = document.getElementById('sweepStatus');
+let sweepRunning = false;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runSweep() {
+  if (!connected || sweepRunning) return;
+  const startMhz = parseFloat(document.getElementById('sweepStart').value);
+  const endMhz = parseFloat(document.getElementById('sweepEnd').value);
+  const stepMhz = parseFloat(document.getElementById('sweepStep').value);
+  const dwellMs = parseFloat(document.getElementById('sweepDwell').value);
+  if ([startMhz, endMhz, stepMhz, dwellMs].some(isNaN) || stepMhz <= 0 || dwellMs <= 0) {
+    sweepStatus.textContent = 'Invalid sweep parameters';
+    return;
+  }
+  // Always sweep low -> high regardless of which box has the smaller number,
+  // so a start/end typo (or a stale browser-autofilled value) can't produce
+  // a descending sweep.
+  const loMhz = Math.min(startMhz, endMhz), hiMhz = Math.max(startMhz, endMhz);
+  const start = loMhz * 1e6, end = hiMhz * 1e6, step = stepMhz * 1e6;
+
+  sessionStartMs = Date.now();
+  sweepRunning = true;
+  const runBtn = document.getElementById('runSweepBtn');
+  runBtn.disabled = true;
+  runBtn.textContent = 'Sweeping...';
+
+  const freqs = [];
+  for (let f = start; f <= end + 1e-9; f += step) freqs.push(f);
+
+  for (let i = 0; i < freqs.length; i++) {
+    const hz = freqs[i];
+    sweepStatus.textContent = `Step ${i + 1}/${freqs.length}: ${(hz / 1e6).toFixed(4)} MHz`;
+    await setFrequency(hz);
+
+    // Let it settle, then collect samples arriving during a capture window.
+    const settleMs = Math.max(50, dwellMs * 0.4);
+    await sleep(settleMs);
+    const samples = [];
+    const captureMs = dwellMs - settleMs;
+    const captureStart = Date.now();
+    while (Date.now() - captureStart < captureMs) {
+      if (latestUasVolts !== null) samples.push(latestUasVolts);
+      await sleep(20);
+    }
+
+    const mean = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : NaN;
+    const variance = samples.length > 1
+      ? samples.reduce((a, b) => a + (b - mean) ** 2, 0) / (samples.length - 1)
+      : 0;
+    const std = Math.sqrt(variance);
+
+    sweepRows.push([new Date().toISOString(), hz, mean.toFixed(4), std.toFixed(4), samples.length]);
+    downloadAvgBtn.textContent = `Download Averaged Summary (${sweepRows.length})`;
+    downloadAvgBtn.disabled = false;
+  }
+
+  sweepStatus.textContent = `Done — ${freqs.length} points swept`;
+  runBtn.disabled = false;
+  runBtn.textContent = 'Run Sweep';
+  sweepRunning = false;
+}
+
+document.getElementById('runSweepBtn').addEventListener('click', runSweep);
+
+downloadAvgBtn.addEventListener('click', () => {
+  if (sweepRows.length === 0) return;
+  const header = ['timestamp_iso', 'freq_hz', 'mean_uas_volts', 'std_uas_volts', 'n_samples'];
+  downloadCsvFile('uas_averaged_summary', header, sweepRows);
+});
+
+// Press-and-hold jog: send the dir+speed command on press, repeat it
+// periodically (matches the firmware's 300ms watchdog window) while held,
+// and send a stop (dir=0) on release / pointer leaving the button.
+document.querySelectorAll('.card[data-motor]').forEach(card => {
+  const motorId = parseInt(card.dataset.motor, 10);
+  const slider = card.querySelector('.speed-slider');
+  const pctLabel = card.querySelector('.pct');
+  slider.addEventListener('input', () => { pctLabel.textContent = slider.value + '%'; });
+
+  card.querySelectorAll('.jog-btn').forEach(btn => {
+    const dir = parseInt(btn.dataset.dir, 10);
+    let holdInterval = null;
+
+    const press = () => {
+      if (!connected) return;
+      btn.classList.add('pressed');
+      const speed = parseInt(slider.value, 10);
+      sendMotorCmd(motorId, dir, speed);
+      holdInterval = setInterval(() => sendMotorCmd(motorId, dir, parseInt(slider.value, 10)), 150);
+    };
+    const release = () => {
+      btn.classList.remove('pressed');
+      if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
+      if (connected) sendMotorCmd(motorId, 0, 0);
+    };
+
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointerleave', release);
+    btn.addEventListener('pointercancel', release);
+  });
+
+  card.querySelector('.home-btn').addEventListener('click', () => sendHomeCmd(motorId));
+});
+
+document.getElementById('homeBothBtn').addEventListener('click', () => sendHomeCmd(2));
+
+// Initialize badges to a known "not yet connected" idle state.
+['apdsBadge', 'maxBadge'].forEach(id => setBadge(document.getElementById(id), 'idle'));
+['limit1Badge', 'limit2Badge', 'softLimit1Badge', 'softLimit2Badge'].forEach(id => setBadge(document.getElementById(id), 'idle'));
+</script>
+</body>
+</html>

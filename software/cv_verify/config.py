@@ -37,6 +37,17 @@ UART_BAUD = 921600
 CAPTURE_TIMEOUT_S = 8.0
 CAPTURE_COMMAND = "CAPTURE"
 
+# PROTOTYPE — raw preview image transfer (see link.py's send_image() and
+# testing/CV_Verify_UART_Prototype/esp32/include/rpi_uart.h). MUST match
+# that firmware copy's RPI_IMG_MAX_W/H exactly — the receiving side
+# validates the header against its own compile-time buffer size and
+# silently drops anything larger, so these can't just be bumped up here
+# without also rebuilding/reflashing that firmware. 160x100 chosen there
+# to fit directly under the ILI9341's 240px width with no scaling needed
+# on the display side, and to transfer in well under a second at 921600 baud.
+IMG_TRANSFER_W = 160
+IMG_TRANSFER_H = 100
+
 # ── Training data collection ─────────────────────────────────────────────
 # See collect_training_data.py. One subfolder per stroke-count label under
 # this directory; a raw .npy (median-stacked, pre-enhancement — kept

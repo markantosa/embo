@@ -17,6 +17,7 @@ import sys
 import time
 from pathlib import Path
 
+import serial
 from PIL import Image
 
 # ../cv-pipeline holds detection.py/sizing.py — see module docstring above
@@ -60,10 +61,27 @@ def handle_capture(camera: Camera, link: FirmwareLink, detector: ParticleDetecto
     # project direction). Firmware/UI wiring for that isn't built yet;
     # this just makes sure the file exists and is always current so that
     # work has something real to point at instead of starting from zero.
+    full_res_image = Image.fromarray(frame)
     try:
-        Image.fromarray(frame).save(config.LAST_CAPTURE_IMAGE_PATH)
+        full_res_image.save(config.LAST_CAPTURE_IMAGE_PATH)
     except OSError as e:
         print(f"WARNING: could not save processed image: {e}", file=sys.stderr)
+
+    # PROTOTYPE (see testing/CV_Verify_UART_Prototype): sends the actual
+    # captured/enhanced image over UART for on-device display, ahead of
+    # detection/sizing existing. Downscaled to IMG_TRANSFER_W/H — MUST
+    # match the prototype firmware's RPI_IMG_MAX_W/H exactly, or the
+    # firmware-side header validation silently drops the image (see that
+    # copy's rpi_uart.cpp). Sent unconditionally, independent of whether
+    # detection below succeeds — the image is real regardless of whether
+    # sizing is.
+    try:
+        preview = full_res_image.convert("L").resize(
+            (config.IMG_TRANSFER_W, config.IMG_TRANSFER_H), Image.LANCZOS
+        )
+        link.send_image(config.IMG_TRANSFER_W, config.IMG_TRANSFER_H, preview.tobytes())
+    except (OSError, serial.SerialException) as e:
+        print(f"WARNING: could not send preview image: {e}", file=sys.stderr)
 
     try:
         masks = detector.detect(frame)

@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMBO Debug Console + UAS Frequency Sweep</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1c20; --muted: #6b7280;
+    --accent: #2563eb; --accent-active: #1d4ed8; --danger: #dc2626; --ok: #16a34a; --border: #e2e4e8;
+    --mono-bg: #0f1115; --mono-text: #d7dce2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15171a; --card:#1e2126; --text:#e8e9eb; --muted:#9aa1ab; --border:#2c3036; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 20px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; }
+  .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 0.9rem; cursor: pointer;
+  }
+  button:active { background: var(--accent-active); }
+  button.secondary { background: var(--border); color: var(--text); }
+  button.danger { background: var(--danger); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); display: inline-block; }
+  .status-dot.connected { background: var(--ok); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card h2 { font-size: 1rem; margin: 0 0 4px; }
+  .card .hint { font-size: 0.75rem; color: var(--muted); margin: 0 0 12px; line-height: 1.4; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+  .row label { font-size: 0.8rem; color: var(--muted); min-width: 70px; }
+  input[type=text], input[type=number] {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 7px 9px; font-size: 0.9rem; width: 100px;
+  }
+  input[type=text].wide { width: 100%; }
+  .quick-cmds { display: flex; gap: 8px; flex-wrap: wrap; }
+  .quick-cmds button { background: var(--border); color: var(--text); }
+  #log {
+    background: var(--mono-bg); color: var(--mono-text); border-radius: 10px; padding: 12px;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.8rem; height: 260px;
+    overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 10px; }
+  th, td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; }
+  .sweep-table-wrap { max-height: 220px; overflow-y: auto; }
+  .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: var(--border); color: var(--muted); }
+  .badge.running { background: var(--ok); color: white; }
+</style>
+</head>
+<body>
+
+<h1>EMBO Debug Console + UAS Frequency Sweep</h1>
+<p class="sub">
+  Talks to the same BLE debug console used over a terminal app (Nordic UART
+  Service) — no separate firmware GATT service needed. Requires Web
+  Bluetooth (Chrome or Edge, desktop or Android) <strong>served over http(s)</strong> —
+  if you double-click this file and it opens as a <code>file://</code> URL, Connect
+  will likely fail silently. Run <code>python3 -m http.server</code> in this folder and
+  open <code>http://localhost:8000/uas_debug_dashboard.html</code> instead.
+</p>
+
+<div class="top-bar">
+  <button id="connectBtn">Connect</button>
+  <span><span id="statusDot" class="status-dot"></span> <span id="statusText">Disconnected</span></span>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Quick Commands</h2>
+    <p class="hint">Same commands as the console — see the firmware's own "Commands:" reply for the full list.</p>
+    <div class="quick-cmds">
+      <button data-cmd="HOME">HOME</button>
+      <button data-cmd="FUSION">FUSION</button>
+      <button data-cmd="FIT">FIT</button>
+      <button data-cmd="CAPTURE">CAPTURE</button>
+      <button data-cmd="MENU">MENU</button>
+      <button data-cmd="UAS ON">UAS ON</button>
+      <button data-cmd="UAS OFF">UAS OFF</button>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <input type="text" id="cmdInput" class="wide" placeholder="Type a raw command, e.g. MOVE 1 200" disabled>
+      <button id="sendBtn" disabled>Send</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Manual UAS Frequency</h2>
+    <p class="hint">
+      Retunes the AD9833 and holds it — bypasses the production 3-tone
+      cycle. Refused by the firmware while a mixing run is in progress.
+    </p>
+    <div class="row">
+      <label>Freq (Hz)</label>
+      <input type="number" id="manualHz" value="1000000" step="1000">
+      <button id="manualSetBtn" disabled>Set</button>
+      <button id="manualClearBtn" class="secondary" disabled>Clear</button>
+    </div>
+    <div class="row"><span class="hint" id="manualReading">No reading yet.</span></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:18px;">
+  <h2>Automated Frequency Sweep <span id="sweepBadge" class="badge">idle</span></h2>
+  <p class="hint">
+    Walks start&rarr;end in steps, dwells at each frequency, and reports
+    mean/stddev envelope voltage — the firmware runs this as a non-blocking
+    background step (see UASSWEEP in ble_debug.cpp), so the safety loop
+    keeps running the whole time. Also refused while a run is in progress.
+  </p>
+  <div class="row">
+    <label>Start (Hz)</label><input type="number" id="sweepStart" value="900000" step="1000">
+    <label>End (Hz)</label><input type="number" id="sweepEnd" value="1100000" step="1000">
+  </div>
+  <div class="row">
+    <label>Step (Hz)</label><input type="number" id="sweepStep" value="10000" step="1000">
+    <label>Dwell (ms)</label><input type="number" id="sweepDwell" value="200" step="50">
+  </div>
+  <div class="row">
+    <button id="sweepRunBtn" disabled>Run Sweep</button>
+    <button id="sweepStopBtn" class="danger" disabled>Stop</button>
+    <button id="sweepCsvBtn" class="secondary" disabled>Download CSV</button>
+  </div>
+  <div class="sweep-table-wrap">
+    <table>
+      <thead><tr><th>Freq (Hz)</th><th>Mean (mV)</th><th>Std (mV)</th><th>n</th></tr></thead>
+      <tbody id="sweepTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Raw Console Log</h2>
+  <div id="log"></div>
+</div>
+
+<script>
+const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_TX      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // notify, board -> browser
+const NUS_RX      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // write,  browser -> board
+
+let device, rxChar, txChar;
+let sweepRows = [];
+let notifyBuf = '';
+
+const el = id => document.getElementById(id);
+const logEl = el('log');
+
+function logLine(line, cls) {
+  const t = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  if (cls) div.style.color = cls;
+  div.textContent = `[${t}] ${line}`;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setConnected(connected) {
+  el('statusDot').classList.toggle('connected', connected);
+  el('statusText').textContent = connected ? 'Connected' : 'Disconnected';
+  el('connectBtn').textContent = connected ? 'Disconnect' : 'Connect';
+  for (const id of ['cmdInput','sendBtn','manualSetBtn','manualClearBtn','sweepRunBtn']) {
+    el(id).disabled = !connected;
+  }
+  if (!connected) {
+    el('sweepStopBtn').disabled = true;
+  }
+}
+
+async function sendCommand(cmd) {
+  if (!rxChar) { logLine('Not connected.', 'var(--danger)'); return; }
+  try {
+    const bytes = new TextEncoder().encode(cmd);
+    await rxChar.writeValue(bytes);
+    logLine(`> ${cmd}`, '#7dd3fc');
+  } catch (e) {
+    logLine(`Send failed: ${e}`, 'var(--danger)');
+  }
+}
+
+function handleNotify(event) {
+  const chunk = new TextDecoder().decode(event.target.value);
+  // Each notify carries one line already (see ble_log() in ble_debug.cpp),
+  // but buffer/split defensively in case a client ever coalesces packets.
+  notifyBuf += chunk;
+  let idx;
+  while ((idx = notifyBuf.indexOf('\n')) >= 0) {
+    processLine(notifyBuf.slice(0, idx).trim());
+    notifyBuf = notifyBuf.slice(idx + 1);
+  }
+  if (notifyBuf.length > 0 && chunk.length > 0) {
+    // No newline present at all (typical — each notify is one line) —
+    // treat the whole notify as one line.
+    processLine(notifyBuf.trim());
+    notifyBuf = '';
+  }
+}
+
+function processLine(line) {
+  if (!line) return;
+  logLine(line);
+
+  // SWEEP: freq_hz=1000000 mean_mv=812.3 std_mv=2.10 n=42
+  let m = line.match(/^SWEEP:\s*freq_hz=([\d.]+)\s*mean_mv=([\d.]+)\s*std_mv=([\d.]+)\s*n=(\d+)/);
+  if (m) {
+    sweepRows.push({ freq: +m[1], mean: +m[2], std: +m[3], n: +m[4] });
+    addSweepRow(sweepRows[sweepRows.length - 1]);
+    el('sweepCsvBtn').disabled = false;
+    return;
+  }
+
+  if (line.startsWith('UASSWEEP: started')) {
+    sweepRows = [];
+    el('sweepTableBody').innerHTML = '';
+    el('sweepCsvBtn').disabled = true;
+    el('sweepBadge').textContent = 'running';
+    el('sweepBadge').classList.add('running');
+    el('sweepRunBtn').disabled = true;
+    el('sweepStopBtn').disabled = false;
+    return;
+  }
+  if (line.startsWith('UASSWEEP: done') || line.startsWith('UASSWEEP: aborted')) {
+    el('sweepBadge').textContent = line.startsWith('UASSWEEP: done') ? 'done' : 'aborted';
+    el('sweepBadge').classList.remove('running');
+    el('sweepRunBtn').disabled = false;
+    el('sweepStopBtn').disabled = true;
+    return;
+  }
+
+  m = line.match(/^UASFREQ: set [\d.]+ Hz, reading=(\d+) mV/);
+  if (m) {
+    el('manualReading').textContent = `Reading: ${m[1]} mV`;
+    return;
+  }
+  if (line.startsWith('UASFREQ: cleared')) {
+    el('manualReading').textContent = 'Cleared — back to production cycle.';
+    return;
+  }
+}
+
+function addSweepRow(row) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${row.freq}</td><td>${row.mean.toFixed(1)}</td><td>${row.std.toFixed(2)}</td><td>${row.n}</td>`;
+  el('sweepTableBody').appendChild(tr);
+}
+
+function downloadCsv() {
+  let csv = 'freq_hz,mean_mv,std_mv,n\n';
+  for (const r of sweepRows) csv += `${r.freq},${r.mean},${r.std},${r.n}\n`;
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `uas_sweep_${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+el('connectBtn').addEventListener('click', async () => {
+  if (device && device.gatt.connected) {
+    device.gatt.disconnect();
+    return;
+  }
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [NUS_SERVICE] }],
+      optionalServices: [NUS_SERVICE],
+    });
+    device.addEventListener('gattserverdisconnected', () => setConnected(false));
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(NUS_SERVICE);
+    rxChar = await service.getCharacteristic(NUS_RX);
+    txChar = await service.getCharacteristic(NUS_TX);
+    await txChar.startNotifications();
+    txChar.addEventListener('characteristicvaluechanged', handleNotify);
+    setConnected(true);
+    logLine('Connected.', 'var(--ok)');
+  } catch (e) {
+    logLine(`Connect failed: ${e}`, 'var(--danger)');
+  }
+});
+
+document.querySelectorAll('[data-cmd]').forEach(btn => {
+  btn.addEventListener('click', () => sendCommand(btn.dataset.cmd));
+});
+
+el('sendBtn').addEventListener('click', () => {
+  const v = el('cmdInput').value.trim();
+  if (v) sendCommand(v);
+  el('cmdInput').value = '';
+});
+el('cmdInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') el('sendBtn').click();
+});
+
+el('manualSetBtn').addEventListener('click', () => {
+  sendCommand(`UASFREQ ${el('manualHz').value}`);
+});
+el('manualClearBtn').addEventListener('click', () => sendCommand('UASFREQ CLEAR'));
+
+el('sweepRunBtn').addEventListener('click', () => {
+  const start = el('sweepStart').value, end = el('sweepEnd').value;
+  const step = el('sweepStep').value, dwell = el('sweepDwell').value;
+  sendCommand(`UASSWEEP ${start} ${end} ${step} ${dwell}`);
+});
+el('sweepStopBtn').addEventListener('click', () => sendCommand('UASSWEEP STOP'));
+el('sweepCsvBtn').addEventListener('click', downloadCsv);
+
+if (!navigator.bluetooth) {
+  logLine('Web Bluetooth not available in this browser — use Chrome or Edge, on desktop or Android.', 'var(--danger)');
+  el('connectBtn').disabled = true;
+} else if (location.protocol === 'file:') {
+  logLine('This page was opened directly from disk (file://) — Web Bluetooth often refuses to run there. ' +
+          'Serve it instead, e.g. run "python3 -m http.server" in this folder and open http://localhost:8000/uas_debug_dashboard.html', 'var(--danger)');
+}
+</script>
+
+</body>
+</html>
