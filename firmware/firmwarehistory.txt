@@ -52,6 +52,10 @@ v0.6.7
 - fixed random stopping with motion limit fine tuning
 - uart check on boot via serial
 
-v0.7.0 (goal) - auto detect syringe inside using uas
+v0.6.8
+- added new menu logic to separate viscosity and particle size 
+- added menu logic to grey out irrelevant options based on agent selected
+
+v0.8.0 (goal) - auto detect syringe inside using uas
 
 

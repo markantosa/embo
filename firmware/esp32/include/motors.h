@@ -33,13 +33,17 @@ uint32_t motor_ramped_speed_hz(int32_t stepsIn, int32_t stepsRemaining, uint32_t
 
 // Logs the TMC2209's own internal fault flags (DRV_STATUS register) via
 // ble_log() — overtemperature, short-to-ground/supply, open-load,
-// standstill. Firmware has NO visibility into these otherwise; this is a
-// deliberately one-shot diagnostic read, called specifically at the
-// moment a motion timeout fires (not polled continuously) — a single UART
-// transaction at that point, after the motor has already stopped moving,
-// is a meaningfully lower-risk moment than continuous polling during
-// active high-current stepping (see motor_sg_result()'s own history in
-// this codebase for why that distinction matters).
+// standstill — plus a re-check of the same UART link-check
+// (test_connection()) used once at boot, so the log distinguishes "driver
+// genuinely reports no faults" from "the read itself may have been
+// corrupted under load." Firmware has NO visibility into any of this
+// otherwise; this is a deliberately one-shot diagnostic read, called
+// specifically at the moment a motion timeout fires (not polled
+// continuously) — a single UART transaction at that point, after the
+// motor has already stopped moving, is a meaningfully lower-risk moment
+// than continuous polling during active high-current stepping (see
+// motor_sg_result()'s own history in this codebase for why that
+// distinction matters).
 void motor_log_driver_status(uint8_t motor);
 void motor_reset_position(uint8_t motor);
 

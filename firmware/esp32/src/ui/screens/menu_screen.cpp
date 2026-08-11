@@ -8,7 +8,18 @@ MenuScreen::MenuScreen(const char *title, const MenuItem *items, uint8_t count, 
     : _title(title), _items(items), _count(count), _subtitle(subtitle) {}
 
 void MenuScreen::onEnter() {
+    // Default to the first item, but skip forward to the first ENABLED
+    // one if that first item happens to be gated off — otherwise the
+    // cursor would land on a greyed-out, unselectable item by default.
+    // Falls back to 0 if every item is somehow disabled (nothing better
+    // to land on).
     _selected = 0;
+    for (uint8_t i = 0; i < _count; i++) {
+        if (!_items[i].isEnabled || _items[i].isEnabled()) {
+            _selected = i;
+            break;
+        }
+    }
 }
 
 void MenuScreen::_draw(bool forceFull) {
@@ -32,11 +43,18 @@ void MenuScreen::_draw(bool forceFull) {
     tft.setFont(&fonts::FreeSans9pt7b);
     for (uint8_t i = 0; i < _count; i++) {
         bool sel = (i == _selected);
+        bool enabled = !_items[i].isEnabled || _items[i].isEnabled();
         int16_t rowY = top + i * rowH;
-        if (sel) {
+        if (sel && enabled) {
             tft.fillRoundRect(20, rowY, tft.width() - 40, rowH - 8, 8, COLOR_BRIGHT_BLUE);
         }
-        ui_display_draw_centered(_items[i].label, rowY + 10, sel ? TFT_WHITE : COLOR_BRIGHT_BLUE, 1);
+        uint16_t textColor;
+        if (!enabled) {
+            textColor = COLOR_ASH;  // dark grey, greyed out — same whether or not the cursor is on it
+        } else {
+            textColor = sel ? TFT_WHITE : COLOR_BRIGHT_BLUE;
+        }
+        ui_display_draw_centered(_items[i].label, rowY + 10, textColor, 1);
     }
 }
 
@@ -53,7 +71,12 @@ void MenuScreen::update(ScreenManager &mgr, bool forceFull) {
     if (changed) _draw(forceFull);
 
     if (ui_input_poll_enc_sw() == ButtonEvent::SHORT_PRESS && _count > 0) {
-        _items[_selected].onSelect(mgr);
+        const MenuItem &item = _items[_selected];
+        if (!item.isEnabled || item.isEnabled()) {
+            item.onSelect(mgr);
+        }
+        // Disabled item: no-op. It's still visibly there (greyed out) and
+        // still reachable by rotating to it, it just can't be confirmed.
     }
 
     // BTN1 = Back here — but ONLY when nothing is running. This screen

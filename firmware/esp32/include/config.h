@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.7"
+#define FIRMWARE_VERSION "0.6.8"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -182,7 +182,7 @@
 // consistent starting condition regardless of where the motor happened to
 // be sitting at boot (position is unknown pre-home). Both motors nudge
 // CONCURRENTLY, same as the real approach.
-#define HOMING_PRE_NUDGE_STEPS 400
+#define HOMING_PRE_NUDGE_STEPS 200
 // Abort homing if limit not reached within this time.
 #define HOMING_TIMEOUT_MS    30000
 // Direction toward the limit switch, intended to be anticlockwise —
@@ -201,6 +201,22 @@
 #define TARGET_SIZE_UM_MAX      1000
 #define TARGET_SIZE_UM_DEFAULT  300
 #define TARGET_SIZE_UM_STEP     5    // per encoder detent
+
+// Viscosity target — mirrors the particle-size constants above, same
+// pattern (min/max/default/step). PLACEHOLDER units (centipoise) and
+// range — not based on any real clinical/product spec, just a reasonable
+// starting shape for the UI. IMPORTANT: unlike particle size, there is no
+// viscosity measurement or equation anywhere in this firmware — the
+// actual mixing stop condition (scheduler.cpp) is still purely the
+// UAS-voltage particle-size equation regardless of which target type was
+// selected. This value is stored and displayed (mixing_options.cpp), not
+// yet wired into any control logic — same "cosmetic for now" pattern
+// already established here for the syringe preset (see
+// mixing_menu_screen.h).
+#define TARGET_VISCOSITY_CP_MIN      1
+#define TARGET_VISCOSITY_CP_MAX      1000
+#define TARGET_VISCOSITY_CP_DEFAULT  100
+#define TARGET_VISCOSITY_CP_STEP     5
 // "In spec" window half-width around the setpoint. Placeholder — see
 // firmware/CALIBRATION.md §8 before trusting for auto-stop.
 #define TARGET_TOLERANCE_UM     25

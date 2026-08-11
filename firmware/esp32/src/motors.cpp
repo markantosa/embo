@@ -242,6 +242,15 @@ void motor_log_driver_status(uint8_t motor) {
     TMC2209Stepper &drv = (motor == 1) ? _driver_m1 : _driver_m2;
     // Each of these is its own UART transaction (TMCStepper library) —
     // deliberately one-shot here, not something to call in a tight loop.
+    //
+    // test_connection() first, same link-check used once at boot
+    // (motors_init()) — 0 = good, non-zero = bad. Running it again here,
+    // under the actual failure condition, tells us whether UART itself is
+    // still trustworthy at this moment, not just whether it was fine at
+    // power-up. If this comes back bad, treat the fault flags below with
+    // real skepticism — a corrupted read can decode as anything,
+    // including flags that look like a coherent but wrong answer.
+    uint8_t conn = drv.test_connection();
     bool overtemp        = drv.ot();
     bool overtempWarning  = drv.otpw();
     bool shortToGroundA   = drv.s2ga();
@@ -249,9 +258,11 @@ void motor_log_driver_status(uint8_t motor) {
     bool openLoadA        = drv.ola();
     bool openLoadB        = drv.olb();
     bool standstill       = drv.stst();
-    ble_log("Motor %u driver status: OT=%d OTPW=%d S2GA=%d S2GB=%d OLA=%d OLB=%d STST=%d "
-            "(OT=overtemp shutdown, OTPW=overtemp warning, S2G=short-to-ground, OL=open-load, STST=standstill)",
-            motor, overtemp, overtempWarning, shortToGroundA, shortToGroundB, openLoadA, openLoadB, standstill);
+    ble_log("Motor %u driver status: UART_LINK=%u(%s) OT=%d OTPW=%d S2GA=%d S2GB=%d OLA=%d OLB=%d STST=%d "
+            "(UART_LINK 0=OK else BAD; OT=overtemp shutdown, OTPW=overtemp warning, "
+            "S2G=short-to-ground, OL=open-load, STST=standstill)",
+            motor, conn, conn == 0 ? "OK" : "BAD",
+            overtemp, overtempWarning, shortToGroundA, shortToGroundB, openLoadA, openLoadB, standstill);
 }
 
 void motor_reset_position(uint8_t motor) {

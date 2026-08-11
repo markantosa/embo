@@ -16,12 +16,26 @@
 // example wired to real backend calls. Don't add a "Back" item — BTN1 is
 // already wired as Back for every MenuScreen (see update() below), so an
 // explicit row for it is redundant.
+//
+// An item can optionally be conditionally greyed out/unselectable — add a
+// third field, a bool()-returning function: { "Label", myAction, myGate }.
+// See ui.cpp's kTargetTypeItems for a real example (Size/Viscosity gated
+// on which agent was selected earlier). Leaving it off (the normal case)
+// means always-enabled, unchanged from before this existed.
 
 class ScreenManager;
 
 struct MenuItem {
     const char *label;
     void (*onSelect)(ScreenManager &mgr);  // called when this item is confirmed
+    // Optional — nullptr (the default for every existing menu item
+    // throughout this codebase, via ordinary aggregate init leaving it
+    // unset) means "always enabled." When set, an item this returns
+    // false for is drawn greyed out and refuses to confirm — see
+    // MenuScreen::update()/_draw(). The item still exists in the list and
+    // can still be navigated to with the encoder, it just can't be
+    // selected.
+    bool (*isEnabled)() = nullptr;
 };
 
 class MenuScreen : public Screen {

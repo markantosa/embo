@@ -11,6 +11,7 @@
 #include "mixing_options.h"
 #include "sound_settings.h"
 #include "ui/screens/mixing_menu_screen.h"
+#include "ui/screens/viscosity_menu_screen.h"
 #include "ui/screens/warning_screen.h"
 #include "ui/screens/mixing_running_screen.h"
 #include "ui/screens/end_screen.h"
@@ -59,6 +60,7 @@ static UasDebugToggleScreen  _uasDebugToggleScreen;
 static SoundToggleScreen     _soundToggleScreen;
 static TelemetryScreen       _telemetryScreen;
 static MixingMenuScreen      _mixingMenuScreen;
+static ViscosityMenuScreen   _viscosityMenuScreen;
 static WarningScreen         _warningScreen;
 static MixingRunningScreen   _mixingRunningScreen;
 static EndScreen             _endScreen;
@@ -178,21 +180,34 @@ static const MenuItem kSettingsItems[] = {
 static MenuScreen _settingsMenuScreen("Settings v" FIRMWARE_VERSION, kSettingsItems,
                                        sizeof(kSettingsItems) / sizeof(kSettingsItems[0]));
 
-// ── Target Type — Start > Agent selection > here > Mixing Menu. Defined
-// before Agent Selection since Agent Selection's items need to reference
-// it (same ordering rule as Settings Menu above). ──────────────────────────
+// ── Target Type — Start > Agent selection > here > Mixing Menu (Size) or
+// Viscosity Menu (Viscosity). Defined before Agent Selection since Agent
+// Selection's items need to reference it (same ordering rule as Settings
+// Menu above). ────────────────────────────────────────────────────────────
 static void _targetTypeGoSize(ScreenManager &mgr) {
     mixing_options_set_target_type(TargetType::SIZE);
     mgr.push(&_mixingMenuScreen);
 }
 static void _targetTypeGoViscosity(ScreenManager &mgr) {
     mixing_options_set_target_type(TargetType::VISCOSITY);
-    mgr.push(&_mixingMenuScreen);
+    mgr.push(&_viscosityMenuScreen);
+}
+
+// Which target type is selectable depends on the agent chosen earlier
+// (Agent Selection, upstream of here) — Gelfoam -> Size only, Lyostypt ->
+// Viscosity only. Both items always stay visible in the list; the
+// disallowed one is just greyed out and can't be confirmed (see
+// menu_screen.h's isEnabled feature).
+static bool _targetTypeSizeEnabled() {
+    return mixing_options_get_agent() == SyringeAgent::Gelfoam;
+}
+static bool _targetTypeViscosityEnabled() {
+    return mixing_options_get_agent() == SyringeAgent::Lyostypt;
 }
 
 static const MenuItem kTargetTypeItems[] = {
-    { "Size",      _targetTypeGoSize },
-    { "Viscosity", _targetTypeGoViscosity },
+    { "Size",      _targetTypeGoSize,      _targetTypeSizeEnabled },
+    { "Viscosity", _targetTypeGoViscosity, _targetTypeViscosityEnabled },
 };
 static MenuScreen _targetTypeMenuScreen("Target Type", kTargetTypeItems,
                                          sizeof(kTargetTypeItems) / sizeof(kTargetTypeItems[0]));
@@ -284,6 +299,7 @@ void ui_init() {
     // _telemetryScreen and _uasDebugToggleScreen directly, both already
     // existing static screens (see kDeveloperModeItems above).
     _mixingMenuScreen.wire(_warningScreen, _verifyingScreen);
+    _viscosityMenuScreen.wire(_warningScreen, _verifyingScreen);
     _warningScreen.wire(_mixingRunningScreen);
     _mixingRunningScreen.wire(_endScreen);
     _endScreen.wire(_startMenuScreen, _verifyingScreen);

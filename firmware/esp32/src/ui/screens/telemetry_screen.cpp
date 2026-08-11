@@ -11,6 +11,14 @@
 
 static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 
+// ~24 refresh/s cap on the live content below — was refreshing every
+// single loop() iteration with no throttle at all (unlike the BLE
+// dashboard's own telemetry, already capped at TELEMETRY_INTERVAL_MS in
+// ble_binary_telemetry.cpp). 42ms ≈ 23.8Hz, close enough to 24 that the
+// 0.2Hz difference isn't meaningful for a screen a person is reading, not
+// measuring.
+#define TELEMETRY_SCREEN_REFRESH_INTERVAL_MS 42
+
 void TelemetryScreen::_draw(bool forceFull) {
     LGFX &tft = ui_display_tft();
     if (forceFull) {
@@ -49,7 +57,12 @@ void TelemetryScreen::_draw(bool forceFull) {
 }
 
 void TelemetryScreen::update(ScreenManager &mgr, bool forceFull) {
-    _draw(forceFull);
+    static uint32_t lastDrawMs = 0;
+    uint32_t now = millis();
+    if (forceFull || now - lastDrawMs >= TELEMETRY_SCREEN_REFRESH_INTERVAL_MS) {
+        lastDrawMs = now;
+        _draw(forceFull);
+    }
 
     ButtonEvent ev = ui_input_poll_enc_sw();
     // Long-press as a back fallback while touch is unavailable — see
