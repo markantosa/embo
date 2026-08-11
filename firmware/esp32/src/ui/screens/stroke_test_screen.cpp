@@ -124,26 +124,47 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
         // immediately rather than continuing to push against it for up to
         // 30 more seconds — see MOTOR_STALL_SG_THRESHOLD (config.h)
         // for why that number isn't fully trustworthy yet.
-        if (!m1Done && motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) {
-            motor_set_speed(1, 0);
-            motor_enable(1, false);
-            motor_set_speed(2, 0);
-            motor_enable(2, false);
-            snprintf(_lastFailureReason, sizeof(_lastFailureReason),
-                     "STALL DETECTED - left motor (SG=%u)", motor_sg_result(1));
-            ble_log("Motion > Stroke Testing: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
-            return false;
+        //
+        // Gated on MOTOR_STALL_SG_THRESHOLD > 0 (compile-time — currently
+        // 0, i.e. disabled) — motor_sg_result() does a live blocking UART
+        // read over the shared TMC2209 bus, not a cached value, and a
+        // reported hang persisted even after throttling how often it was
+        // called (MOTOR_STALL_CHECK_INTERVAL_MS below), meaning a SINGLE
+        // call can apparently block for a long time under real torque
+        // load — not just cumulative frequency. Since the check's result
+        // is never acted on while the threshold is 0 anyway
+        // (motor_sg_result() is unsigned, so "< 0" can never be true),
+        // there's no reason to take that risk for zero functional
+        // benefit. Once a real threshold is set, this starts actually
+        // calling it again — worth watching closely for the same hang at
+        // that point, since the underlying single-call blocking risk
+        // hasn't been separately fixed, only avoided while unused.
+#if MOTOR_STALL_SG_THRESHOLD > 0
+        static uint32_t lastStallCheckMs = 0;
+        if (millis() - lastStallCheckMs >= MOTOR_STALL_CHECK_INTERVAL_MS) {
+            lastStallCheckMs = millis();
+            if (!m1Done && motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) {
+                motor_set_speed(1, 0);
+                motor_enable(1, false);
+                motor_set_speed(2, 0);
+                motor_enable(2, false);
+                snprintf(_lastFailureReason, sizeof(_lastFailureReason),
+                         "STALL DETECTED - left motor (SG=%u)", motor_sg_result(1));
+                ble_log("Motion > Stroke Testing: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
+                return false;
+            }
+            if (!m2Done && motor_sg_result(2) < MOTOR_STALL_SG_THRESHOLD) {
+                motor_set_speed(1, 0);
+                motor_enable(1, false);
+                motor_set_speed(2, 0);
+                motor_enable(2, false);
+                snprintf(_lastFailureReason, sizeof(_lastFailureReason),
+                         "STALL DETECTED - right motor (SG=%u)", motor_sg_result(2));
+                ble_log("Motion > Stroke Testing: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
+                return false;
+            }
         }
-        if (!m2Done && motor_sg_result(2) < MOTOR_STALL_SG_THRESHOLD) {
-            motor_set_speed(1, 0);
-            motor_enable(1, false);
-            motor_set_speed(2, 0);
-            motor_enable(2, false);
-            snprintf(_lastFailureReason, sizeof(_lastFailureReason),
-                     "STALL DETECTED - right motor (SG=%u)", motor_sg_result(2));
-            ble_log("Motion > Stroke Testing: %s in stroke %d (%s)", _lastFailureReason, stroke, label);
-            return false;
-        }
+#endif
 
         if (!m1Done) {
             int32_t p1 = motor_get_position(1);
@@ -282,6 +303,9 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
             uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
             uint32_t lastProgressMs = millis();
             uint32_t lastCsvMs = millis();
+#if MOTOR_STALL_SG_THRESHOLD > 0
+            uint32_t lastStallCheckMs = millis();
+#endif
             bool stalled = false;
             while (motor_get_position(1) < MOTOR1_SOFT_LIMIT_MAX && millis() < deadline) {
                 // Same noise check/resume as _driveBothConcurrent() below —
@@ -289,13 +313,22 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
                 // to full speed.
                 bool noiseResume = motor_limit_hit(1) && !motor_limit_hit_debounced(1);
                 // Same stall check as _driveBothConcurrent() — see there
-                // for why this matters (catches a TMC torque loss or a
-                // genuine mechanical jam fast, instead of waiting the full
-                // 30s timeout regardless of which one it actually is).
-                if (motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) {
-                    stalled = true;
-                    break;
+                // for why this matters, and why it's gated on
+                // MOTOR_STALL_SG_THRESHOLD > 0 (currently 0/disabled) —
+                // throttling alone didn't fix a reported hang under real
+                // torque load, meaning a single motor_sg_result() call can
+                // apparently block for a long time, not just cumulative
+                // frequency — and this check does nothing anyway while
+                // disabled.
+#if MOTOR_STALL_SG_THRESHOLD > 0
+                if (millis() - lastStallCheckMs >= MOTOR_STALL_CHECK_INTERVAL_MS) {
+                    lastStallCheckMs = millis();
+                    if (motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) {
+                        stalled = true;
+                        break;
+                    }
                 }
+#endif
                 int32_t p1 = motor_get_position(1);
                 int32_t stepsIn1 = p1 - startPos1;
                 if (stepsIn1 < 0) stepsIn1 = -stepsIn1;

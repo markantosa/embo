@@ -274,14 +274,35 @@ void scheduler_update() {
         // failing to mix material while nothing on screen shows a
         // problem, so this stops immediately into a real fault state
         // rather than continuing or waiting for a timeout.
-        if ((!_m1Done && motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) ||
-            (!_m2Done && motor_sg_result(2) < MOTOR_STALL_SG_THRESHOLD)) {
-            _stopMotorsHold();
-            _state = RunState::FAULT;
-            ble_log("Scheduler: STALL DETECTED during mixing (M1 SG=%u M2 SG=%u) at %lu strokes — motors stopped",
-                    motor_sg_result(1), motor_sg_result(2), (unsigned long)_strokesDone);
-            return;
+        //
+        // Gated on MOTOR_STALL_SG_THRESHOLD > 0 (compile-time — currently
+        // 0, i.e. disabled) — motor_sg_result() does a live blocking UART
+        // read over the shared TMC2209 bus, not a cached value, and a
+        // reported hang persisted even after throttling how often it was
+        // called (MOTOR_STALL_CHECK_INTERVAL_MS below), which means a
+        // SINGLE call can apparently block for a long time under real
+        // torque load — not just cumulative frequency. Since the check's
+        // result is never acted on while the threshold is 0 anyway
+        // (motor_sg_result() is unsigned, so "< 0" can never be true),
+        // there's no reason to take that risk for zero functional
+        // benefit. Once a real threshold is set, this starts actually
+        // calling it again — worth watching closely for the same hang
+        // at that point, since the underlying single-call blocking risk
+        // hasn't been separately fixed, only avoided while unused.
+#if MOTOR_STALL_SG_THRESHOLD > 0
+        static uint32_t lastStallCheckMs = 0;
+        if (millis() - lastStallCheckMs >= MOTOR_STALL_CHECK_INTERVAL_MS) {
+            lastStallCheckMs = millis();
+            if ((!_m1Done && motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) ||
+                (!_m2Done && motor_sg_result(2) < MOTOR_STALL_SG_THRESHOLD)) {
+                _stopMotorsHold();
+                _state = RunState::FAULT;
+                ble_log("Scheduler: STALL DETECTED during mixing (M1 SG=%u M2 SG=%u) at %lu strokes — motors stopped",
+                        motor_sg_result(1), motor_sg_result(2), (unsigned long)_strokesDone);
+                return;
+            }
         }
+#endif
 
         // Continuous UAS-voltage-based size check — evaluated every call,
         // independent of stroke/half-stroke boundaries, so mixing stops
@@ -290,6 +311,11 @@ void scheduler_update() {
         // stroke to finish and risking overshoot on this irreversible
         // process. Stops the motors wherever they currently are —
         // mid-half-stroke is fine, same _stopMotorsHold() used elsewhere.
+        // Gated on UAS_SIZE_CHECK_ENABLED (config.h) — set to 0 there to
+        // temporarily disable this entirely (compiled out, not just
+        // skipped); with it off, a run can only stop via the safety cap,
+        // a fault, or an emergency stop, never on reaching target size.
+#if UAS_SIZE_CHECK_ENABLED
         {
             float voltageVolts = uas_read_mv() / 1000.0f;
             _lastMeasuredUm = calib_estimate_particle_size_from_uas_voltage_um(voltageVolts);
@@ -309,6 +335,7 @@ void scheduler_update() {
                 _inSpecSinceMs = 0;  // reset debounce on any out-of-spec reading
             }
         }
+#endif
 
         if (!_m1Done) {
             int32_t p1 = motor_get_position(1);
