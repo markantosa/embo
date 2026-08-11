@@ -143,13 +143,22 @@ FusedSizeEstimate calib_estimate_particle_size_um(float uasAttenuation, float tu
 // condition (scheduler.cpp) — the function above stays available for bench
 // calibration data collection (BLE FUSION/FIT commands, ble_debug.cpp),
 // unrelated to this. Real measured calibration, not a placeholder:
-//   size_um = UAS_SIZE_EQ_COEFFICIENT * voltage_volts ^ UAS_SIZE_EQ_EXPONENT
-// voltage is in VOLTS — uas_read_mv() (uas.h) returns millivolts, divide by
-// 1000 before calling this.
-#define UAS_SIZE_EQ_COEFFICIENT   8476.5f
-#define UAS_SIZE_EQ_EXPONENT      -2.75f
+//   size_um = UAS_SIZE_EQ_COEFFICIENT * deltaV_volts ^ UAS_SIZE_EQ_EXPONENT
+//   deltaV_volts = V_current - V_baseline
+// V_baseline is captured once at the start of each run (scheduler.cpp,
+// right after homing, before the first stroke) — NOT the older, unrelated
+// per-frequency baseline uas.cpp keeps internally for its own attenuation
+// calculations. voltage is in VOLTS — uas_read_mv() (uas.h) returns
+// millivolts, divide by 1000 before computing deltaV.
+#define UAS_SIZE_EQ_COEFFICIENT   681.8f
+#define UAS_SIZE_EQ_EXPONENT      -0.79f
 
-float calib_estimate_particle_size_from_uas_voltage_um(float voltageVolts);
+// deltaVoltageVolts = V_current - V_baseline, both in volts. A
+// non-positive delta is expected/normal early in a run (before mixing has
+// caused enough change yet), not necessarily a fault — unlike the
+// previous absolute-voltage version of this function, where <= 0 meant a
+// sensor problem.
+float calib_estimate_particle_size_from_uas_delta_v_um(float deltaVoltageVolts);
 
 // ---------------------------------------------------------------------------
 // Mixing stop condition — debounce, see CALIBRATION.md §6

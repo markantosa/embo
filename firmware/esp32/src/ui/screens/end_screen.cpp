@@ -7,6 +7,7 @@
 #include "motors.h"
 #include "ui.h"
 #include <string.h>
+#include <stdio.h>
 
 static const TouchButton kBackButton = { 20, 260, 140, 40, "Back to menu" };
 
@@ -15,7 +16,19 @@ void EndScreen::setResult(const char *msg) {
     _resultMsg[sizeof(_resultMsg) - 1] = '\0';
 }
 
+// End-of-mixing chirp — distinct from both the boot chirp (523Hz/150ms,
+// ui.cpp) and the button-press feedback tone (800Hz/30ms, ui_input.cpp) —
+// higher pitch and longer than either, meant to read as a genuine "done"
+// signal rather than routine feedback. Fires for every way a run reaches
+// this screen (target reached, safety cap, or emergency stop) — not
+// specific to a successful finish, since all of those are "the end of
+// mixing." Gated on Settings > Sound via ui_chirp() itself.
+#define END_OF_MIXING_CHIRP_HZ  1046
+#define END_OF_MIXING_CHIRP_MS  300
+
 void EndScreen::onEnter() {
+    ui_chirp(END_OF_MIXING_CHIRP_HZ, END_OF_MIXING_CHIRP_MS);
+
     // Draw the result FIRST, before the blocking re-home below — so the
     // operator sees what actually happened (target reached, e-stop, etc.)
     // rather than a stale Mixing-screen frame during the homing wait.
@@ -33,6 +46,16 @@ void EndScreen::_draw() {
     ui_display_draw_centered("Results", 30, TFT_BLACK, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
     ui_display_draw_centered(_resultMsg, 100, COLOR_BRIGHT_BLUE, 1);
+
+    // Final UAS-derived value — whatever the continuous check last
+    // computed/read, which is exactly the run's final state regardless of
+    // which of the three ways it ended (these getters just aren't reset
+    // again until the next scheduler_start()).
+    char line[48];
+    snprintf(line, sizeof(line), "Final: %.1fum  (V=%.3fV)",
+             scheduler_get_last_fused_size_um(), scheduler_get_last_measured_voltage());
+    ui_display_draw_centered(line, 140, COLOR_ASH, 1);
+
     ui_display_draw_centered("Hold knob to verify with camera", 220, COLOR_ASH, 1);
     ui_display_draw_centered("(or press BTN1)", 245, COLOR_ASH, 1);
 }

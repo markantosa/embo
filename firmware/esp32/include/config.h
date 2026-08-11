@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.8"
+#define FIRMWARE_VERSION "0.6.9"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -228,14 +228,6 @@
 // — not measured against real noise characteristics of the UAS voltage
 // signal yet, pick a value and tune from there once you have real
 // in-tolerance sensor traces.
-// Set to 0 to temporarily disable the continuous UAS-voltage size check
-// entirely (scheduler.cpp) — compiled OUT, not just skipped, same
-// approach as MOTOR_STALL_SG_THRESHOLD's gating. With this off, a mixing
-// run can only stop via the stroke-count safety cap
-// (MIXING_MAX_STROKES_SAFETY_CAP, calibration.h), a stall/timeout fault,
-// or an emergency stop — it will NOT stop on reaching the target size.
-// Remember to set this back to 1 once done testing.
-#define UAS_SIZE_CHECK_ENABLED 1
 #define UAS_SIZE_IN_SPEC_HOLD_MS   1000
 
 // ── UI input timing (used by ui.cpp) ────────────────────────────────────────

@@ -174,12 +174,16 @@ FusedSizeEstimate calib_estimate_particle_size_um(float uasAttenuation, float tu
     return result;
 }
 
-float calib_estimate_particle_size_from_uas_voltage_um(float voltageVolts) {
-    // pow() with a negative fractional exponent is undefined for
-    // voltageVolts <= 0 — a genuine zero/negative reading means "no valid
-    // signal" (sensor fault, disconnected, etc.), not "infinite size."
-    if (voltageVolts <= 0.0f) return 0.0f;
-    return UAS_SIZE_EQ_COEFFICIENT * powf(voltageVolts, UAS_SIZE_EQ_EXPONENT);
+float calib_estimate_particle_size_from_uas_delta_v_um(float deltaVoltageVolts) {
+    // pow() with a negative fractional exponent is undefined for a
+    // non-positive base. Unlike the previous absolute-voltage version of
+    // this function, deltaV <= 0 here is EXPECTED/NORMAL early in a run —
+    // before mixing has caused enough change from baseline yet — not
+    // necessarily a sensor fault. Returning 0 (no valid size estimate
+    // yet) is still the right behavior either way, just for a different
+    // reason than before.
+    if (deltaVoltageVolts <= 0.0f) return 0.0f;
+    return UAS_SIZE_EQ_COEFFICIENT * powf(deltaVoltageVolts, UAS_SIZE_EQ_EXPONENT);
 }
 
 // ---------------------------------------------------------------------------

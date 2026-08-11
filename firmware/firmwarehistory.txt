@@ -56,6 +56,16 @@ v0.6.8
 - added new menu logic to separate viscosity and particle size 
 - added menu logic to grey out irrelevant options based on agent selected
 
+v0.6.9
+- add buzzer chirp at end of mixing
+- sound mode turn on or off will change whether buzzer will chirp at every button press
+- improve the finishing screen
+- display uas voltage reading at the end of the run
+- changed uas correlation equation
+
+v0.7.0
+- add camera functionality
+
 v0.8.0 (goal) - auto detect syringe inside using uas
 
 

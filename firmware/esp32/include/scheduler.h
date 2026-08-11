@@ -137,6 +137,16 @@ uint32_t scheduler_get_strokes_done();
 float    scheduler_get_last_fused_size_um();
 uint8_t  scheduler_get_last_fused_num_channels();
 
+// Raw voltage readings behind the equation above (volts) — for display
+// (EndScreen shows the final measured value) and diagnostics.
+// scheduler_get_baseline_voltage() is captured fresh at the start of each
+// run (scheduler_start()); scheduler_get_last_measured_voltage() is
+// whatever the continuous check last read. Both stay at their last run's
+// values after a run ends, until the next scheduler_start() resets them —
+// exactly what a "final reading" display needs.
+float scheduler_get_last_measured_voltage();
+float scheduler_get_baseline_voltage();
+
 // Diagnostic-only breakage-model fit, for UI/BLE cross-check against the
 // live UAS-voltage estimate — see calibration.h's BreakageFit for field
 // meanings. This does NOT drive the stop condition (see header comment

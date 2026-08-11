@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // TFT UI — LovyanGFX, encoder + one button, no touch.
 //
 // Deliberately minimal per project decision: the screen shows only a
@@ -41,6 +43,14 @@
 
 void ui_init();
 void ui_update();   // call every loop()
+
+// Plays a brief tone via the shared buzzer, IF Settings > Sound is
+// currently on — callers don't need to check sound_is_enabled()
+// themselves, this gates internally so every caller behaves consistently.
+// Non-blocking (BuzzerDriver's own tone(), auto-stops after durationMs) —
+// safe to call from anywhere, including right before a blocking call like
+// motors_home(), without delaying it.
+void ui_chirp(uint32_t frequencyHz, uint32_t durationMs);
 
 // Switches to a persistent error screen (e.g. a failed homing attempt).
 // There is no way back from this screen short of a reboot — a hardware

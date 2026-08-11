@@ -60,6 +60,8 @@ static bool _hitSafetyCap = false;
 
 // Continuous UAS-voltage size check state.
 static float _lastMeasuredUm = 0.0f;
+static float _lastMeasuredVoltageVolts = 0.0f;  // for display on EndScreen
+static float _baselineVoltageVolts = 0.0f;      // captured fresh at the start of each run — see scheduler_start()
 static uint32_t _inSpecSinceMs = 0;   // 0 = not currently in spec; else timestamp it FIRST became in-spec
 
 // Current half-stroke bookkeeping.
@@ -158,10 +160,18 @@ bool scheduler_start() {
     _hitSafetyCap = false;
     _stopRequested = false;
     _lastMeasuredUm = 0.0f;
+    _lastMeasuredVoltageVolts = 0.0f;
     _inSpecSinceMs = 0;
     _firstStroke = true;
 
-    ble_log("Scheduler: run started, target=%u um (UAS voltage equation, checked continuously)", _target_um);
+    // Baseline for this run's delta-V equation — captured fresh here,
+    // right after homing and before the first stroke, NOT reused from any
+    // previous run or from uas.cpp's own unrelated internal baseline (used
+    // for its per-frequency attenuation calculations, a different thing).
+    _baselineVoltageVolts = uas_read_mv() / 1000.0f;
+
+    ble_log("Scheduler: run started, target=%u um (UAS delta-V equation, baseline=%.3fV, checked continuously)",
+            _target_um, _baselineVoltageVolts);
     _beginHalfStroke(true);
     return true;
 }
@@ -244,6 +254,8 @@ uint32_t scheduler_get_strokes_done() { return _strokesDone; }
 // fused anymore.
 float   scheduler_get_last_fused_size_um()      { return _lastMeasuredUm; }
 uint8_t scheduler_get_last_fused_num_channels() { return _lastMeasuredUm > 0.0f ? 1 : 0; }
+float   scheduler_get_last_measured_voltage()   { return _lastMeasuredVoltageVolts; }
+float   scheduler_get_baseline_voltage()        { return _baselineVoltageVolts; }
 
 float   scheduler_get_fit_k()          { return calib_breakage_get_fit().k; }
 float   scheduler_get_fit_d0_um()      { return calib_breakage_get_fit().d0Um; }
@@ -311,14 +323,11 @@ void scheduler_update() {
         // stroke to finish and risking overshoot on this irreversible
         // process. Stops the motors wherever they currently are —
         // mid-half-stroke is fine, same _stopMotorsHold() used elsewhere.
-        // Gated on UAS_SIZE_CHECK_ENABLED (config.h) — set to 0 there to
-        // temporarily disable this entirely (compiled out, not just
-        // skipped); with it off, a run can only stop via the safety cap,
-        // a fault, or an emergency stop, never on reaching target size.
-#if UAS_SIZE_CHECK_ENABLED
         {
             float voltageVolts = uas_read_mv() / 1000.0f;
-            _lastMeasuredUm = calib_estimate_particle_size_from_uas_voltage_um(voltageVolts);
+            _lastMeasuredVoltageVolts = voltageVolts;
+            float deltaV = voltageVolts - _baselineVoltageVolts;
+            _lastMeasuredUm = calib_estimate_particle_size_from_uas_delta_v_um(deltaV);
             bool inSpec = fabsf(_lastMeasuredUm - (float)_target_um) <= TARGET_TOLERANCE_UM;
             if (inSpec) {
                 if (_inSpecSinceMs == 0) _inSpecSinceMs = millis();
@@ -326,16 +335,15 @@ void scheduler_update() {
                     _stopMotorsHold();
                     _hitSafetyCap = false;
                     _state = RunState::DONE;
-                    ble_log("Scheduler: target confirmed by UAS voltage equation "
-                            "(measured=%.1fum, target=%uum, voltage=%.3fV) at %lu strokes",
-                            _lastMeasuredUm, _target_um, voltageVolts, (unsigned long)_strokesDone);
+                    ble_log("Scheduler: target confirmed by UAS delta-V equation "
+                            "(measured=%.1fum, target=%uum, voltage=%.3fV, deltaV=%.3fV) at %lu strokes",
+                            _lastMeasuredUm, _target_um, voltageVolts, deltaV, (unsigned long)_strokesDone);
                     return;
                 }
             } else {
                 _inSpecSinceMs = 0;  // reset debounce on any out-of-spec reading
             }
         }
-#endif
 
         if (!_m1Done) {
             int32_t p1 = motor_get_position(1);

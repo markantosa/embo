@@ -1,6 +1,7 @@
 #include "ui_input.h"
 #include "config.h"
 #include "ui_display.h"
+#include "ui.h"
 #include <Arduino.h>
 
 // ── EC11 rotary encoder — quadrature decode (Buxton table), ported from
@@ -60,6 +61,15 @@ struct ButtonState {
     uint32_t longpressMs;
 };
 
+// Button-press feedback tone — quick and subtle, distinct from the
+// louder/longer end-of-mixing chirp (see mixing_running_screen.cpp/
+// end_screen.cpp). Gated on Settings > Sound via ui_chirp() itself, not
+// checked here — every caller of ui_input_poll_enc_sw()/poll_btn1()
+// throughout the whole app gets this for free, since it's hooked at the
+// shared _pollButton() level rather than needing to be added per-screen.
+#define BUTTON_CHIRP_HZ    800
+#define BUTTON_CHIRP_MS    30
+
 static ButtonEvent _pollButton(ButtonState &s) {
     bool down = (digitalRead(s.pin) == LOW);
 
@@ -70,11 +80,13 @@ static ButtonEvent _pollButton(ButtonState &s) {
             s.longFired = false;
         } else if (!s.longFired && (millis() - s.downAtMs) >= s.longpressMs) {
             s.longFired = true;
+            ui_chirp(BUTTON_CHIRP_HZ, BUTTON_CHIRP_MS);
             return ButtonEvent::LONG_PRESS;
         }
     } else {
         if (s.down && !s.longFired && (millis() - s.downAtMs) >= s.debounceMs) {
             s.down = false;
+            ui_chirp(BUTTON_CHIRP_HZ, BUTTON_CHIRP_MS);
             return ButtonEvent::SHORT_PRESS;
         }
         s.down = false;
@@ -119,6 +131,7 @@ int ui_input_poll_touch_tap(const TouchButton *buttons, uint8_t count) {
             const TouchButton &b = buttons[i];
             if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) {
                 hit = (int)i;
+                ui_chirp(BUTTON_CHIRP_HZ, BUTTON_CHIRP_MS);
                 break;
             }
         }

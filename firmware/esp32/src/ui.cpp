@@ -314,6 +314,12 @@ void ui_update() {
     _buzzer.update();
 }
 
+void ui_chirp(uint32_t frequencyHz, uint32_t durationMs) {
+    if (sound_is_enabled()) {
+        _buzzer.tone(frequencyHz, durationMs);
+    }
+}
+
 void ui_show_error(const char *msg) {
     _errorScreen.setMessage(msg);
     _screenManager.goTo(&_errorScreen);
