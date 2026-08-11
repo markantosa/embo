@@ -68,6 +68,22 @@ static bool _firstStroke = true;      // true only for the very first half-strok
 static bool _m1Done = false, _m2Done = false;
 static uint32_t _phaseDeadlineMs = 0;
 
+// Acceleration/deceleration ramp state — position each motor started this
+// half-stroke at (to compute steps traveled so far), and the last speed
+// actually commanded to each motor (so the ramp only re-issues
+// motor_set_speed() when the computed value has genuinely changed by a
+// meaningful amount, not every single scheduler_update() call — that
+// function restarts the step timer each time it's called, and doing that
+// on every loop() iteration regardless of whether the speed actually
+// changed would be needless timer churn, the same class of problem
+// already found and fixed elsewhere in this firmware).
+static int32_t  _halfStrokeStartPos1 = 0, _halfStrokeStartPos2 = 0;
+static uint32_t _lastCommandedHz1 = 0, _lastCommandedHz2 = 0;
+// Ramp state uses the shared motor_ramped_speed_hz() (motors.h) — see
+// there for the formula. STROKE_RAMP_UPDATE_THRESHOLD_HZ (config.h) is
+// the "don't restart the step timer for a negligible speed change"
+// threshold, shared with Stroke Testing's identical use of the same ramp.
+
 // Set by scheduler_pause(), consumed by scheduler_resume().
 static RunState _pausedFromState = RunState::IDLE;
 static bool _pausedM1Active = false, _pausedM2Active = false;
@@ -83,22 +99,27 @@ static void _stopMotorsHold() {
 // left toward MAX (right toward MIN, unless _firstStroke, where right has
 // nothing to do). leftForward=false: left toward MIN, right toward MAX
 // (always concurrent — only the very first half-stroke of a run has
-// _firstStroke true).
+// _firstStroke true). Starts each motor at STROKE_MIN_HZ, not
+// STROKE_RUN_HZ directly — scheduler_update()'s ramp takes it from there.
 static void _beginHalfStroke(bool leftForward) {
     _leftForward = leftForward;
 
+    _halfStrokeStartPos1 = motor_get_position(1);
     motor_set_dir(1, leftForward);
     motor_enable(1, true);
-    motor_set_speed(1, STROKE_RUN_HZ);
+    motor_set_speed(1, STROKE_MIN_HZ);
+    _lastCommandedHz1 = STROKE_MIN_HZ;
     motor_clear_limit(1);
     _m1Done = false;
 
     if (_firstStroke) {
         _m2Done = true;  // nothing for right to do concurrently this one time
     } else {
+        _halfStrokeStartPos2 = motor_get_position(2);
         motor_set_dir(2, !leftForward);
         motor_enable(2, true);
-        motor_set_speed(2, STROKE_RUN_HZ);
+        motor_set_speed(2, STROKE_MIN_HZ);
+        _lastCommandedHz2 = STROKE_MIN_HZ;
         motor_clear_limit(2);
         _m2Done = false;
     }
@@ -241,13 +262,11 @@ void scheduler_update() {
         // electrical noise from the stepper's own step pulses, not a
         // genuine closure; the ISR already stopped that motor's step
         // timer unconditionally either way. Same pattern as
-        // stroke_test_screen.cpp/motors_home().
-        if (!_m1Done && motor_limit_hit(1) && !motor_limit_hit_debounced(1)) {
-            motor_set_speed(1, STROKE_RUN_HZ);
-        }
-        if (!_m2Done && motor_limit_hit(2) && !motor_limit_hit_debounced(2)) {
-            motor_set_speed(2, STROKE_RUN_HZ);
-        }
+        // stroke_test_screen.cpp/motors_home(). Resumes at the current
+        // ramped speed (computed below), not straight back to
+        // STROKE_RUN_HZ — a sudden jump would defeat the point of ramping.
+        bool m1NoiseResume = !_m1Done && motor_limit_hit(1) && !motor_limit_hit_debounced(1);
+        bool m2NoiseResume = !_m2Done && motor_limit_hit(2) && !motor_limit_hit_debounced(2);
 
         // Stall check — SG_RESULT below threshold means high load (TMC
         // torque loss or a genuine mechanical jam). This is REAL mixing,
@@ -293,11 +312,31 @@ void scheduler_update() {
 
         if (!_m1Done) {
             int32_t p1 = motor_get_position(1);
+            int32_t stepsIn1 = p1 - _halfStrokeStartPos1;
+            if (stepsIn1 < 0) stepsIn1 = -stepsIn1;
+            int32_t stepsRemaining1 = _leftForward ? (MOTOR1_SOFT_LIMIT_MAX - p1) : (p1 - MOTOR1_SOFT_LIMIT_MIN);
+            uint32_t rampHz1 = motor_ramped_speed_hz(stepsIn1, stepsRemaining1, STROKE_RUN_HZ);
+            if (m1NoiseResume ||
+                (rampHz1 > _lastCommandedHz1 && rampHz1 - _lastCommandedHz1 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ) ||
+                (rampHz1 < _lastCommandedHz1 && _lastCommandedHz1 - rampHz1 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ)) {
+                motor_set_speed(1, rampHz1);
+                _lastCommandedHz1 = rampHz1;
+            }
             bool reached = _leftForward ? (p1 >= MOTOR1_SOFT_LIMIT_MAX) : (p1 <= MOTOR1_SOFT_LIMIT_MIN);
             if (reached) { motor_set_speed(1, 0); motor_enable(1, false); _m1Done = true; }
         }
         if (!_m2Done) {
             int32_t p2 = motor_get_position(2);
+            int32_t stepsIn2 = p2 - _halfStrokeStartPos2;
+            if (stepsIn2 < 0) stepsIn2 = -stepsIn2;
+            int32_t stepsRemaining2 = _leftForward ? (p2 - MOTOR2_SOFT_LIMIT_MIN) : (MOTOR2_SOFT_LIMIT_MAX - p2);
+            uint32_t rampHz2 = motor_ramped_speed_hz(stepsIn2, stepsRemaining2, STROKE_RUN_HZ);
+            if (m2NoiseResume ||
+                (rampHz2 > _lastCommandedHz2 && rampHz2 - _lastCommandedHz2 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ) ||
+                (rampHz2 < _lastCommandedHz2 && _lastCommandedHz2 - rampHz2 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ)) {
+                motor_set_speed(2, rampHz2);
+                _lastCommandedHz2 = rampHz2;
+            }
             bool reached = _leftForward ? (p2 <= MOTOR2_SOFT_LIMIT_MIN) : (p2 >= MOTOR2_SOFT_LIMIT_MAX);
             if (reached) { motor_set_speed(2, 0); motor_enable(2, false); _m2Done = true; }
         }

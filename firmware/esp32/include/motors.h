@@ -17,6 +17,19 @@ void motor_enable(uint8_t motor, bool en);
 // version of this file; ported to real step counting along with the rest
 // of the step-generation mechanism from a confirmed-working bench firmware.
 int32_t motor_get_position(uint8_t motor);
+
+// Trapezoidal accel/decel ramp speed, shared by the mixing loop
+// (scheduler.cpp) and Stroke Testing (stroke_test_screen.cpp) so both use
+// identical ramp logic rather than two separately-maintained copies.
+// Ramps STROKE_MIN_HZ -> cruiseHz over the first STROKE_ACCEL_STEPS
+// (config.h — both shared, mechanical properties of the ramp itself, not
+// specific to either caller), cruises, then back down to STROKE_MIN_HZ
+// over the last STROKE_ACCEL_STEPS before the target. For a move shorter
+// than 2*STROKE_ACCEL_STEPS, the same formula naturally forms a triangle
+// profile that never reaches cruiseHz, instead of needing separate logic
+// for that case. cruiseHz is the only thing callers vary (STROKE_RUN_HZ
+// for real mixing, MOTOR_STROKE_TEST_HZ for the bench test).
+uint32_t motor_ramped_speed_hz(int32_t stepsIn, int32_t stepsRemaining, uint32_t cruiseHz);
 void motor_reset_position(uint8_t motor);
 
 // Soft position limits — fixed firmware config (MOTOR1/2_SOFT_LIMIT_MIN/MAX

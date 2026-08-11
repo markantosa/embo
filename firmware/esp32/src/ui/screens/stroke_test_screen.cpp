@@ -88,12 +88,16 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
     ble_log("Motion > Stroke Testing: stroke %d/%d - %s (concurrent)",
             stroke, totalStrokes, label);
 
+    int32_t startPos1 = motor_get_position(1);
+    int32_t startPos2 = motor_get_position(2);
+    uint32_t lastHz1 = STROKE_MIN_HZ, lastHz2 = STROKE_MIN_HZ;
+
     motor_set_dir(1, leftForward);
     motor_enable(1, true);
-    motor_set_speed(1, MOTOR_STROKE_TEST_HZ);
+    motor_set_speed(1, STROKE_MIN_HZ);
     motor_set_dir(2, !leftForward);
     motor_enable(2, true);
-    motor_set_speed(2, MOTOR_STROKE_TEST_HZ);
+    motor_set_speed(2, STROKE_MIN_HZ);
 
     bool m1Done = false, m2Done = false;
     uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
@@ -108,12 +112,11 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
         // Resume it, or it just silently stalls until the 30s timeout —
         // this was the actual bug behind "concurrent leg did not
         // complete" failures. See motors_home() for the same pattern.
-        if (!m1Done && motor_limit_hit(1) && !motor_limit_hit_debounced(1)) {
-            motor_set_speed(1, MOTOR_STROKE_TEST_HZ);
-        }
-        if (!m2Done && motor_limit_hit(2) && !motor_limit_hit_debounced(2)) {
-            motor_set_speed(2, MOTOR_STROKE_TEST_HZ);
-        }
+        // Resumes at the current ramped speed (computed below), not
+        // straight back to full speed — a sudden jump would defeat the
+        // point of ramping.
+        bool m1NoiseResume = !m1Done && motor_limit_hit(1) && !motor_limit_hit_debounced(1);
+        bool m2NoiseResume = !m2Done && motor_limit_hit(2) && !motor_limit_hit_debounced(2);
 
         // Stall check — SG_RESULT below threshold means high load (TMC
         // torque loss or a genuine mechanical jam, either way something's
@@ -144,6 +147,16 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
 
         if (!m1Done) {
             int32_t p1 = motor_get_position(1);
+            int32_t stepsIn1 = p1 - startPos1;
+            if (stepsIn1 < 0) stepsIn1 = -stepsIn1;
+            int32_t stepsRemaining1 = leftForward ? (MOTOR1_SOFT_LIMIT_MAX - p1) : (p1 - MOTOR1_SOFT_LIMIT_MIN);
+            uint32_t rampHz1 = motor_ramped_speed_hz(stepsIn1, stepsRemaining1, MOTOR_STROKE_TEST_HZ);
+            if (m1NoiseResume ||
+                (rampHz1 > lastHz1 && rampHz1 - lastHz1 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ) ||
+                (rampHz1 < lastHz1 && lastHz1 - rampHz1 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ)) {
+                motor_set_speed(1, rampHz1);
+                lastHz1 = rampHz1;
+            }
             bool reached = leftForward ? (p1 >= MOTOR1_SOFT_LIMIT_MAX) : (p1 <= MOTOR1_SOFT_LIMIT_MIN);
             if (reached) {
                 motor_set_speed(1, 0);
@@ -155,6 +168,16 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
         }
         if (!m2Done) {
             int32_t p2 = motor_get_position(2);
+            int32_t stepsIn2 = p2 - startPos2;
+            if (stepsIn2 < 0) stepsIn2 = -stepsIn2;
+            int32_t stepsRemaining2 = leftForward ? (p2 - MOTOR2_SOFT_LIMIT_MIN) : (MOTOR2_SOFT_LIMIT_MAX - p2);
+            uint32_t rampHz2 = motor_ramped_speed_hz(stepsIn2, stepsRemaining2, MOTOR_STROKE_TEST_HZ);
+            if (m2NoiseResume ||
+                (rampHz2 > lastHz2 && rampHz2 - lastHz2 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ) ||
+                (rampHz2 < lastHz2 && lastHz2 - rampHz2 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ)) {
+                motor_set_speed(2, rampHz2);
+                lastHz2 = rampHz2;
+            }
             bool reached = leftForward ? (p2 <= MOTOR2_SOFT_LIMIT_MIN) : (p2 >= MOTOR2_SOFT_LIMIT_MAX);
             if (reached) {
                 motor_set_speed(2, 0);
@@ -250,9 +273,11 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
             // would report "at limit" before the motor ever took a step.
             ble_log("Motion > Stroke Testing: stroke %d/%d - left motor clockwise to max limit (alone)",
                     stroke, _strokeCount);
+            int32_t startPos1 = motor_get_position(1);
+            uint32_t lastHz1 = STROKE_MIN_HZ;
             motor_set_dir(1, true);
             motor_enable(1, true);
-            motor_set_speed(1, MOTOR_STROKE_TEST_HZ);
+            motor_set_speed(1, STROKE_MIN_HZ);
 
             uint32_t deadline = millis() + HOMING_TIMEOUT_MS;
             uint32_t lastProgressMs = millis();
@@ -260,10 +285,9 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
             bool stalled = false;
             while (motor_get_position(1) < MOTOR1_SOFT_LIMIT_MAX && millis() < deadline) {
                 // Same noise check/resume as _driveBothConcurrent() below —
-                // see that function's comment for why this matters here.
-                if (motor_limit_hit(1) && !motor_limit_hit_debounced(1)) {
-                    motor_set_speed(1, MOTOR_STROKE_TEST_HZ);
-                }
+                // resumes at the current ramped speed, not straight back
+                // to full speed.
+                bool noiseResume = motor_limit_hit(1) && !motor_limit_hit_debounced(1);
                 // Same stall check as _driveBothConcurrent() — see there
                 // for why this matters (catches a TMC torque loss or a
                 // genuine mechanical jam fast, instead of waiting the full
@@ -271,6 +295,17 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
                 if (motor_sg_result(1) < MOTOR_STALL_SG_THRESHOLD) {
                     stalled = true;
                     break;
+                }
+                int32_t p1 = motor_get_position(1);
+                int32_t stepsIn1 = p1 - startPos1;
+                if (stepsIn1 < 0) stepsIn1 = -stepsIn1;
+                int32_t stepsRemaining1 = MOTOR1_SOFT_LIMIT_MAX - p1;
+                uint32_t rampHz1 = motor_ramped_speed_hz(stepsIn1, stepsRemaining1, MOTOR_STROKE_TEST_HZ);
+                if (noiseResume ||
+                    (rampHz1 > lastHz1 && rampHz1 - lastHz1 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ) ||
+                    (rampHz1 < lastHz1 && lastHz1 - rampHz1 >= STROKE_RAMP_UPDATE_THRESHOLD_HZ)) {
+                    motor_set_speed(1, rampHz1);
+                    lastHz1 = rampHz1;
                 }
                 // Same reasoning as _driveBothConcurrent() — loop() (and
                 // its force_sensor_update()/uas_update() calls) is frozen

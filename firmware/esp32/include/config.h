@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.5"
+#define FIRMWARE_VERSION "0.6.6"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -229,6 +229,27 @@
 // opposed to calibration.h's sensor/model constants (how strokes map to
 // particle size) — kept separate on purpose.
 #define STROKE_RUN_HZ        8000   // step rate during a stroke 8000
+// Acceleration/deceleration ramp for stroke movement (scheduler.cpp only
+// — Stroke Testing, stroke_test_screen.cpp, still runs at a flat speed;
+// say if you want the ramp there too). Trapezoidal profile computed from
+// actual position each scheduler_update() call, not time — speed ramps
+// linearly from STROKE_MIN_HZ up to STROKE_RUN_HZ over the first
+// STROKE_ACCEL_STEPS of a half-stroke, cruises at STROKE_RUN_HZ, then
+// ramps back down to STROKE_MIN_HZ over the last STROKE_ACCEL_STEPS
+// before the target. For a half-stroke shorter than 2*STROKE_ACCEL_STEPS,
+// this naturally forms a triangle (never reaching STROKE_RUN_HZ) instead
+// of a trapezoid — same formula handles both cases. PLACEHOLDER —
+// STROKE_MIN_HZ/STROKE_ACCEL_STEPS aren't tuned against real mechanical
+// behavior yet (vibration, missed steps at too-fast a ramp, etc.); pick
+// reasonable starting points and adjust from bench testing.
+#define STROKE_MIN_HZ         500
+#define STROKE_ACCEL_STEPS    1000
+// Shared by both callers of motor_ramped_speed_hz() — only re-issue
+// motor_set_speed() if the ramp moved by at least this much, to avoid
+// restarting the step timer on every single check (scheduler_update()
+// runs every loop() iteration; the Stroke Testing loops check every 1ms)
+// for a negligible speed change.
+#define STROKE_RAMP_UPDATE_THRESHOLD_HZ 50
 #define MOTOR_JOG_HZ         2000    // step rate for manual jog moves — BLE MOVE and Settings > Motion > Jog
 
 // ── Sensor-to-physical-unit and control-loop calibration ────────────────────

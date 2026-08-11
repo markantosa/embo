@@ -222,6 +222,22 @@ int32_t motor_get_position(uint8_t motor) {
     return _axis(motor).position;  // exact ISR-incremented count, no settling needed
 }
 
+uint32_t motor_ramped_speed_hz(int32_t stepsIn, int32_t stepsRemaining, uint32_t cruiseHz) {
+    if (cruiseHz <= STROKE_MIN_HZ) return cruiseHz;  // nothing to ramp — avoids unsigned underflow below
+    if (stepsIn < 0) stepsIn = 0;
+    if (stepsRemaining < 0) stepsRemaining = 0;
+
+    uint32_t accelLimited = STROKE_MIN_HZ +
+        (uint32_t)(((int64_t)(cruiseHz - STROKE_MIN_HZ) * stepsIn) / STROKE_ACCEL_STEPS);
+    uint32_t decelLimited = STROKE_MIN_HZ +
+        (uint32_t)(((int64_t)(cruiseHz - STROKE_MIN_HZ) * stepsRemaining) / STROKE_ACCEL_STEPS);
+
+    uint32_t speed = accelLimited < decelLimited ? accelLimited : decelLimited;
+    if (speed > cruiseHz) speed = cruiseHz;
+    if (speed < STROKE_MIN_HZ) speed = STROKE_MIN_HZ;
+    return speed;
+}
+
 void motor_reset_position(uint8_t motor) {
     _axis(motor).position = 0;
 }

@@ -43,8 +43,11 @@ v0.6.5
 - motor stroke speed 8000hz
 - stroke test speed to 4000hz
 - homing pre nudge to 200steps
-- 
 
-v0.7.0 (goal) - acceleration ramp to improve motion, add dynamic speeds to improve torque performance during first few strokes and auto detect syringe inside using uas
+v0.6.6 (goal) - acceleration ramp to improve motion, add dynamic speeds to improve torque performance during first few strokes 
+- implemented adjustable acceleration ramp to improve motion system
+- current is now at 1000mA for torque and speed requirements
+
+v0.7.0 (goal) - auto detect syringe inside using uas
 
 
