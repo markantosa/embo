@@ -238,6 +238,22 @@ uint32_t motor_ramped_speed_hz(int32_t stepsIn, int32_t stepsRemaining, uint32_t
     return speed;
 }
 
+void motor_log_driver_status(uint8_t motor) {
+    TMC2209Stepper &drv = (motor == 1) ? _driver_m1 : _driver_m2;
+    // Each of these is its own UART transaction (TMCStepper library) —
+    // deliberately one-shot here, not something to call in a tight loop.
+    bool overtemp        = drv.ot();
+    bool overtempWarning  = drv.otpw();
+    bool shortToGroundA   = drv.s2ga();
+    bool shortToGroundB   = drv.s2gb();
+    bool openLoadA        = drv.ola();
+    bool openLoadB        = drv.olb();
+    bool standstill       = drv.stst();
+    ble_log("Motor %u driver status: OT=%d OTPW=%d S2GA=%d S2GB=%d OLA=%d OLB=%d STST=%d "
+            "(OT=overtemp shutdown, OTPW=overtemp warning, S2G=short-to-ground, OL=open-load, STST=standstill)",
+            motor, overtemp, overtempWarning, shortToGroundA, shortToGroundB, openLoadA, openLoadB, standstill);
+}
+
 void motor_reset_position(uint8_t motor) {
     _axis(motor).position = 0;
 }

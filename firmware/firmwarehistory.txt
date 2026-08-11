@@ -48,6 +48,10 @@ v0.6.6 (goal) - acceleration ramp to improve motion, add dynamic speeds to impro
 - implemented adjustable acceleration ramp to improve motion system
 - current is now at 1000mA for torque and speed requirements
 
+v0.6.7 
+- fixed random stopping with motion limit fine tuning
+- uart check on boot via serial
+
 v0.7.0 (goal) - auto detect syringe inside using uas
 
 

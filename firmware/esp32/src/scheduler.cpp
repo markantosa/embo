@@ -371,6 +371,13 @@ void scheduler_update() {
         if ((!_m1Done || !_m2Done) && millis() > _phaseDeadlineMs) {
             _stopMotorsHold();
             _state = RunState::FAULT;
+            // One-shot diagnostic read of the TMC2209's own internal
+            // fault flags — motors are already stopped by this point, so
+            // this isn't adding UART risk during active high-current
+            // stepping, unlike continuous polling (see
+            // motor_sg_result()'s history in this codebase).
+            if (!_m1Done) motor_log_driver_status(1);
+            if (!_m2Done) motor_log_driver_status(2);
             ble_log("Scheduler: TIMED OUT during mixing half-stroke at %lu strokes (M1 done=%d M2 done=%d) — motors stopped",
                     (unsigned long)_strokesDone, _m1Done, _m2Done);
             return;

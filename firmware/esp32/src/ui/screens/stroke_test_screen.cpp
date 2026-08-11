@@ -238,6 +238,12 @@ static bool _driveBothConcurrent(bool leftForward, int stroke, int totalStrokes,
     if (!m2Done) { motor_set_speed(2, 0); motor_enable(2, false); }
 
     if (!m1Done || !m2Done) {
+        // One-shot diagnostic read of the TMC2209's own internal fault
+        // flags — motors are already stopped by this point, so this isn't
+        // adding UART risk during active high-current stepping, unlike
+        // continuous polling (see motor_sg_result()'s history above).
+        if (!m1Done) motor_log_driver_status(1);
+        if (!m2Done) motor_log_driver_status(2);
         snprintf(_lastFailureReason, sizeof(_lastFailureReason),
                  "TIMED OUT - %s (left=%ld right=%ld)",
                  label, (long)motor_get_position(1), (long)motor_get_position(2));
@@ -370,6 +376,7 @@ void StrokeTestScreen::_runTest(ScreenManager &mgr) {
                 return;
             }
             if (motor_get_position(1) < MOTOR1_SOFT_LIMIT_MAX) {
+                motor_log_driver_status(1);
                 snprintf(_lastFailureReason, sizeof(_lastFailureReason),
                          "TIMED OUT - left alone (left=%ld)", (long)motor_get_position(1));
                 ble_log("Motion > Stroke Testing: %s in stroke %d - force1=%.2fg",

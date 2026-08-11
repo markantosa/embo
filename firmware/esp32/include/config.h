@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.6"
+#define FIRMWARE_VERSION "0.6.7"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -116,9 +116,9 @@
 // safe travel range is known). Enforced directly in the step-generation
 // ISR (motors.cpp) for every motor movement path, not just one.
 #define MOTOR1_SOFT_LIMIT_MIN   0
-#define MOTOR1_SOFT_LIMIT_MAX   16000
+#define MOTOR1_SOFT_LIMIT_MAX   15000
 #define MOTOR2_SOFT_LIMIT_MIN   0
-#define MOTOR2_SOFT_LIMIT_MAX   16000
+#define MOTOR2_SOFT_LIMIT_MAX   15000
 
 // Settings > Motion > Test Both Motors. One "stroke" for this bench test =
 // left motor 0→max then (concurrently) left back to 0 while right goes
@@ -182,7 +182,7 @@
 // consistent starting condition regardless of where the motor happened to
 // be sitting at boot (position is unknown pre-home). Both motors nudge
 // CONCURRENTLY, same as the real approach.
-#define HOMING_PRE_NUDGE_STEPS 200
+#define HOMING_PRE_NUDGE_STEPS 400
 // Abort homing if limit not reached within this time.
 #define HOMING_TIMEOUT_MS    30000
 // Direction toward the limit switch, intended to be anticlockwise —
@@ -219,7 +219,7 @@
 // (MIXING_MAX_STROKES_SAFETY_CAP, calibration.h), a stall/timeout fault,
 // or an emergency stop — it will NOT stop on reaching the target size.
 // Remember to set this back to 1 once done testing.
-#define UAS_SIZE_CHECK_ENABLED 0
+#define UAS_SIZE_CHECK_ENABLED 1
 #define UAS_SIZE_IN_SPEC_HOLD_MS   1000
 
 // ── UI input timing (used by ui.cpp) ────────────────────────────────────────
@@ -246,7 +246,7 @@
 // are motion-profile constants (how a stroke is physically executed), as
 // opposed to calibration.h's sensor/model constants (how strokes map to
 // particle size) — kept separate on purpose.
-#define STROKE_RUN_HZ        4000   // step rate during a stroke 8000
+#define STROKE_RUN_HZ        8000   // step rate during a stroke 8000
 // Acceleration/deceleration ramp for stroke movement (scheduler.cpp only
 // — Stroke Testing, stroke_test_screen.cpp, still runs at a flat speed;
 // say if you want the ramp there too). Trapezoidal profile computed from
