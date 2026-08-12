@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>EMBO UAS Frequency Sweep Dashboard</title>
+<title>EMBO Telemetry Dashboard</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -88,8 +88,8 @@
 </head>
 <body>
 
-<h1>EMBO UAS Frequency Sweep Dashboard</h1>
-<div class="sub">Standalone UAS bench-test rig — run an automated frequency sweep and get both a pre-averaged summary and the full raw labelled data. Other v3.4 sensors are also shown for reference.</div>
+<h1>EMBO Telemetry Dashboard</h1>
+<div class="sub">Live readings from every EMBO v3.4 sensor over BLE — UAS acoustic chain, load cells, and the optical sensor pair — plus motor jog/home controls and the automated UAS frequency sweep.</div>
 
 <div class="top-bar">
   <span class="status-dot" id="statusDot"></span>
@@ -170,11 +170,11 @@
   </div>
 </div>
 
-<div class="section-title">Turbidity Pair (§9)</div>
+<div class="section-title">Optical Sensors</div>
 <div class="grid">
   <div class="card">
-    <h2>APDS9960 ALS <span class="badge" id="apdsBadge">--</span></h2>
-    <div class="unit">Clear channel, transmission mode, 0x39</div>
+    <h2>Optical Sensor 1 <span class="badge" id="apdsBadge">--</span></h2>
+    <div class="unit">APDS9960, clear channel, transmission mode, 0x39</div>
     <div class="reading">
       <span class="label">Counts</span>
       <span class="value" id="alsValue">--</span>
@@ -182,36 +182,26 @@
     <div class="spark-wrap"><canvas class="spark" id="alsSpark"></canvas></div>
   </div>
   <div class="card">
-    <h2>MAX30102 IR <span class="badge" id="maxBadge">--</span></h2>
-    <div class="unit">Backscatter, 18-bit, 0x57</div>
+    <h2>Optical Sensor 2 <span class="badge" id="maxBadge">--</span></h2>
+    <div class="unit">MAX30102, backscatter, 18-bit, 0x57</div>
     <div class="reading">
-      <span class="label">Counts</span>
+      <span class="label">IR</span>
       <span class="value" id="irValue">--</span>
     </div>
     <div class="spark-wrap"><canvas class="spark" id="irSpark"></canvas></div>
-  </div>
-  <div class="card">
-    <h2>MAX30102 RED</h2>
-    <div class="unit">Backscatter, 18-bit, 0x57</div>
-    <div class="reading">
-      <span class="label">Counts</span>
+    <div class="reading" style="margin-top:10px">
+      <span class="label">Red</span>
       <span class="value" id="redValue">--</span>
     </div>
     <div class="spark-wrap"><canvas class="spark" id="redSpark"></canvas></div>
   </div>
 </div>
 
-<div class="section-title">Motors &amp; StallGuard</div>
+<div class="section-title">Motors</div>
 <div class="grid">
 
   <div class="card" data-motor="0">
     <h2>Motor 1</h2>
-    <div class="reading">
-      <span class="label">SG_RESULT</span>
-      <span class="value" id="sg1Value">--</span>
-    </div>
-    <div class="bar-track"><div class="bar-fill" id="sg1Bar"></div></div>
-    <div class="spark-wrap"><canvas class="spark" id="sg1Spark"></canvas></div>
     <div class="switch-row" style="margin-top:10px">
       <span class="label">Limit switch</span>
       <span class="badge" id="limit1Badge">--</span>
@@ -235,12 +225,6 @@
 
   <div class="card" data-motor="1">
     <h2>Motor 2</h2>
-    <div class="reading">
-      <span class="label">SG_RESULT</span>
-      <span class="value" id="sg2Value">--</span>
-    </div>
-    <div class="bar-track"><div class="bar-fill" id="sg2Bar"></div></div>
-    <div class="spark-wrap"><canvas class="spark" id="sg2Spark"></canvas></div>
     <div class="switch-row" style="margin-top:10px">
       <span class="label">Limit switch</span>
       <span class="badge" id="limit2Badge">--</span>
@@ -627,8 +611,6 @@ const sparks = {
   als: new Sparkline(document.getElementById('alsSpark')),
   ir: new Sparkline(document.getElementById('irSpark')),
   red: new Sparkline(document.getElementById('redSpark')),
-  sg1: new Sparkline(document.getElementById('sg1Spark')),
-  sg2: new Sparkline(document.getElementById('sg2Spark')),
 };
 
 async function connect() {
@@ -719,13 +701,6 @@ function onTelemetry(event) {
   document.getElementById('uasFreqValue').textContent = (uasFreq / 1e6).toFixed(4) + ' MHz';
   document.getElementById('uasBar').style.width = Math.min(100, (uas / 3.3) * 100) + '%';
   sparks.uas.push(uas);
-
-  document.getElementById('sg1Value').textContent = sg1;
-  document.getElementById('sg1Bar').style.width = Math.min(100, (sg1 / 1023) * 100) + '%';
-  sparks.sg1.push(sg1);
-  document.getElementById('sg2Value').textContent = sg2;
-  document.getElementById('sg2Bar').style.width = Math.min(100, (sg2 / 1023) * 100) + '%';
-  sparks.sg2.push(sg2);
 
   document.getElementById('force1Value').textContent = force1;
   sparks.force1.push(force1);
