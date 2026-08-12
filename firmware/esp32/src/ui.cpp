@@ -12,6 +12,7 @@
 #include "ui/screens/viscosity_menu_screen.h"
 #include "ui/screens/warning_screen.h"
 #include "ui/screens/mixing_running_screen.h"
+#include "ui/screens/viscosity_mixing_running_screen.h"
 #include "ui/screens/end_screen.h"
 #include "ui/screens/verifying_screen.h"
 #include "ui/screens/error_screen.h"
@@ -38,8 +39,11 @@
 // No other file needs to know it exists.
 //
 // Screen graph (see the flowchart this was built from):
-//   Insert syringe -> Start Menu -> [Start] -> Agent selection -> Target type -> Mixing Menu -> Warning
-//                                                                                              -> Mixing Running -> End -> (back to Start Menu)
+//   Insert syringe -> Start Menu -> [Start] -> Agent selection -> Target type
+//     -> Mixing Menu (Size)      -> Warning -> Mixing Running (Size)      -> End -> (back to Start Menu)
+//     -> Viscosity Menu          -> Warning -> Viscosity Mixing Running   -> End -> (back to Start Menu)
+//   Warning picks which of the two Running screens to goTo() based on
+//   mixing_options_get_target_type() at confirm time — see warning_screen.cpp.
 //                                -> [Settings] -> [Motion] -> [Home Motors]
 //                                              -> [Developer mode] -> [UAS debug mode] (BLE toggle)
 //                                -> [Camera feature] -> Verifying (camera size check)
@@ -59,6 +63,7 @@ static MixingMenuScreen      _mixingMenuScreen;
 static ViscosityMenuScreen   _viscosityMenuScreen;
 static WarningScreen         _warningScreen;
 static MixingRunningScreen   _mixingRunningScreen;
+static ViscosityMixingRunningScreen _viscosityMixingRunningScreen;
 static EndScreen             _endScreen;
 static PlaceholderScreen     _insertSyringeScreen;
 static StrokeTestScreen      _strokeTestScreen;
@@ -283,8 +288,9 @@ void ui_init() {
     // existing static screens (see kDeveloperModeItems above).
     _mixingMenuScreen.wire(_warningScreen, _verifyingScreen);
     _viscosityMenuScreen.wire(_warningScreen, _verifyingScreen);
-    _warningScreen.wire(_mixingRunningScreen);
+    _warningScreen.wire(_mixingRunningScreen, _viscosityMixingRunningScreen);
     _mixingRunningScreen.wire(_endScreen);
+    _viscosityMixingRunningScreen.wire(_endScreen);
     _endScreen.wire(_startMenuScreen, _verifyingScreen);
     Serial.println("UI_INIT: screens wired, starting screen manager");
 

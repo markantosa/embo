@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.7.3"
+#define FIRMWARE_VERSION "0.7.5"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -209,20 +209,19 @@
 #define TARGET_SIZE_UM_STEP     10    // per encoder detent
 
 // Viscosity target — mirrors the particle-size constants above, same
-// pattern (min/max/default/step). PLACEHOLDER units (centipoise) and
-// range — not based on any real clinical/product spec, just a reasonable
-// starting shape for the UI. IMPORTANT: unlike particle size, there is no
-// viscosity measurement or equation anywhere in this firmware — the
-// actual mixing stop condition (scheduler.cpp) is still purely the
-// UAS-voltage particle-size equation regardless of which target type was
-// selected. This value is stored and displayed (mixing_options.cpp), not
-// yet wired into any control logic — same "cosmetic for now" pattern
-// already established here for the syringe preset (see
-// mixing_menu_screen.h).
-#define TARGET_VISCOSITY_CP_MIN      1
-#define TARGET_VISCOSITY_CP_MAX      1000
-#define TARGET_VISCOSITY_CP_DEFAULT  100
-#define TARGET_VISCOSITY_CP_STEP     5
+// pattern (min/max/default/step). Units: Pa*s (matching
+// calib_estimate_viscosity_pa_s()'s native output unit directly — no cP
+// conversion anymore, this used to be centipoise before v0.7.5). Range is
+// a straight unit conversion of the original 1-1000 cP placeholder range
+// (÷1000), NOT adjusted to the force equation's actual achievable range
+// (~0-0.0494 Pa*s at the current VISCOSITY_EQ_SLOPE/INTERCEPT,
+// calibration.h) — a target above that ceiling still can't be reached via
+// the equation, same caveat as before, just carried over rather than
+// silently narrowed here.
+#define TARGET_VISCOSITY_PA_S_MIN      0.001f
+#define TARGET_VISCOSITY_PA_S_MAX      1.0f
+#define TARGET_VISCOSITY_PA_S_DEFAULT  0.1f
+#define TARGET_VISCOSITY_PA_S_STEP     0.005f
 // "In spec" window half-width around the setpoint — used by
 // VerifyingScreen's camera-check spec test. Placeholder — see
 // firmware/CALIBRATION.md §8 before trusting for that purpose.

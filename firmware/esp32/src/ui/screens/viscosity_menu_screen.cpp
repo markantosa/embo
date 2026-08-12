@@ -32,7 +32,7 @@ void ViscosityMenuScreen::_draw(bool forceFull) {
     // forceFull, since the target value changes with encoder rotation.
     tft.fillRect(0, 80, tft.width(), 100, TFT_WHITE);
     char buf[16];
-    snprintf(buf, sizeof(buf), "%u cP", mixing_options_get_viscosity_target_cp());
+    snprintf(buf, sizeof(buf), "%.4f Pa*s", mixing_options_get_viscosity_target_pa_s());
     tft.setFont(&fonts::FreeSansBold24pt7b);
     ui_display_draw_centered(buf, 95, TFT_BLACK, 1);
     tft.setFont(&fonts::FreeSans9pt7b);
@@ -48,10 +48,10 @@ void ViscosityMenuScreen::update(ScreenManager &mgr, bool forceFull) {
 
     int step = ui_input_read_encoder_step();
     if (step != 0) {
-        int32_t newTarget = (int32_t)mixing_options_get_viscosity_target_cp() + step * TARGET_VISCOSITY_CP_STEP;
-        if (newTarget < TARGET_VISCOSITY_CP_MIN) newTarget = TARGET_VISCOSITY_CP_MIN;
-        if (newTarget > TARGET_VISCOSITY_CP_MAX) newTarget = TARGET_VISCOSITY_CP_MAX;
-        mixing_options_set_viscosity_target_cp((uint16_t)newTarget);
+        float newTarget = mixing_options_get_viscosity_target_pa_s() + (float)step * TARGET_VISCOSITY_PA_S_STEP;
+        if (newTarget < TARGET_VISCOSITY_PA_S_MIN) newTarget = TARGET_VISCOSITY_PA_S_MIN;
+        if (newTarget > TARGET_VISCOSITY_PA_S_MAX) newTarget = TARGET_VISCOSITY_PA_S_MAX;
+        mixing_options_set_viscosity_target_pa_s(newTarget);
         needsRedraw = true;
     }
 

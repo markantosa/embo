@@ -78,8 +78,14 @@ v0.7.2
 - home pre nudge to 400 steps
 
 v0.7.3
-- add loadcell loop equation
+- add loadcell loop equation (right loadcell)
 - updated some values in config
+
+v0.7.4 
+- fixed mixing loop distinction and screen distinction
+
+v0.7.5
+- changed viscosity units to Pas
 
 v0.8.0 (goal) - auto detect syringe inside using uas
 

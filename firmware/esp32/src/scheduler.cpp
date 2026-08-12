@@ -64,7 +64,8 @@ static bool _stopRequested = false;   // graceful stop — finish current half-s
 static uint32_t _strokesDone = 0;
 static uint32_t _targetStrokeCount = 0;  // computed once at scheduler_start() — see calib_estimate_stroke_count_for_target(). SIZE target type only — see _isViscosityRun below.
 static bool _isViscosityRun = false;     // cached at scheduler_start() from mixing_options_get_target_type() — which stop condition applies for this run
-static float _lastMeasuredViscosityCp = 0.0f;  // for live display (MixingRunningScreen/EndScreen), same pattern as _lastMeasuredUm
+static float _lastMeasuredViscosityPaS = 0.0f;  // for live display (MixingRunningScreen/EndScreen), same pattern as _lastMeasuredUm
+static float _lastMeasuredForceGrams = 0.0f;   // the equation's raw input, for display alongside the computed Pa*s output
 static bool _hitSafetyCap = false;
 
 // UAS-voltage size reading — kept running continuously for live display
@@ -184,7 +185,8 @@ bool scheduler_start() {
     // mixing_options_get_target_type() rather than re-read every
     // scheduler_update() call.
     _isViscosityRun = (mixing_options_get_target_type() == TargetType::VISCOSITY);
-    _lastMeasuredViscosityCp = 0.0f;
+    _lastMeasuredViscosityPaS = 0.0f;
+    _lastMeasuredForceGrams = 0.0f;
 
     if (_isViscosityRun) {
         // No stroke-count equation exists for Viscosity (that one's
@@ -193,8 +195,8 @@ bool scheduler_start() {
         // STROKING case below. _targetStrokeCount stays 0 and is simply
         // not consulted for this run (see the stroke-completion check).
         _targetStrokeCount = 0;
-        ble_log("Scheduler: run started, target=%u cP (viscosity, force-gated stop, baseline=%.3fV for display only)",
-                mixing_options_get_viscosity_target_cp(), _baselineVoltageVolts);
+        ble_log("Scheduler: run started, target=%.4f Pa*s (viscosity, force-gated stop, baseline=%.3fV for display only)",
+                mixing_options_get_viscosity_target_pa_s(), _baselineVoltageVolts);
     } else {
         // The actual stop condition for a Size run — computed once here
         // from the target size, not re-evaluated during the run. See the
@@ -288,7 +290,8 @@ float   scheduler_get_last_fused_size_um()      { return _lastMeasuredUm; }
 uint8_t scheduler_get_last_fused_num_channels() { return _lastMeasuredUm > 0.0f ? 1 : 0; }
 float   scheduler_get_last_measured_voltage()   { return _lastMeasuredVoltageVolts; }
 float   scheduler_get_baseline_voltage()        { return _baselineVoltageVolts; }
-float   scheduler_get_last_measured_viscosity_cp() { return _lastMeasuredViscosityCp; }
+float   scheduler_get_last_measured_viscosity_pa_s() { return _lastMeasuredViscosityPaS; }
+float   scheduler_get_last_measured_force_grams()  { return _lastMeasuredForceGrams; }
 
 float   scheduler_get_fit_k()          { return calib_breakage_get_fit().k; }
 float   scheduler_get_fit_d0_um()      { return calib_breakage_get_fit().d0Um; }
@@ -379,15 +382,16 @@ void scheduler_update() {
             bool inWindow = (p2 >= VISCOSITY_FORCE_READ_POS_MIN && p2 <= VISCOSITY_FORCE_READ_POS_MAX);
             if (inWindow) {
                 float forceGrams = force_sensor_get_grams_2();
+                _lastMeasuredForceGrams = forceGrams;
                 float viscosityPaS = calib_estimate_viscosity_pa_s(forceGrams);
-                _lastMeasuredViscosityCp = viscosityPaS * 1000.0f;  // Pa*s -> cP, matching mixing_options_get_viscosity_target_cp()'s unit
-                if (_lastMeasuredViscosityCp <= (float)mixing_options_get_viscosity_target_cp()) {
+                _lastMeasuredViscosityPaS = viscosityPaS;  // native unit — no conversion needed (was Pa*s -> cP before v0.7.5)
+                if (_lastMeasuredViscosityPaS <= mixing_options_get_viscosity_target_pa_s()) {
                     _stopMotorsHold();
                     _hitSafetyCap = false;
                     _state = RunState::DONE;
-                    ble_log("Scheduler: viscosity target reached (measured=%.1fcP, target=%ucP, "
+                    ble_log("Scheduler: viscosity target reached (measured=%.4f Pa*s, target=%.4f Pa*s, "
                             "force=%.2fg) at %lu strokes",
-                            _lastMeasuredViscosityCp, mixing_options_get_viscosity_target_cp(),
+                            _lastMeasuredViscosityPaS, mixing_options_get_viscosity_target_pa_s(),
                             forceGrams, (unsigned long)_strokesDone);
                     return;
                 }
@@ -459,9 +463,9 @@ void scheduler_update() {
         if (_stopRequested) {
             _state = RunState::IDLE;
             _stopRequested = false;
-            ble_log("Scheduler: stopped (graceful) at %lu strokes, last measured=%.1f%s",
-                    (unsigned long)_strokesDone, _isViscosityRun ? _lastMeasuredViscosityCp : _lastMeasuredUm,
-                    _isViscosityRun ? "cP" : "um");
+            ble_log("Scheduler: stopped (graceful) at %lu strokes, last measured=%.3f%s",
+                    (unsigned long)_strokesDone, _isViscosityRun ? _lastMeasuredViscosityPaS : _lastMeasuredUm,
+                    _isViscosityRun ? " Pa*s" : "um");
         } else if (!_isViscosityRun && _strokesDone >= _targetStrokeCount) {
             // Size run only — Viscosity's stop condition already returned
             // earlier in this function (the position-gated force check
@@ -475,8 +479,8 @@ void scheduler_update() {
             _state = RunState::DONE;
             if (_isViscosityRun) {
                 ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before viscosity target "
-                        "reached; target=%ucP, last measured=%.1fcP. Check calibration/equation range.",
-                        MIXING_MAX_STROKES_SAFETY_CAP, mixing_options_get_viscosity_target_cp(), _lastMeasuredViscosityCp);
+                        "reached; target=%.4f Pa*s, last measured=%.4f Pa*s. Check calibration/equation range.",
+                        MIXING_MAX_STROKES_SAFETY_CAP, mixing_options_get_viscosity_target_pa_s(), _lastMeasuredViscosityPaS);
             } else {
                 ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before target stroke count "
                         "(%lu) reached; target=%uum, last measured=%.1fum. Check calibration.",

@@ -4,7 +4,7 @@
 static SyringeAgent _agent = SyringeAgent::Gelfoam;
 static SyringeType _syringetype = SyringeType::Terumo;
 static TargetType   _targetType = TargetType::SIZE;
-static uint16_t _viscosityTargetCp = TARGET_VISCOSITY_CP_DEFAULT;
+static float _viscosityTargetPaS = TARGET_VISCOSITY_PA_S_DEFAULT;
 
 SyringeAgent mixing_options_get_agent() { return _agent; }
 void mixing_options_set_agent(SyringeAgent agent) { _agent = agent; }
@@ -23,9 +23,9 @@ const char *mixing_options_target_type_label() {
     return _targetType == TargetType::SIZE ? "Target size" : "Target viscosity";
 }
 
-uint16_t mixing_options_get_viscosity_target_cp() { return _viscosityTargetCp; }
-void mixing_options_set_viscosity_target_cp(uint16_t cp) {
-    if (cp < TARGET_VISCOSITY_CP_MIN) cp = TARGET_VISCOSITY_CP_MIN;
-    if (cp > TARGET_VISCOSITY_CP_MAX) cp = TARGET_VISCOSITY_CP_MAX;
-    _viscosityTargetCp = cp;
+float mixing_options_get_viscosity_target_pa_s() { return _viscosityTargetPaS; }
+void mixing_options_set_viscosity_target_pa_s(float paS) {
+    if (paS < TARGET_VISCOSITY_PA_S_MIN) paS = TARGET_VISCOSITY_PA_S_MIN;
+    if (paS > TARGET_VISCOSITY_PA_S_MAX) paS = TARGET_VISCOSITY_PA_S_MAX;
+    _viscosityTargetPaS = paS;
 }

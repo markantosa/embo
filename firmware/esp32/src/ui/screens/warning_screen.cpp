@@ -1,9 +1,11 @@
 #include "warning_screen.h"
 #include "mixing_running_screen.h"
+#include "viscosity_mixing_running_screen.h"
 #include "ui_screen_manager.h"
 #include "ui_input.h"
 #include "ui_display.h"
 #include "scheduler.h"
+#include "mixing_options.h"
 
 static const TouchButton kBackButton = { 20, 260, 100, 40, "Back" };
 
@@ -24,11 +26,18 @@ void WarningScreen::update(ScreenManager &mgr, bool forceFull) {
     if (forceFull) _draw();
 
     ButtonEvent ev = ui_input_poll_enc_sw();
-    if (ev == ButtonEvent::SHORT_PRESS && _runningScreen) {
+    if (ev == ButtonEvent::SHORT_PRESS) {
         // Homing (and scheduler_start() itself) now happens from
-        // MixingRunningScreen::onEnter(), AFTER the screen has actually
-        // switched — not here, blocking on this screen. Just navigate.
-        mgr.goTo(_runningScreen);
+        // MixingRunningScreen/ViscosityMixingRunningScreen::onEnter(),
+        // AFTER the screen has actually switched — not here, blocking on
+        // this screen. Just navigate to whichever one matches the
+        // current target type.
+        Screen *target = (mixing_options_get_target_type() == TargetType::VISCOSITY)
+            ? static_cast<Screen *>(_viscosityRunningScreen)
+            : static_cast<Screen *>(_sizeRunningScreen);
+        if (target) {
+            mgr.goTo(target);
+        }
         return;
     }
     // Long-press as a back fallback while touch is unavailable — see

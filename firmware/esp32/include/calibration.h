@@ -197,9 +197,10 @@ uint32_t calib_estimate_stroke_count_for_target(uint16_t targetSizeUm);
 #define VISCOSITY_EQ_SLOPE       -1.66e-5f
 #define VISCOSITY_EQ_INTERCEPT    0.0494f
 
-// Returns viscosity in Pa*s (NOT centipoise — mixing_options_get_viscosity_target_cp()
-// is in cP; multiply this result by 1000 to compare against that). Clamped
-// to >= 0 — the equation's slope is negative, so a large enough force
+// Returns viscosity in Pa*s — matches mixing_options_get_viscosity_target_pa_s()'s
+// unit directly now (was centipoise, requiring a x1000 conversion, before
+// v0.7.5). Clamped to >= 0 — the equation's slope is negative, so a large
+// enough force
 // input would otherwise compute a negative (nonsensical) viscosity.
 float calib_estimate_viscosity_pa_s(float forceGrams);
 
