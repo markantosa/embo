@@ -32,13 +32,19 @@ static bool _timed_out         = false;
 static uint32_t _capture_sent_ms = 0;
 
 void rpi_uart_init() {
+    // Default RX ring buffer is only 256 bytes — nowhere near enough to
+    // survive a stall elsewhere in loop() (e.g. a slow HX711 read) during
+    // the ~16KB raw-image transfer at 921600 baud. Undersized here caused
+    // visibly corrupted/shifted images (dropped bytes desync every
+    // subsequent pixel). Must be set before begin().
+    _rpi.setRxBufferSize(RPI_IMG_MAX_W * RPI_IMG_MAX_H + 256);
     _rpi.begin(BAUD_RPI, SERIAL_8N1, PIN_RPI_RX, PIN_RPI_TX);
 }
 
 static void _parse_line() {
     // "IMG <width> <height>" — switches the reader into binary mode for
     // the next width*height bytes, see rpi_uart_update(). Checked before
-    // SIZE since it's the primary path now (both arrive per capture).
+    // SIZE since it's the prototype's primary path (see rpi_uart.h).
     unsigned int w, h;
     if (sscanf(_buf, "IMG %u %u", &w, &h) == 2) {
         if (w > RPI_IMG_MAX_W || h > RPI_IMG_MAX_H || w == 0 || h == 0) {

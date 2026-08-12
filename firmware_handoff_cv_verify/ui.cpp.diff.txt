@@ -1,0 +1,11 @@
+47c47
+< //                                -> [Camera feature] -> mount check -> (stub, "developing in progress")
+---
+> //                                -> [Camera feature] -> mount check -> Verifying (camera size check)
+66d65
+< static PlaceholderScreen     _cameraStubScreen;
+280,281c279
+<     _cameraMountScreen.setConfirmTarget(&_cameraStubScreen, true);  // push — Back pops to Start Menu
+<     _cameraStubScreen.configure("Camera Feature", "Feature idea developing in progress", true);
+---
+>     _cameraMountScreen.setConfirmTarget(&_verifyingScreen, true);  // push — VerifyingScreen pops back here

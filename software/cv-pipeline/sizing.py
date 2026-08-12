@@ -1,16 +1,15 @@
-"""Equivalent Circular Diameter (+ Feret/solidity) sizing from instance
-masks. STUB — not implemented.
+"""Equivalent Circular Diameter (ECD) sizing from instance-segmentation
+polygons, per ISO 13322 / ISO 9276-6 (area-equivalent circle diameter) —
+NOT a bounding-box/Feret approximation, since gelatin/collagen fragments
+are irregular ("snowflake"-like), not circular, so those would misrepresent
+size.
 
-See SOFTWARE_TODO.md Layer 3 task 8 and
-docs/EMBO_UAS_CV_Technical_Advisory.txt section 2 Problem C.
-
-Gelatin/collagen fragments are irregular ("snowflake"-like), not circular,
-so a naive bounding-box diameter isn't well-defined. ECD (diameter of a
-circle with equal projected area, per ISO 13322 / ISO 9276-6) is the
-metric to implement here, not a placeholder approximation — a fake sizing
-formula would silently poison the PID target check on the firmware side.
+See docs/EMBO_UAS_CV_Technical_Advisory.txt section 2 Problem C for the
+fuller reasoning this was originally scoped against.
 """
 from dataclasses import dataclass
+
+import numpy as np
 
 
 @dataclass
@@ -18,18 +17,42 @@ class SizeStats:
     median_um: int
     iqr_um: int
     # Feret diameter (min/max) and solidity are useful secondary signals
-    # (see advisory) but are NOT sent over UART yet — see SOFTWARE_TODO.md
-    # task 9 before adding fields to the firmware protocol.
+    # (see advisory) but are NOT sent over UART — the wire protocol
+    # (firmware/esp32/include/rpi_uart.h) only carries median+IQR.
 
 
-def compute_ecd_stats(masks, um_per_pixel: float) -> SizeStats:
-    """Compute ECD median/IQR from a list of per-particle instance masks.
+def _polygon_area_px(points: np.ndarray) -> float:
+    """Shoelace formula. points is an (N, 2) array of (x, y) pixel coords."""
+    x = points[:, 0]
+    y = points[:, 1]
+    return 0.5 * abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
 
-    TODO (Layer 3 task 8): implement per ISO 13322 / ISO 9276-6. Requires
-    `um_per_pixel` calibrated against a known reference (e.g. glass beads
-    of known diameter) before any output here can be trusted — see the
-    task 8 verification gate in SOFTWARE_TODO.md.
+
+def compute_ecd_stats(masks: list, um_per_pixel: float) -> SizeStats:
+    """Compute ECD median/IQR from a list of per-particle polygons (each an
+    (N, 2) array of pixel-coordinate points, see detection.py).
+
+    Raises ValueError if masks is empty or none have positive area —
+    callers must treat "no particles detected" as a distinct case from a
+    successful zero-particle reading, not silently send a fabricated
+    SIZE 0 0 over UART.
     """
-    raise NotImplementedError(
-        "compute_ecd_stats() not implemented — see SOFTWARE_TODO.md Layer 3 task 8"
-    )
+    if not masks:
+        raise ValueError("compute_ecd_stats() called with no detected particles")
+
+    ecds_um = []
+    for poly in masks:
+        area_px2 = _polygon_area_px(poly)
+        if area_px2 <= 0:
+            continue
+        ecd_px = 2.0 * np.sqrt(area_px2 / np.pi)
+        ecds_um.append(ecd_px * um_per_pixel)
+
+    if not ecds_um:
+        raise ValueError("compute_ecd_stats() found no particles with positive area")
+
+    arr = np.array(ecds_um)
+    median = float(np.median(arr))
+    q75, q25 = np.percentile(arr, [75, 25])
+    iqr = float(q75 - q25)
+    return SizeStats(median_um=round(median), iqr_um=round(iqr))

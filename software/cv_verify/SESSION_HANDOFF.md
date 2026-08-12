@@ -1,3 +1,85 @@
+---
+
+## Update 2026-08-12 — Roboflow PoC wiring (detection/sizing no longer stubs)
+
+**What changed this session:**
+- Trained model exists: Roboflow `vincent-santosa/particle-size-ecd/3`
+  (RF-DETR Small, instance segmentation). Modest metrics (mAP@50 51.5%,
+  F1 53.3% on a 10-image test set — small sample, don't over-trust the
+  precision of these numbers) but user explicitly chose to proceed to a
+  PoC rather than spend more time improving the model first.
+- **Local/offline inference is blocked** — "weights export not included"
+  on the current Roboflow plan (confirmed live, hit the paywall dialog).
+  So this PoC uses Roboflow's **hosted Serverless Cloud API**
+  (`https://serverless.roboflow.com`) instead — the Pi needs internet
+  connectivity at capture time, not just during setup. Revisit local
+  inference if the plan is ever upgraded or offline becomes a hard
+  requirement.
+- `../cv-pipeline/detection.py` and `../cv-pipeline/sizing.py` are no
+  longer `NotImplementedError` stubs — implemented for real:
+  - `detection.py`: `ParticleDetector.detect(frame)` calls the hosted API
+    via `inference_sdk.InferenceHTTPClient`, returns a list of polygons
+    (each an (N,2) pixel-coord array). Also added `draw_overlay(image,
+    masks)` — draws polygon outlines onto a greyscale copy, used to
+    produce the "photo with segmentation blobs" now sent to firmware.
+  - `sizing.py`: `compute_ecd_stats()` implemented per ISO 13322/9276-6
+    (shoelace polygon area -> equivalent circular diameter), no longer
+    raises `NotImplementedError` — now raises `ValueError` specifically
+    for "no particles detected/sized", which `main.py` catches
+    separately from other exceptions.
+  - `config.py` gained `ROBOFLOW_MODEL_ID`/`ROBOFLOW_API_URL`/
+    `ROBOFLOW_CONFIDENCE` (0.39, the model's evaluation-page "optimal"
+    F1 threshold). **`ROBOFLOW_API_KEY` is deliberately NOT in any
+    committed file** — `detection.py` reads it from the
+    `ROBOFLOW_API_KEY` environment variable. **Not yet set on the Pi**
+    (network was down before this could be deployed) — must be exported
+    (e.g. appended to `~/.bashrc`) before `main.py` will run; it raises
+    `RuntimeError` at `ParticleDetector.__init__` if missing, on purpose
+    (fail loud, not a silent bad-request).
+  - `main.py`'s `handle_capture()` reordered: detection now runs
+    **before** the image is sent (not after, like the old
+    image-arrives-alone prototype flow), so the transmitted preview can
+    have blob outlines baked in via `draw_overlay()`. Falls back to the
+    plain enhanced image if no particles were found/detection failed —
+    never blocks the capture on a detection error.
+- **`CAPTURE_TIMEOUT_S` bumped 8.0 -> 20.0** (and firmware's
+  `RPI_CAPTURE_TIMEOUT_MS` 8000 -> 20000 to match) — the hosted API adds
+  real network round-trip/queueing on top of capture+inference, and 8s
+  didn't budget for that. Not yet measured on real hardware; revisit
+  once a few real capture-to-reply timings exist.
+- **Real firmware (`firmware/esp32/`, not the throwaway
+  `testing/CV_Verify_UART_Prototype/` copy) now has the IMG-over-UART
+  protocol and two-column image+result verifying_screen** — previously
+  only the prototype had this; real firmware only showed SIZE-line text.
+  Ported `rpi_uart.h/.cpp` (IMG receive), `ui_display.h/.cpp`
+  (`ui_display_draw_grayscale_image()`), and `verifying_screen.h/.cpp`
+  (image left / median+IQR+spread-bar right layout) from the prototype
+  into real firmware, **keeping real firmware's IN SPEC/OUT OF SPEC
+  check** (against `scheduler_get_target_um()`/`TARGET_TOLERANCE_UM`)
+  which the prototype never had — the two features were merged, not a
+  straight file copy. **Compiles clean** (`pio run -e embo`, RAM 15%,
+  Flash 75%) — not yet flashed to real hardware this session (ESP32 not
+  connected via USB yet).
+- Python side syntax-checked (`py_compile`) clean. `inference-sdk` and
+  `pillow` added to `../requirements.txt`.
+
+**Blocked on hardware/network, not code, as of this update:**
+- Pi dropped off the phone-hotspot network mid-session (known flakiness
+  pattern for this specific Zero 2W, see Hardware status below) —
+  nothing has been deployed to the Pi yet (`scp` never ran). Once it's
+  back: `scp` the four changed files
+  (`main.py`, `config.py` — from this folder — plus `detection.py`,
+  `sizing.py` from `../cv-pipeline`), `pip install -r
+  ../requirements.txt` in the venv, export `ROBOFLOW_API_KEY` on the Pi,
+  then run the Layer 1 verification gate (camera detected, photo
+  capturable, `CAPTURE`/`IMG`+`SIZE` round-trip over UART) before
+  declaring the PoC done.
+- Firmware not yet flashed — ESP32 needs a USB connection to this
+  Windows machine (not the Pi) for `pio run -e embo -t upload`; COM
+  port not yet identified.
+
+---
+
 # cv_verify — Session Handoff (2026-08-08)
 
 Read this first in a fresh conversation to pick up exactly where the last

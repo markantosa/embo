@@ -247,7 +247,14 @@
 // CV is NOT a continuous control input as of this revision — the RPi only
 // captures + runs CV when explicitly asked (rpi_request_capture()), and the
 // result is for display/logging only. See rpi_uart.h and scheduler.h.
-#define RPI_CAPTURE_TIMEOUT_MS  8000   // camera + YOLO inference time budget
+// PoC value (was 8000): the RPi now calls Roboflow's hosted Serverless
+// Cloud API for detection rather than running a local model (local/offline
+// inference is blocked on the current Roboflow plan — weights export not
+// included, confirmed 2026-08-12) — that adds real network round-trip +
+// queueing time on top of capture + median-stacking, which 8s didn't
+// budget for. Revisit downward once local inference is unblocked or
+// hosted-API latency is actually measured on real hardware.
+#define RPI_CAPTURE_TIMEOUT_MS  20000   // camera + hosted inference time budget
 
 // ── Mixing stroke motion (used by scheduler.cpp) ────────────────────────────
 // One "stroke" = one forward + return cycle at this speed/duration. These

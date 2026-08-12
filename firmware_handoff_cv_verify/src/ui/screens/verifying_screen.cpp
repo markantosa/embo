@@ -13,9 +13,9 @@
 
 void VerifyingScreen::onEnter() {
     _resultMsg[0] = '\0';
+    _specMsg[0] = '\0';
     _timedOut = false;
     _gotSize = false;
-    _inSpec = false;
     _lastMedianUm = -1;
     _lastIqrUm = -1;
     rpi_request_capture();
@@ -26,6 +26,9 @@ void VerifyingScreen::_draw(bool waiting, bool forceFull) {
     if (forceFull) {
         tft.fillScreen(TFT_WHITE);
         tft.setFont(&fonts::FreeSansBold12pt7b);
+        // Moved up from the original y=50 to y=20 to make room for the
+        // image + result layout below (image starts at y=45) — the old
+        // y=50 title would otherwise overlap the top of the image.
         ui_display_draw_centered("Camera Verify", 20, TFT_BLACK, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
     }
@@ -37,11 +40,11 @@ void VerifyingScreen::_draw(bool waiting, bool forceFull) {
         ui_display_draw_centered(_resultMsg, 140, TFT_BLACK, 1);
         ui_display_draw_centered("Press knob to continue", 220, COLOR_ASH, 1);
     } else {
-        // Two-column result layout: captured (annotated) image on the
-        // left, median/IQR/spec stacked on the right — sized around
-        // whatever the image actually is (RPI_IMG_MAX_W/H) rather than
-        // hardcoded, so this still lays out sanely if that constant ever
-        // changes.
+        // Two-column result layout: captured image on the left, size
+        // result (median + IQR spread bar) stacked on the right — sized
+        // around whatever the image actually is (RPI_IMG_MAX_W/H) rather
+        // than hardcoded, so this still lays out sanely if that constant
+        // ever changes.
         uint16_t imgW = rpi_get_last_image_width();
         uint16_t imgH = rpi_get_last_image_height();
         const int16_t imgX = 8, imgY = 45;
@@ -52,7 +55,15 @@ void VerifyingScreen::_draw(bool waiting, bool forceFull) {
         const int16_t rightW = tft.width() - rightX - 8;
         _drawSizeResult(rightX, imgY, rightW, imgH);
 
-        int16_t footerY = imgY + imgH + 25;
+        // IN SPEC / OUT OF SPEC line, full width, below both columns —
+        // only shown once a real SIZE line has actually been received.
+        int16_t specY = imgY + imgH + 15;
+        tft.fillRect(0, specY - 4, tft.width(), 24, TFT_WHITE);
+        if (_gotSize && _specMsg[0] != '\0') {
+            ui_display_draw_centered(_specMsg, specY, _inSpec ? COLOR_BRIGHT_BLUE : COLOR_CLOWN_NOSE, 1);
+        }
+
+        int16_t footerY = specY + 30;
         if (footerY > tft.height() - 20) footerY = tft.height() - 20;
         ui_display_draw_centered("Press knob to continue", footerY, COLOR_ASH, 1);
     }
@@ -65,12 +76,13 @@ void VerifyingScreen::_drawSizeResult(int16_t x, int16_t y, int16_t w, int16_t c
     tft.setTextSize(1);
 
     if (!_gotSize) {
-        // No real SIZE line this capture (e.g. zero particles detected,
-        // or the Pi-side detector errored) — say so instead of drawing
-        // fabricated numbers.
+        // detection.py/sizing.py upstream not implemented yet (or this
+        // capture's SIZE line never arrived) — say so instead of drawing
+        // fabricated numbers. Once the RPi sends real "SIZE <median>
+        // <iqr>" lines this branch stops being taken automatically.
         tft.setTextColor(COLOR_ASH);
         const char *l1 = "No size data";
-        const char *l2 = "(no particles found)";
+        const char *l2 = "(model not trained yet)";
         tft.setCursor(x + (w - tft.textWidth(l1)) / 2, y + colH / 2 - 14);
         tft.print(l1);
         tft.setCursor(x + (w - tft.textWidth(l2)) / 2, y + colH / 2 + 4);
@@ -111,12 +123,6 @@ void VerifyingScreen::_drawSizeResult(int16_t x, int16_t y, int16_t w, int16_t c
     textW = tft.textWidth(iqrMsg);
     tft.setCursor(x + (w - textW) / 2, barY + barH + 10);
     tft.print(iqrMsg);
-
-    const char *specMsg = _inSpec ? "IN SPEC" : "OUT OF SPEC";
-    tft.setTextColor(_inSpec ? COLOR_BRIGHT_BLUE : COLOR_CLOWN_NOSE);
-    textW = tft.textWidth(specMsg);
-    tft.setCursor(x + (w - textW) / 2, barY + barH + 30);
-    tft.print(specMsg);
 }
 
 void VerifyingScreen::update(ScreenManager &mgr, bool forceFull) {
@@ -124,25 +130,29 @@ void VerifyingScreen::update(ScreenManager &mgr, bool forceFull) {
     if (status == RpiCaptureStatus::RESULT_READY) {
         int16_t median, iqr;
         bool gotSize = rpi_pop_capture_result(median, iqr);
-        // Image arrival alone completes the capture (see rpi_uart.h) — a
-        // SIZE line is not guaranteed every capture (e.g. zero particles
-        // detected), so only trust/display/feed a result when a real SIZE
-        // line actually arrived, so absent data never contaminates the
-        // breakage-model fit or gets shown as if it were real.
+        // PROTOTYPE-derived: image arrival alone can complete the capture
+        // (see rpi_uart.h's IMG protocol) — a real SIZE line is not
+        // guaranteed if sizing.py is still a stub on the RPi, so
+        // gotSize/median/iqr can be unset here. Only trust and
+        // display/feed a result — including the IN SPEC/OUT OF SPEC
+        // check — when a real SIZE line actually arrived, so
+        // placeholder/absent data never contaminates the breakage-model
+        // fit or gets shown as if it were real.
         _gotSize = gotSize && median > 0;
         if (_gotSize) {
             _lastMedianUm = median;
             _lastIqrUm = iqr;
-            // Feeds the (diagnostic-only) breakage-model fit for cross-checking
-            // against the live sensor-fusion estimate in future runs — does not
-            // alter the run already done, and does not itself drive the stop
-            // condition (see scheduler.h).
+            // Feeds the (diagnostic-only) breakage-model fit for cross-
+            // checking against the live sensor-fusion estimate in future
+            // runs — does not alter the run already done, and does not
+            // itself drive the stop condition (see scheduler.h).
             calib_breakage_add_point(motor_get_stroke_count(), (float)median);
             _inSpec = (abs((int)median - (int)scheduler_get_target_um()) <= TARGET_TOLERANCE_UM);
+            strncpy(_specMsg, _inSpec ? "IN SPEC" : "OUT OF SPEC", sizeof(_specMsg) - 1);
         } else {
             _lastMedianUm = -1;
             _lastIqrUm = -1;
-            _inSpec = false;
+            _specMsg[0] = '\0';
         }
         strncpy(_resultMsg, "Capture received", sizeof(_resultMsg) - 1);
         _timedOut = false;
@@ -151,6 +161,7 @@ void VerifyingScreen::update(ScreenManager &mgr, bool forceFull) {
         int16_t dummyMedian, dummyIqr;
         rpi_pop_capture_result(dummyMedian, dummyIqr);  // consumes/clears the timeout flag
         strncpy(_resultMsg, "No response from RPi", sizeof(_resultMsg) - 1);
+        _specMsg[0] = '\0';
         _timedOut = true;
         forceFull = true;
     }

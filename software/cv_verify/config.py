@@ -34,7 +34,10 @@ UART_BAUD = 921600
 # config.h: RPI_CAPTURE_TIMEOUT_MS). The ESP32 gives up and marks the
 # request TIMED_OUT if no SIZE reply arrives within this many seconds —
 # capture + inference must fit inside it. Keep in sync with firmware's value.
-CAPTURE_TIMEOUT_S = 8.0
+# Bumped from 8.0 (see config.h's matching comment) — detection.py now
+# calls Roboflow's hosted Serverless Cloud API, which adds real network
+# round-trip + queueing time on top of capture + median-stacking.
+CAPTURE_TIMEOUT_S = 20.0
 CAPTURE_COMMAND = "CAPTURE"
 
 # PROTOTYPE — raw preview image transfer (see link.py's send_image() and
@@ -61,6 +64,25 @@ TRAINING_DATA_DIR = "training_data"
 # imported from ../cv-pipeline (see detection_sizing.py in this folder) —
 # not duplicated here.
 WEIGHTS_PATH = "../cv-pipeline/weights/best.pt"
+
+# ── Roboflow hosted inference (PoC) ──────────────────────────────────────
+# Local/offline inference (weights export + self-hosted `inference`
+# package) is blocked on the current Roboflow plan ("weights export not
+# included", confirmed 2026-08-12) — detection.py uses the hosted
+# Serverless Cloud API instead, trading an internet dependency on the Pi
+# for being unblocked right now. See SESSION_HANDOFF.md.
+#
+# ROBOFLOW_API_KEY is intentionally NOT here — read from the
+# ROBOFLOW_API_KEY environment variable on the Pi instead (see
+# ~/.bashrc), so the key never lives in a committed file.
+ROBOFLOW_MODEL_ID = "vincent-santosa/particle-size-ecd/3"
+ROBOFLOW_API_URL = "https://serverless.roboflow.com"
+# "Optimal" confidence threshold from the v3 model's evaluation page (best
+# F1 balance point, mAP@50 51.5%/F1 53.3% on a 10-image test set — small
+# sample, treat as a rough starting point, not a precise number). Retune
+# from the model's Evaluation > Production Metrics Explorer if it's
+# over/under-detecting in practice.
+ROBOFLOW_CONFIDENCE = 0.39
 
 # ── Verification-screen outputs ─────────────────────────────────────────
 # Per project direction: the eventual on-demand verification screen shows

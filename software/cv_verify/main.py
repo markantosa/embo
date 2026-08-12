@@ -8,10 +8,11 @@ protocol.
 
 detection.py/sizing.py are intentionally NOT duplicated here — they're
 loop/trigger-agnostic (see TODO.md's closing note), so this imports them
-straight from ../cv-pipeline. Both are still NotImplementedError stubs,
-blocked on Layer 2 (optics) per SOFTWARE_TODO.md; this loop already handles
-that by reporting a status string instead of crashing, same as
-../cv-pipeline/main.py did.
+straight from ../cv-pipeline. Both now call Roboflow's hosted Serverless
+Cloud API (PoC — local/offline inference is blocked on the current
+Roboflow plan, see cv-pipeline/detection.py's module docstring); this loop
+still degrades to a status string instead of crashing on "no particles
+found" or a network/API error, same as when they were stubs.
 """
 import sys
 import time
@@ -30,8 +31,8 @@ import config
 from capture import Camera
 from link import FirmwareLink
 from preprocessing import enhance_for_display
-from detection import ParticleDetector  # from ../cv-pipeline, stub for now
-from sizing import compute_ecd_stats     # from ../cv-pipeline, stub for now
+from detection import ParticleDetector, draw_overlay  # from ../cv-pipeline
+from sizing import compute_ecd_stats                   # from ../cv-pipeline
 
 POLL_INTERVAL_S = 0.05  # link.py's readline() already timeouts at 0.1s; this just avoids a tight spin
 
@@ -55,34 +56,23 @@ def handle_capture(camera: Camera, link: FirmwareLink, detector: ParticleDetecto
         return
     frame = enhance_for_display(raw)
 
-    # Saved unconditionally (success or NotImplementedError below) — this
-    # is the "processed image" half of the eventual verification-screen
-    # display (median/histogram on one side, this image on the other, per
-    # project direction). Firmware/UI wiring for that isn't built yet;
-    # this just makes sure the file exists and is always current so that
-    # work has something real to point at instead of starting from zero.
+    # Saved unconditionally, independent of whether detection below
+    # succeeds — this is the plain (non-annotated) capture, useful for
+    # debugging on the Pi even when the transmitted preview ends up
+    # blob-annotated or detection fails outright.
     full_res_image = Image.fromarray(frame)
     try:
         full_res_image.save(config.LAST_CAPTURE_IMAGE_PATH)
     except OSError as e:
         print(f"WARNING: could not save processed image: {e}", file=sys.stderr)
 
-    # PROTOTYPE (see testing/CV_Verify_UART_Prototype): sends the actual
-    # captured/enhanced image over UART for on-device display, ahead of
-    # detection/sizing existing. Downscaled to IMG_TRANSFER_W/H — MUST
-    # match the prototype firmware's RPI_IMG_MAX_W/H exactly, or the
-    # firmware-side header validation silently drops the image (see that
-    # copy's rpi_uart.cpp). Sent unconditionally, independent of whether
-    # detection below succeeds — the image is real regardless of whether
-    # sizing is.
-    try:
-        preview = full_res_image.convert("L").resize(
-            (config.IMG_TRANSFER_W, config.IMG_TRANSFER_H), Image.LANCZOS
-        )
-        link.send_image(config.IMG_TRANSFER_W, config.IMG_TRANSFER_H, preview.tobytes())
-    except (OSError, serial.SerialException) as e:
-        print(f"WARNING: could not send preview image: {e}", file=sys.stderr)
-
+    # Run detection BEFORE sending the preview image, so the transmitted
+    # photo can have segmentation blob outlines baked in (see
+    # verifying_screen.cpp's two-column image+result layout) — the
+    # firmware displays whatever bytes arrive as-is, it doesn't know about
+    # polygons itself.
+    masks = []
+    stats = None
     try:
         masks = detector.detect(frame)
         # UM_PER_PIXEL measured 2026-08-08 against a ruler at the working
@@ -90,10 +80,30 @@ def handle_capture(camera: Camera, link: FirmwareLink, detector: ParticleDetecto
         # for the measurement and its caveats (rough bench value, not the
         # formal Track 1 validation from master_experiment1_validation_protocol.md).
         stats = compute_ecd_stats(masks, um_per_pixel=config.UM_PER_PIXEL)
+    except ValueError:
+        # "No particles detected/sized" is a normal outcome (e.g. an empty
+        # syringe view), not a crash — firmware's verifying_screen already
+        # renders a "no size data" placeholder when no SIZE line arrives.
+        link.send_status("CV: no particles detected")
+    except Exception as e:
+        # Roboflow API/network errors, malformed responses, etc. — must
+        # not kill the on-demand loop; report and let firmware show its
+        # own placeholder rather than a hard TIMED_OUT for a problem that
+        # isn't actually a timeout.
+        print(f"WARNING: detection/sizing failed: {e}", file=sys.stderr)
+        link.send_status("CV: detection failed")
+
+    overlay_image = draw_overlay(full_res_image, masks) if masks else full_res_image
+    try:
+        preview = overlay_image.resize(
+            (config.IMG_TRANSFER_W, config.IMG_TRANSFER_H), Image.LANCZOS
+        )
+        link.send_image(config.IMG_TRANSFER_W, config.IMG_TRANSFER_H, preview.tobytes())
+    except (OSError, serial.SerialException) as e:
+        print(f"WARNING: could not send preview image: {e}", file=sys.stderr)
+
+    if stats is not None:
         link.send_size(stats.median_um, stats.iqr_um)
-    except NotImplementedError:
-        link.send_status("CV: detection/sizing not implemented yet")
-        return
 
     elapsed = time.monotonic() - started
     if elapsed > config.CAPTURE_TIMEOUT_S * 0.8:
