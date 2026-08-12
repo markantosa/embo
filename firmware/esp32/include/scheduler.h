@@ -163,6 +163,12 @@ uint8_t  scheduler_get_last_fused_num_channels();
 float scheduler_get_last_measured_voltage();
 float scheduler_get_baseline_voltage();
 
+// Live viscosity reading (cP) — Viscosity-targeted runs only, see
+// scheduler.cpp's file header comment. Position-gated (only updated while
+// a motor is within the force-read window), stays at its last value
+// between updates. Always 0 for a Size-targeted run.
+float scheduler_get_last_measured_viscosity_cp();
+
 // Diagnostic-only breakage-model fit, for UI/BLE cross-check against the
 // live UAS-voltage estimate — see calibration.h's BreakageFit for field
 // meanings. This does NOT drive the stop condition (see header comment

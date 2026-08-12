@@ -77,6 +77,10 @@ v0.7.2
 - add auto home and push left motor if the camera feature is used
 - home pre nudge to 400 steps
 
+v0.7.3
+- add loadcell loop equation
+- updated some values in config
+
 v0.8.0 (goal) - auto detect syringe inside using uas
 
 

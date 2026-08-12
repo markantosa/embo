@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.7.2"
+#define FIRMWARE_VERSION "0.7.3"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -119,6 +119,12 @@
 #define MOTOR1_SOFT_LIMIT_MAX   15000
 #define MOTOR2_SOFT_LIMIT_MIN   0
 #define MOTOR2_SOFT_LIMIT_MAX   15000
+
+// Position window (either motor) the viscosity mixing loop reads force
+// within — see calib_estimate_viscosity_pa_s() (calibration.h). Near the
+// top of travel (MOTOR1/2_SOFT_LIMIT_MAX above), not the full range.
+#define VISCOSITY_FORCE_READ_POS_MIN  14000
+#define VISCOSITY_FORCE_READ_POS_MAX  15000
 
 // Settings > Motion > Test Both Motors. One "stroke" for this bench test =
 // left motor 0→max then (concurrently) left back to 0 while right goes
@@ -239,21 +245,14 @@
 // CV is NOT a continuous control input as of this revision — the RPi only
 // captures + runs CV when explicitly asked (rpi_request_capture()), and the
 // result is for display/logging only. See rpi_uart.h and scheduler.h.
-// PoC value (was 8000): the RPi now calls Roboflow's hosted Serverless
-// Cloud API for detection rather than running a local model (local/offline
-// inference is blocked on the current Roboflow plan — weights export not
-// included, confirmed 2026-08-12) — that adds real network round-trip +
-// queueing time on top of capture + median-stacking, which 8s didn't
-// budget for. Revisit downward once local inference is unblocked or
-// hosted-API latency is actually measured on real hardware.
-#define RPI_CAPTURE_TIMEOUT_MS  20000   // camera + hosted inference time budget
+#define RPI_CAPTURE_TIMEOUT_MS  20000   // camera + YOLO inference time budget
 
 // ── Mixing stroke motion (used by scheduler.cpp) ────────────────────────────
 // One "stroke" = one forward + return cycle at this speed/duration. These
 // are motion-profile constants (how a stroke is physically executed), as
 // opposed to calibration.h's sensor/model constants (how strokes map to
 // particle size) — kept separate on purpose.
-#define STROKE_RUN_HZ        10000   // step rate during a stroke 8000
+#define STROKE_RUN_HZ        10000   // step rate during a stroke
 // Acceleration/deceleration ramp for stroke movement (scheduler.cpp only
 // — Stroke Testing, stroke_test_screen.cpp, still runs at a flat speed;
 // say if you want the ramp there too). Trapezoidal profile computed from

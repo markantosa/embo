@@ -181,6 +181,27 @@ float calib_estimate_particle_size_from_uas_delta_v_um(float deltaVoltageVolts);
 // mixing needed" is a legitimate answer for a large enough target).
 uint32_t calib_estimate_stroke_count_for_target(uint16_t targetSizeUm);
 
+// ── Force-to-viscosity equation (VISCOSITY target type only) ────────────────
+// This IS this target type's stop condition (scheduler.cpp) — a run
+// targeting Viscosity, not Size, stops when this reads at or below target,
+// not via the stroke-count equation above (that one's specific to Size —
+// no stroke-count equation exists for Viscosity). Real measured
+// calibration, not a placeholder:
+//   viscosity_pa_s = VISCOSITY_EQ_SLOPE * force_grams + VISCOSITY_EQ_INTERCEPT
+// force_grams is the AVERAGE of both load cells (force_sensor_get_grams_1()/
+// _2()), read ONLY while a motor's position is within
+// [VISCOSITY_FORCE_READ_POS_MIN, VISCOSITY_FORCE_READ_POS_MAX] (config.h) —
+// scheduler.cpp gates this, not this function; this function just does the
+// conversion for whatever force value it's given.
+#define VISCOSITY_EQ_SLOPE       -1.66e-5f
+#define VISCOSITY_EQ_INTERCEPT    0.0494f
+
+// Returns viscosity in Pa*s (NOT centipoise — mixing_options_get_viscosity_target_cp()
+// is in cP; multiply this result by 1000 to compare against that). Clamped
+// to >= 0 — the equation's slope is negative, so a large enough force
+// input would otherwise compute a negative (nonsensical) viscosity.
+float calib_estimate_viscosity_pa_s(float forceGrams);
+
 // ---------------------------------------------------------------------------
 // Mixing stop condition — debounce, see CALIBRATION.md §6
 // ---------------------------------------------------------------------------

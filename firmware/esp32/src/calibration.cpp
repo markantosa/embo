@@ -197,6 +197,12 @@ uint32_t calib_estimate_stroke_count_for_target(uint16_t targetSizeUm) {
     return (uint32_t)(strokes + 0.5f);  // round to nearest, not truncate
 }
 
+float calib_estimate_viscosity_pa_s(float forceGrams) {
+    float viscosity = VISCOSITY_EQ_SLOPE * forceGrams + VISCOSITY_EQ_INTERCEPT;
+    if (viscosity < 0.0f) viscosity = 0.0f;  // negative slope — clamp rather than return a nonsensical negative value
+    return viscosity;
+}
+
 // ---------------------------------------------------------------------------
 // Breakage kinetics — online linear-regression fit of the linearized model
 // ---------------------------------------------------------------------------

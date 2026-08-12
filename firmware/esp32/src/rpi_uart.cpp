@@ -44,7 +44,7 @@ void rpi_uart_init() {
 static void _parse_line() {
     // "IMG <width> <height>" — switches the reader into binary mode for
     // the next width*height bytes, see rpi_uart_update(). Checked before
-    // SIZE since it's the primary path now (both arrive per capture).
+    // SIZE since it's the prototype's primary path (see rpi_uart.h).
     unsigned int w, h;
     if (sscanf(_buf, "IMG %u %u", &w, &h) == 2) {
         if (w > RPI_IMG_MAX_W || h > RPI_IMG_MAX_H || w == 0 || h == 0) {

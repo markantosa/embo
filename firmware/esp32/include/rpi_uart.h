@@ -36,28 +36,26 @@ RpiCaptureStatus rpi_capture_status();
 // and fills medianOut/iqrOut only when the status was RESULT_READY.
 bool rpi_pop_capture_result(int16_t &medianOut, int16_t &iqrOut);
 
-// ── Raw preview image ────────────────────────────────────────────────────
+// ── Raw preview image (prototype, see testing/CV_Verify_UART_Prototype) ────
 // Wire format: "IMG <width> <height>\n" followed by exactly width*height
 // raw greyscale bytes (1 byte/pixel, row-major, no line ending after the
 // binary payload — length is already known from the header, so no
 // delimiter is needed and none is expected).
 //
-// Ported from testing/CV_Verify_UART_Prototype, now that detection.py/
-// sizing.py exist on the Pi side (Roboflow-hosted PoC) — the Pi draws
-// segmentation blob outlines onto this image before sending it, so what
-// arrives here is already the annotated verification photo, not a plain
-// capture. Deliberately NOT a JPEG: this board (ESP32-S3-WROOM-1-N4) most
-// likely has no PSRAM, so a small fixed-size raw buffer this program can
-// size at compile time is a much safer bet than pulling in a JPEG decoder
-// and its transient memory footprint. 160x100 chosen as a size that's fast
-// over UART (~16KB, ~175ms @ 921600 baud) and fits directly into the
-// 240px-wide display without needing to scale.
+// This is the prototype's answer to the "future work" JPEG note that used
+// to live here — deliberately NOT a JPEG: this board (ESP32-S3-WROOM-1-N4)
+// most likely has no PSRAM, so a small fixed-size raw buffer this program
+// can size at compile time is a much safer bet than pulling in a JPEG
+// decoder and its transient memory footprint. 160x100 chosen as a size
+// that's fast over UART (~16KB, ~175ms @ 921600 baud) and fits directly
+// into the 240px-wide display without needing to scale.
 //
 // Receiving an image completes the pending capture the same way a SIZE
-// line does (sets RESULT_READY) — image and SIZE typically arrive as a
-// pair now, but the two aren't mutually exclusive: image arrival alone
-// still completes the capture if a SIZE line is ever missing (e.g. no
-// particles detected).
+// line does (sets RESULT_READY) — this prototype's Pi side doesn't send a
+// SIZE line at all (detection.py is still unimplemented upstream), so
+// image arrival IS the "result" for now. Once real detection/sizing
+// exists, a SIZE line arriving separately will still work through the
+// same existing path — the two aren't mutually exclusive.
 #define RPI_IMG_MAX_W 160
 #define RPI_IMG_MAX_H 100
 
