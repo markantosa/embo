@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include "ui_screen.h"
 
 // Optional, operator-triggered, single-shot CV check — NOT part of the
@@ -18,11 +19,22 @@ private:
     bool _inSpec        = false;
     bool _timedOut      = false;
 
+    // Populated from rpi_pop_capture_result() in update() — detection.py/
+    // sizing.py upstream are unimplemented as of this writing, so _gotSize
+    // is normally false and _draw() shows a "no size data" placeholder.
+    // Once the RPi starts sending real "SIZE <median> <iqr>" lines (after
+    // training), these fill in and the real result renders automatically —
+    // no firmware change/reflash needed for that transition.
+    int16_t _lastMedianUm = -1;
+    int16_t _lastIqrUm    = -1;
+    bool _gotSize         = false;
+
     void _draw(bool waiting, bool forceFull);
-    // PROTOTYPE (testing/CV_Verify_UART_Prototype): histogram + median text
-    // are fabricated locally, not from the RPi — detection.py/sizing.py
-    // upstream are still unimplemented, so there is no real PSD to show
-    // yet. Only the image itself is real (received over UART). See
-    // rpi_uart.h's IMG protocol note for why.
-    void _drawStubHistogramAndMedian();
+    // Draws real median/IQR when available (_gotSize), otherwise a "no
+    // size data yet" placeholder. No per-bin histogram is drawn — the
+    // wire protocol (rpi_uart.h) only carries median+IQR, not a bucketed
+    // distribution, so the IQR is shown as a spread bar around the median
+    // rather than fabricated bars. Only the image itself was ever real
+    // before this; see rpi_uart.h's IMG protocol note.
+    void _drawSizeResult(int16_t x, int16_t y, int16_t w, int16_t colH);
 };
