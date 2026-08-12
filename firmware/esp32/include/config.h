@@ -253,7 +253,7 @@
 // are motion-profile constants (how a stroke is physically executed), as
 // opposed to calibration.h's sensor/model constants (how strokes map to
 // particle size) — kept separate on purpose.
-#define STROKE_RUN_HZ        8000   // step rate during a stroke 8000
+#define STROKE_RUN_HZ        10000   // step rate during a stroke 8000
 // Acceleration/deceleration ramp for stroke movement (scheduler.cpp only
 // — Stroke Testing, stroke_test_screen.cpp, still runs at a flat speed;
 // say if you want the ramp there too). Trapezoidal profile computed from
