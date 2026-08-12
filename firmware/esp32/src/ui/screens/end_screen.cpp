@@ -6,6 +6,7 @@
 #include "scheduler.h"
 #include "motors.h"
 #include "ui.h"
+#include "mixing_options.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -35,13 +36,19 @@ void EndScreen::_draw() {
     tft.setFont(&fonts::FreeSans9pt7b);
     ui_display_draw_centered(_resultMsg, 100, COLOR_BRIGHT_BLUE, 1);
 
-    // Final UAS-derived value — whatever the continuous check last
-    // computed/read, which is exactly the run's final state regardless of
-    // which of the three ways it ended (these getters just aren't reset
-    // again until the next scheduler_start()).
+    // Final value — whatever the continuous check last computed/read,
+    // which is exactly the run's final state regardless of which of the
+    // three ways it ended (these getters just aren't reset again until
+    // the next scheduler_start()). Which value is shown depends on which
+    // equation actually drove this run's stop condition — see
+    // mixing_options.h.
     char line[48];
-    snprintf(line, sizeof(line), "Final: %.1fum  (V=%.3fV)",
-             scheduler_get_last_fused_size_um(), scheduler_get_last_measured_voltage());
+    if (mixing_options_get_target_type() == TargetType::VISCOSITY) {
+        snprintf(line, sizeof(line), "Final: %.4f Pa*s", scheduler_get_last_measured_viscosity_pa_s());
+    } else {
+        snprintf(line, sizeof(line), "Final: %.1fum  (V=%.3fV)",
+                 scheduler_get_last_fused_size_um(), scheduler_get_last_measured_voltage());
+    }
     ui_display_draw_centered(line, 140, COLOR_ASH, 1);
 
     ui_display_draw_centered("Hold knob to verify with camera", 220, COLOR_ASH, 1);

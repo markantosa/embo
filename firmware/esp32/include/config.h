@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.7.5"
+#define FIRMWARE_VERSION "0.7.6"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -204,28 +204,39 @@
 // ── Particle size target ─────────────────────────────────────────────────────
 // Encoder-adjustable setpoint range (clinical range TBD beyond this bound).
 #define TARGET_SIZE_UM_MIN      50
-#define TARGET_SIZE_UM_MAX      2000
+#define TARGET_SIZE_UM_MAX      10000
 #define TARGET_SIZE_UM_DEFAULT  300
 #define TARGET_SIZE_UM_STEP     10    // per encoder detent
 
 // Viscosity target — mirrors the particle-size constants above, same
 // pattern (min/max/default/step). Units: Pa*s (matching
 // calib_estimate_viscosity_pa_s()'s native output unit directly — no cP
-// conversion anymore, this used to be centipoise before v0.7.5). Range is
-// a straight unit conversion of the original 1-1000 cP placeholder range
-// (÷1000), NOT adjusted to the force equation's actual achievable range
-// (~0-0.0494 Pa*s at the current VISCOSITY_EQ_SLOPE/INTERCEPT,
-// calibration.h) — a target above that ceiling still can't be reached via
-// the equation, same caveat as before, just carried over rather than
-// silently narrowed here.
-#define TARGET_VISCOSITY_PA_S_MIN      0.001f
-#define TARGET_VISCOSITY_PA_S_MAX      1.0f
-#define TARGET_VISCOSITY_PA_S_DEFAULT  0.1f
-#define TARGET_VISCOSITY_PA_S_STEP     0.005f
+// conversion, this used to be centipoise before v0.7.5). MIN/MAX are
+// stated requirements (0 to 0.1 Pa*s); DEFAULT/STEP weren't specified —
+// picked DEFAULT=0.025 (within both this range and the force equation's
+// own achievable ceiling, ~0.0494 Pa*s at the current
+// VISCOSITY_EQ_SLOPE/INTERCEPT, calibration.h) and STEP=0.0005 (200 steps
+// across the full range, similar granularity to before). Reconsider
+// either if they don't match the real intended defaults.
+#define TARGET_VISCOSITY_PA_S_MIN      0.0f
+#define TARGET_VISCOSITY_PA_S_MAX      0.1f
+#define TARGET_VISCOSITY_PA_S_DEFAULT  0.025f
+#define TARGET_VISCOSITY_PA_S_STEP     0.0005f
 // "In spec" window half-width around the setpoint — used by
-// VerifyingScreen's camera-check spec test. Placeholder — see
-// firmware/CALIBRATION.md §8 before trusting for that purpose.
+// VerifyingScreen's camera-check spec test, AND (as of v0.7.6) by the
+// Size mixing loop's own closed-loop stop condition again (scheduler.cpp)
+// — see UAS_SIZE_IN_SPEC_HOLD_MS below. Placeholder — see
+// firmware/CALIBRATION.md §8 before trusting for either purpose.
 #define TARGET_TOLERANCE_UM     25
+// How long the UAS-voltage size estimate must read continuously within
+// TARGET_TOLERANCE_UM before the Size mixing loop actually stops
+// (scheduler.cpp) — the check itself runs every scheduler_update() call
+// ("always"), but a single instantaneous in-tolerance reading isn't
+// trusted to stop an irreversible process; this is the debounce.
+// PLACEHOLDER — not measured against real noise characteristics of the
+// UAS voltage signal yet, pick a value and tune from there once you have
+// real in-tolerance sensor traces.
+#define UAS_SIZE_IN_SPEC_HOLD_MS   1000
 
 // ── UI input timing (used by ui.cpp) ────────────────────────────────────────
 // BTN1 is dedicated to stop/e-stop only (no start function) — the encoder's

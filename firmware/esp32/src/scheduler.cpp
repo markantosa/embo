@@ -66,6 +66,7 @@ static uint32_t _targetStrokeCount = 0;  // computed once at scheduler_start() �
 static bool _isViscosityRun = false;     // cached at scheduler_start() from mixing_options_get_target_type() — which stop condition applies for this run
 static float _lastMeasuredViscosityPaS = 0.0f;  // for live display (MixingRunningScreen/EndScreen), same pattern as _lastMeasuredUm
 static float _lastMeasuredForceGrams = 0.0f;   // the equation's raw input, for display alongside the computed Pa*s output
+static uint32_t _inSpecSinceMs = 0;   // Size runs only — 0 = not currently in spec; else timestamp it FIRST became in-spec
 static bool _hitSafetyCap = false;
 
 // UAS-voltage size reading — kept running continuously for live display
@@ -187,6 +188,7 @@ bool scheduler_start() {
     _isViscosityRun = (mixing_options_get_target_type() == TargetType::VISCOSITY);
     _lastMeasuredViscosityPaS = 0.0f;
     _lastMeasuredForceGrams = 0.0f;
+    _inSpecSinceMs = 0;
 
     if (_isViscosityRun) {
         // No stroke-count equation exists for Viscosity (that one's
@@ -198,13 +200,14 @@ bool scheduler_start() {
         ble_log("Scheduler: run started, target=%.4f Pa*s (viscosity, force-gated stop, baseline=%.3fV for display only)",
                 mixing_options_get_viscosity_target_pa_s(), _baselineVoltageVolts);
     } else {
-        // The actual stop condition for a Size run — computed once here
-        // from the target size, not re-evaluated during the run. See the
-        // file header comment for why this replaced the previous
-        // continuous check.
+        // No longer the stop condition (restored to the UAS delta-V
+        // closed-loop check, v0.7.6) — kept computed here purely as a
+        // diagnostic estimate (scheduler_get_target_stroke_count()), not
+        // consulted anywhere in the actual stop decision anymore.
         _targetStrokeCount = calib_estimate_stroke_count_for_target(_target_um);
-        ble_log("Scheduler: run started, target=%u um -> %lu strokes (open-loop stroke count, baseline=%.3fV for display only)",
-                _target_um, (unsigned long)_targetStrokeCount, _baselineVoltageVolts);
+        ble_log("Scheduler: run started, target=%u um (UAS delta-V equation, checked continuously, "
+                "baseline=%.3fV, estimated %lu strokes)",
+                _target_um, _baselineVoltageVolts, (unsigned long)_targetStrokeCount);
     }
     _beginHalfStroke(true);
     return true;
@@ -257,6 +260,7 @@ void scheduler_resume() {
         motor_set_speed(2, STROKE_RUN_HZ);
     }
     _phaseDeadlineMs = millis() + HOMING_TIMEOUT_MS;  // fresh timeout window from the resume point
+    _inSpecSinceMs = 0;  // fresh debounce window too — don't resume already "half-confirmed" from before the pause
     _state = _pausedFromState;
     ble_log("Scheduler: resumed");
 }
@@ -352,15 +356,40 @@ void scheduler_update() {
         }
 #endif
 
-        // Continuous UAS-voltage reading — kept running for live display
-        // (MixingRunningScreen/EndScreen) and diagnostics only. Does NOT
-        // drive the stop decision anymore — see the file header comment
-        // for why (the stroke-count equation below does that now).
+        // Continuous UAS-voltage reading — Size run's ACTUAL stop
+        // condition again (restored v0.7.6, "again" per product
+        // decision — replaces the stroke-count equation as what actually
+        // decides when to stop; that equation's computation is KEPT below
+        // for scheduler_get_target_stroke_count(), a diagnostic estimate
+        // only now, not consulted for the stop decision). Debounced by
+        // UAS_SIZE_IN_SPEC_HOLD_MS (config.h) — a single instantaneous
+        // in-tolerance reading isn't trusted to stop an irreversible
+        // process. Stops the motors wherever they currently are — this
+        // can fire mid-half-stroke, not just at a stroke boundary, unlike
+        // Viscosity's check below.
         {
             float voltageVolts = uas_read_mv() / 1000.0f;
             _lastMeasuredVoltageVolts = voltageVolts;
             float deltaV = voltageVolts - _baselineVoltageVolts;
             _lastMeasuredUm = calib_estimate_particle_size_from_uas_delta_v_um(deltaV);
+
+            if (!_isViscosityRun) {
+                bool inSpec = fabsf(_lastMeasuredUm - (float)_target_um) <= TARGET_TOLERANCE_UM;
+                if (inSpec) {
+                    if (_inSpecSinceMs == 0) _inSpecSinceMs = millis();
+                    if (millis() - _inSpecSinceMs >= UAS_SIZE_IN_SPEC_HOLD_MS) {
+                        _stopMotorsHold();
+                        _hitSafetyCap = false;
+                        _state = RunState::DONE;
+                        ble_log("Scheduler: target confirmed by UAS delta-V equation "
+                                "(measured=%.1fum, target=%uum, voltage=%.3fV, deltaV=%.3fV) at %lu strokes",
+                                _lastMeasuredUm, _target_um, voltageVolts, deltaV, (unsigned long)_strokesDone);
+                        return;
+                    }
+                } else {
+                    _inSpecSinceMs = 0;  // reset debounce on any out-of-spec reading
+                }
+            }
         }
 
         // Viscosity run's actual stop condition — position-gated force
@@ -466,14 +495,6 @@ void scheduler_update() {
             ble_log("Scheduler: stopped (graceful) at %lu strokes, last measured=%.3f%s",
                     (unsigned long)_strokesDone, _isViscosityRun ? _lastMeasuredViscosityPaS : _lastMeasuredUm,
                     _isViscosityRun ? " Pa*s" : "um");
-        } else if (!_isViscosityRun && _strokesDone >= _targetStrokeCount) {
-            // Size run only — Viscosity's stop condition already returned
-            // earlier in this function (the position-gated force check
-            // above), it never falls through to here on a real target-hit.
-            _hitSafetyCap = false;
-            _state = RunState::DONE;
-            ble_log("Scheduler: target stroke count (%lu) reached — target=%uum, last measured=%.1fum",
-                    (unsigned long)_targetStrokeCount, _target_um, _lastMeasuredUm);
         } else if (_strokesDone >= MIXING_MAX_STROKES_SAFETY_CAP) {
             _hitSafetyCap = true;
             _state = RunState::DONE;
@@ -482,8 +503,8 @@ void scheduler_update() {
                         "reached; target=%.4f Pa*s, last measured=%.4f Pa*s. Check calibration/equation range.",
                         MIXING_MAX_STROKES_SAFETY_CAP, mixing_options_get_viscosity_target_pa_s(), _lastMeasuredViscosityPaS);
             } else {
-                ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before target stroke count "
-                        "(%lu) reached; target=%uum, last measured=%.1fum. Check calibration.",
+                ble_log("Scheduler: WARNING — safety cap (%d strokes) hit before UAS delta-V equation "
+                        "confirmed target (estimated %lu strokes needed); target=%uum, last measured=%.1fum. Check calibration.",
                         MIXING_MAX_STROKES_SAFETY_CAP, (unsigned long)_targetStrokeCount, _target_um, _lastMeasuredUm);
             }
         } else {
