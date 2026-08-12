@@ -90,6 +90,7 @@ v0.7.5
 v0.7.6
 - changed back to closed loop particle size uas
 - changed the max particle size to 10000um
+- stroke testing speed to 10000hz
 
 v0.8.0 (goal) - auto detect syringe inside using uas
 
