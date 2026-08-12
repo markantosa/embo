@@ -1,6 +1,6 @@
 # EMBO — Embolization Particle Sizing System
 
-> SUTD 30.007 Engineering Design Innovation | Team EMBO | Week 11 of 13
+> SUTD 30.007 Engineering Design Innovation | Team EMBO | Week 13 of 13
 
 EMBO is a closed-loop medical device that automates and quality-controls the preparation of gelatin foam embolic agents for interventional radiology procedures. It is the first device of its kind to measure and control particle size during embolic agent preparation in real time.
 
@@ -27,10 +27,10 @@ Embolization procedures use tiny gelatin foam particles (embolic agents) to deli
 EMBO replaces manual syringe pumping with a controlled, sensor-guided system that:
 
 1. **Automates mixing** — two stepper motors drive syringe plungers back and forth with precise speed, stroke, and cycle control
-2. **Measures particle size in real time** using two parallel sensing modalities:
-   - **Computer vision** — a Raspberry Pi 5 + USB 2.0 microscope camera running a YOLOv8 model trained on gelatin foam particles, reporting median particle size and IQR
-   - **Ultrasound attenuation** — a 1 MHz acoustic signal chain measures how much sound energy the slurry absorbs; larger particles attenuate more
-3. **Stops automatically** when the target particle size is reached, using a PID control loop on the ESP32-S3 that adjusts stroke count based on live sensor feedback. The target is adjustable per procedure (50–1000 µm, set via the touchscreen/encoder), since the ideal size depends on which vessels are being treated.
+2. **Measures particle size** using two independent sensing modalities:
+   - **Ultrasound attenuation (UAS)** — a 1 MHz acoustic signal chain measures how much sound energy the slurry absorbs; larger particles attenuate more. This is the **closed-loop** measurement the mixing stop condition actually runs on.
+   - **Computer vision (verification only)** — a Raspberry Pi Zero 2W + OV9281 global-shutter mono camera captures a frame on demand and runs it through a Roboflow-hosted instance-segmentation model, reporting median particle size and IQR plus a segmentation-blob-annotated photo. This is an **optional, operator-triggered check**, not a continuous control input — see "Sensing System" below for why.
+3. **Stops automatically** when the target particle size is reached, using a closed-loop control scheduler on the ESP32-S3 driven by the UAS delta-voltage size equation, adjusting stroke-by-stroke based on live sensor feedback. The target is adjustable per procedure (50–1000 µm, set via the touchscreen/encoder), since the ideal size depends on which vessels are being treated.
 
 ---
 
@@ -41,13 +41,16 @@ EMBO replaces manual syringe pumping with a controlled, sensor-guided system tha
 │                        EMBO Device                              │
 │                                                                 │
 │  ┌──────────────────┐          ┌──────────────────────────────┐ │
-│  │  Raspberry Pi 5  │◄─UART──►│     ESP32-S3 MCU Board       │ │
-│  │                  │          │                              │ │
-│  │  - YOLOv8 CV     │          │  - PID control loop          │ │
-│  │  - Particle size │          │  - 2× TMC2209 motor drivers  │ │
-│  │    statistics    │          │  - UAS signal chain          │ │
-│  │  - USB           │          │  - ILI9341 TFT UI            │ │
-│  │    Microscope Cam│          │  - BLE debug (NimBLE)        │ │
+│  │ Raspberry Pi     │◄─UART──►│     ESP32-S3 MCU Board       │ │
+│  │ Zero 2W          │          │                              │ │
+│  │  - Roboflow      │          │  - Scheduler control loop    │ │
+│  │    hosted CV     │          │    (UAS delta-V closed loop) │ │
+│  │    (on-demand)   │          │  - 2× TMC2209 motor drivers  │ │
+│  │  - Particle size │          │  - UAS signal chain          │ │
+│  │    + annotated   │          │  - ILI9341 TFT UI (LovyanGFX)│ │
+│  │    photo         │          │  - BLE debug (NimBLE)        │ │
+│  │  - OV9281 CSI    │          │                              │ │
+│  │    mono camera   │          │                              │ │
 │  └──────────────────┘          └──────────────────────────────┘ │
 │           │                             │           │            │
 │           ▼                             ▼           ▼            │
@@ -64,7 +67,7 @@ Mixing follows first-order breakage kinetics:
 D(N) = D_min + (D₀ − D_min) × e^(−kN)
 ```
 
-Where `N` is stroke count, `k` is a shear constant (measured empirically), `D₀` is initial particle size, and `D_min` is the minimum achievable size. The PID loop uses live measurements of `D(N)` to schedule remaining strokes.
+Where `N` is stroke count, `k` is a shear constant (measured empirically), `D₀` is initial particle size, and `D_min` is the minimum achievable size. The mixing scheduler uses live measurements of `D(N)` (via the UAS delta-V equation) to decide when to stop.
 
 ---
 
@@ -95,13 +98,23 @@ EMBO/
 │       └── ../FIRMWARE_TODO.md        # Build-up task list + hardware checklist
 │
 ├── software/
-│   ├── SOFTWARE_TODO.md               # CV pipeline build-up task list
-│   └── cv-pipeline/                   # Raspberry Pi YOLOv8 vision pipeline
-│       ├── README.md
-│       └── RPI_SETUP_GUIDE.md         # RPi flash/SSH/VS Code dev setup
+│   ├── SOFTWARE_TODO.md               # Original CV pipeline build-up task list (superseded, kept for reference)
+│   ├── cv_verify/                     # CURRENT — on-demand CV verification, Pi Zero 2W
+│   │   ├── SESSION_HANDOFF.md         # Latest working state, Roboflow wiring, hardware notes
+│   │   ├── main.py                    # Request/reply loop: waits for CAPTURE, replies SIZE + annotated IMG
+│   │   ├── capture.py / preprocessing.py / link.py / config.py
+│   │   └── SETUP.md                   # Pi Zero 2W flash/SSH/dev setup
+│   └── cv-pipeline/                   # Legacy — original continuous-loop design, Pi 5 + YOLOv8.
+│       │                              # detection.py/sizing.py now live here and are imported by
+│       │                              # cv_verify/main.py (loop-agnostic), but the driving loop itself
+│       │                              # moved to cv_verify/ — see cv_verify/TODO.md for why.
+│       └── README.md
 │
 ├── testing/
-│   └── PCB_Test_Firmware_v3_4/        # v3.4 bench-test firmware + Web Bluetooth sensor dashboard
+│   ├── PCB_Test_Firmware_v3_4/        # v3.4 bench-test firmware + Web Bluetooth sensor dashboard
+│   └── CV_Verify_UART_Prototype/      # Throwaway prototype that proved out the IMG-over-UART
+│                                      # protocol ahead of real detection/sizing existing — since
+│                                      # merged into firmware/esp32/ directly, kept for reference
 │
 └── assets/                            # Images, diagrams, photos
 ```
@@ -129,8 +142,8 @@ v3.4 is a hardware-hardening pass: 12× 220Ω GPIO protection resistors on every
 
 | | | |
 |:---:|:---:|:---:|
-| ![v3.4 PCB front render](assets/EMBO%20Controller%20v3.4%20PCB%20Front.jpg) | ![v3.4 PCB back render](assets/EMBO%20Controller%20v3.4%20PCB%20Back.jpg) | ![v3.4 PCB editor view](assets/EMBO%20Controller%20v3.4%20PCB%20Editor%20View.jpg) |
-| *3D render, front* | *3D render, back* | *KiCad PCB editor view* |
+| ![v3.4 PCB front render](assets/EMBO%20Controller%20v3.4%20PCB%20Front.jpg) | ![v3.4 PCB back render](assets/EMBO%20Controller%20v3.4%20PCB%20Back.jpg) | ![v3.4 PCB trace routing, layers 1 and 4](assets/EMBO%20Controller%20Routing%20L1%20and%20L4%20%28L2%20GND%20and%20L3%203V3%20hidden%20for%20clarity%29.png) |
+| *3D render, front* | *3D render, back* | *KiCad trace routing — L1 + L4 (L2 GND, L3 3V3 hidden for clarity)* |
 
 | | |
 |:---:|:---:|
@@ -169,15 +182,18 @@ ILI9341 TFT + XPT2046 touch controller on a separate board, connected to the mai
 - Received signal → J2 SMA → BAV99 protection → OPA2354 two-stage Rx (10× + 10× = 100× total) → BAT54 envelope detector → GPIO1
 - Firmware reads attenuation ratio vs saline baseline to track particle size change
 
-**Computer Vision:**
-- USB 2.0 microscope camera frames processed by YOLOv8 model (likely rolling shutter — see `software/cv-pipeline/README.md`)
-- Outputs: median particle diameter (µm) and IQR, sent to ESP32 over UART
+**Computer Vision (verification, not closed-loop control):**
+- Raspberry Pi Zero 2W + OV9281-110 global-shutter mono CSI camera — no dye/contrast agent added to the slurry (real medical-device material), so contrast comes entirely from dark-field/oblique illumination and software-side local-contrast enhancement
+- Operator-triggered only: the ESP32 sends `CAPTURE` over UART, the Pi captures + median-stacks frames (noise reduction), runs instance segmentation via a Roboflow-hosted model (RF-DETR, trained on ~100 collected samples), and replies with `SIZE <median_um> <iqr_um>` plus a downscaled photo with segmentation blob outlines baked in — both rendered on the touchscreen's Camera Verify screen side by side, with an IN SPEC/OUT OF SPEC check
+- **Not a fusion input** — unlike UAS, a CV result never drives the mixing stop condition; worst case for a failed/slow capture is a timeout notice, not a stalled run. See `software/cv_verify/TODO.md` for the full reasoning
 - Diffused LED panel (5V, J8) backlit behind syringe for particle contrast
 
 **Turbidity Sensing (added v3.2, hardened v3.4):**
 - APDS9960 (I2C 0x39) reads ALS clear-channel transmission through the syringe; external LED hardwired on
 - MAX30102 (I2C 0x57) reads backscatter using its own onboard 660/880nm LEDs
 - Shared I2C bus (GPIO3/GPIO43, 400kHz); independent of the UAS acoustic path — a second, optical estimate of slurry turbidity
+- Live readings viewable on the BLE **Telemetry Dashboard** (`firmware/esp32/web/`) as Optical Sensor 1/2, alongside every other sensor — see "Getting Started" below
+- Like CV, not yet part of the mixing stop condition — the fusion calibration table (`calibration.cpp`) is still unfilled placeholder data for every channel, so only UAS drives the closed loop today
 
 **Force Sensing (added v3.2):**
 - 2× load cell + HX711 24-bit amplifier at the syringe plunger contact point
@@ -194,10 +210,11 @@ ILI9341 TFT + XPT2046 touch controller on a separate board, connected to the mai
 | LEDC step generation, limit switch ISRs | `src/motors.cpp` | ✅ Done |
 | Homing routine + stroke counter | `src/motors.cpp` | ✅ Done |
 | AD9833 1MHz DDS, UAS ADC calibration | `src/uas.cpp` | ✅ Done |
-| NimBLE wireless debug UART | `src/ble_debug.cpp` | ✅ Done |
-| RPi UART receive + packet parser | `src/rpi_uart.cpp` | ✅ Done |
-| PID: adjustable setpoint (50–1000µm), in-spec detection | `src/pid.cpp` | ⚠️ Motor stroke mapping still stub |
-| TFT live PSD/IQR display, encoder setpoint, BTN1 start / BTN2 stop-estop | `src/ui.cpp` | ⚠️ Touch input still stub |
+| NimBLE wireless debug UART + binary telemetry service | `src/ble_debug.cpp`, `src/ble_binary_telemetry.cpp` | ✅ Done |
+| RPi UART: SIZE reply parsing + on-demand IMG (annotated photo) receive | `src/rpi_uart.cpp` | ✅ Done |
+| Mixing scheduler: adjustable setpoint (50–1000µm), closed-loop UAS delta-V stop condition | `src/scheduler.cpp` | ✅ Done — replaces the old PID design |
+| TFT UI: encoder-driven menus, live verify screen (photo + PSD/IQR), start/stop-estop | `src/ui.cpp`, `src/ui/screens/` | ⚠️ Touch input still stub (encoder-only works) |
+| Turbidity sensors (APDS9960 + MAX30102) | `src/turbidity.cpp` | ✅ Done — feeds the BLE Telemetry Dashboard; not yet a fusion input (calibration table unfilled) |
 
 See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task list and hardware bring-up checklist, and [`firmware/esp32/README.md`](firmware/esp32/README.md#operational-workflow) for the doctor-facing operational workflow (boot → home → set target → run → stop/e-stop).
 
@@ -207,10 +224,10 @@ See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task l
 
 | Layer | Platform | Language | Key Libraries |
 |---|---|---|---|
-| Computer vision | Raspberry Pi 5 | Python 3 | OpenCV, Ultralytics YOLOv8 |
-| Firmware / PID | ESP32-S3 | C++ (Arduino) | TMCStepper, NimBLE, TFT_eSPI, AD9833 |
-| Touchscreen UI | ESP32-S3 | C++ | TFT_eSPI |
-| BLE debug | ESP32-S3 | C++ | NimBLE |
+| Computer vision (on-demand verification) | Raspberry Pi Zero 2W | Python 3 | picamera2, Pillow, NumPy, `requests` (Roboflow hosted inference — see `software/cv_verify/detection.py`) |
+| Firmware / mixing scheduler | ESP32-S3 | C++ (Arduino) | TMCStepper, NimBLE, LovyanGFX, AD9833 |
+| Touchscreen UI | ESP32-S3 | C++ | LovyanGFX |
+| BLE debug + telemetry | ESP32-S3 | C++ | NimBLE |
 
 **Critical firmware notes:**
 - SPI2 is shared between AD9833 (Mode 2, ~10MHz), ILI9341 (Mode 0, 20MHz max via ribbon), and XPT2046 (Mode 0, 2MHz). Each library switches mode per transaction via `SPI.beginTransaction()`.
@@ -226,7 +243,7 @@ See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task l
 | Sub-team | Responsibilities | Members |
 |---|---|---|
 | **Mechanical** | Frame, syringe holders, motor mounts, 3D printed enclosure (FDM + SLA resin), DOE (Design of Experiments) | Alvin, Victoria, Tian Wen |
-| **Electrical & Software** | KiCad schematics + PCB layout (main board + display breakout), component sourcing, board bring-up/testing, ESP32-S3 firmware (PID, motor control, UAS), RPi CV pipeline (YOLOv8), TFT UI | Vincent, Ren Jie, Audrey, Aditi |
+| **Electrical & Software** | KiCad schematics + PCB layout (main board + display breakout), component sourcing, board bring-up/testing, ESP32-S3 firmware (mixing scheduler, motor control, UAS), RPi CV verification pipeline (Roboflow), TFT UI | Vincent, Ren Jie, Audrey, Aditi |
 
 ---
 
@@ -235,12 +252,10 @@ See [`firmware/FIRMWARE_TODO.md`](firmware/FIRMWARE_TODO.md) for the full task l
 | Milestone | Week | Status |
 |---|---|---|
 | System Requirements Review | 5 | ✅ Complete |
-| Recess week — build sprint | 7 | ✅ Current |
-| PCB schematic freeze | End of 7 | 🔲 Upcoming |
-| System Design Review | 9 | 🔲 |
-| Final Exhibition | 13 | 🔲 |
-
-The PCB schematic must be finalised by end of Week 7 to meet the JLCPCB fabrication lead time before the System Design Review.
+| Recess week — build sprint | 7 | ✅ Complete |
+| PCB schematic freeze | End of 7 | ✅ Complete |
+| System Design Review | 9 | ✅ Complete |
+| Final Exhibition | 13 | ✅ Current |
 
 ---
 
@@ -259,21 +274,36 @@ pio device monitor        # serial monitor at 115200
 
 Hold `BOOT` + press `RESET` for manual bootloader entry if auto-reset fails.
 
-### Computer Vision Pipeline (Raspberry Pi 5)
+### Computer Vision Pipeline (Raspberry Pi Zero 2W)
 
 ```bash
-cd software/cv-pipeline
-pip install -r requirements.txt
-python main.py
+cd software/cv_verify
+python3 -m venv .venv --system-site-packages   # --system-site-packages: sees apt-installed picamera2
+source .venv/bin/activate
+pip install -r ../requirements.txt
+export ROBOFLOW_API_KEY=<your key>             # not stored in any committed file
+python3 main.py
 ```
+
+See [`software/cv_verify/SETUP.md`](software/cv_verify/SETUP.md) for full Pi Zero 2W bring-up (camera/UART dtoverlays, etc.) and [`software/cv_verify/SESSION_HANDOFF.md`](software/cv_verify/SESSION_HANDOFF.md) for current working state and known issues.
 
 ### Electrical
 
 PCB files live in `hardware/electrical/` — two boards: the main board (`embo main MCU PCB v3_4/`, current revision) and the display breakout. Open with KiCad 10. The full design spec including component values, GPIO assignments, layout rules, BOM, and the pre-submission checklist is in [`docs/EMBO_PCB_Design_Brief_v3_4.txt`](docs/EMBO_PCB_Design_Brief_v3_4.txt).
 
+### Telemetry Dashboard (real firmware)
+
+`firmware/esp32/web/index_logging to record UAS csv data.html` is a Web Bluetooth dashboard for the actual production firmware (not the bench-test project below) — live UAS envelope, both load cells, and both optical/turbidity sensors (labeled Optical Sensor 1/2), plus motor jog/home controls and the automated UAS frequency sweep. Requires BLE to be enabled on-device first (**Settings → Developer mode → UAS debug mode**), and must be served over http(s) — Web Bluetooth silently fails under a `file://` URL:
+
+```bash
+cd firmware/esp32/web
+python3 -m http.server 8000
+# open http://localhost:8000/index_logging%20to%20record%20UAS%20csv%20data.html
+```
+
 ### PCB Bench-Test Firmware + Dashboard
 
-`testing/PCB_Test_Firmware_v3_4/` is a standalone PlatformIO project for bringing up an assembled v3.4 board: reads every sensor (UAS envelope, both load cells, both turbidity channels, both StallGuard results, limit switches), drives the two steppers, and streams it all over BLE to a Web Bluetooth dashboard (`web/index.html`) with live strip-charts alongside the raw numbers.
+`testing/PCB_Test_Firmware_v3_4/` is a separate, standalone PlatformIO project for bringing up an assembled v3.4 board pre-final-firmware: reads every sensor (UAS envelope, both load cells, both turbidity channels, both StallGuard results, limit switches), drives the two steppers, and streams it all over BLE to its own Web Bluetooth dashboard (`web/index.html`) with live strip-charts alongside the raw numbers.
 
 ---
 
