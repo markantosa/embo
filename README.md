@@ -6,11 +6,14 @@ EMBO is a closed-loop medical device that automates and quality-controls the pre
 
 | | |
 |:---:|:---:|
-| ![EMBO isometric view](assets/embo%20iso.png) | ![EMBO side view](assets/embo%20side.png) |
-| *Isometric render* | *Front view* |
+| ![EMBO fully assembled](assets/EMBO%20fully%20assembled.jpg) | ![EMBO electrical assembly](assets/EMBO%20electrical%20assembly.jpg) |
+| *Fully assembled device* | *Electrical assembly* |
 
-![EMBO sheet metal case render](assets/EMBO%20Sheet%20Metal%20Case.png)
-*Sheet-metal enclosure, latest CAD — syringe/plunger mechanism with external touchscreen panel*
+**CAD renders**
+
+| Isometric | Front | Sheet-metal enclosure |
+|:---:|:---:|:---:|
+| <img src="assets/embo%20iso.png" width="220"> | <img src="assets/embo%20side.png" width="220"> | <img src="assets/EMBO%20Sheet%20Metal%20Case.png" width="220"> |
 
 ---
 
