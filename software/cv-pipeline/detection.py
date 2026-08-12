@@ -7,20 +7,34 @@ confirmed 2026-08-12) — this trades an internet dependency for being
 unblocked right now. Revisit if/when the plan is upgraded or offline
 operation becomes a hard requirement (see cv_verify/SESSION_HANDOFF.md).
 
+Uses a plain `requests` multipart POST against Roboflow's REST endpoint
+rather than the `inference_sdk` package — every published inference_sdk
+version requires Python <3.13, and this Pi's fresh OS image ships 3.13.5
+(confirmed 2026-08-12, `pip install inference-sdk` failed with "no matching
+distribution" for that reason, not a network issue). The REST response
+shape is identical to what the SDK would return, so only the request
+plumbing changed, not the polygon-parsing logic.
+
 Reads ROBOFLOW_MODEL_ID/ROBOFLOW_API_URL/ROBOFLOW_CONFIDENCE from config.py
 (cv_verify's copy wins over this file's own config.py when imported via
 main.py — see that file's sys.path docstring) and the API key from the
 ROBOFLOW_API_KEY environment variable, deliberately not from any committed
 file.
 """
+import io
 import os
-import tempfile
 
 import numpy as np
+import requests
 from PIL import Image
-from inference_sdk import InferenceHTTPClient
 
 from config import ROBOFLOW_MODEL_ID, ROBOFLOW_API_URL, ROBOFLOW_CONFIDENCE
+
+# Capture+median-stack+preprocessing already eats into CAPTURE_TIMEOUT_S
+# (config.py) — this is just the HTTP call's own budget, kept comfortably
+# under that total so a hung request fails fast enough for main.py to still
+# reply before firmware's RPI_CAPTURE_TIMEOUT_MS.
+_REQUEST_TIMEOUT_S = 12.0
 
 
 class ParticleDetector:
@@ -29,13 +43,12 @@ class ParticleDetector:
         # original stub (main.py calls ParticleDetector(config.WEIGHTS_PATH))
         # — unused here, see module docstring.
         self.weights_path = weights_path
-        api_key = os.environ.get("ROBOFLOW_API_KEY")
-        if not api_key:
+        self._api_key = os.environ.get("ROBOFLOW_API_KEY")
+        if not self._api_key:
             raise RuntimeError(
                 "ROBOFLOW_API_KEY environment variable not set — export it "
                 "before running main.py (see SESSION_HANDOFF.md)"
             )
-        self._client = InferenceHTTPClient(api_url=ROBOFLOW_API_URL, api_key=api_key)
 
     def detect(self, frame: np.ndarray) -> list:
         """Run instance segmentation on one greyscale (H x W) frame.
@@ -46,18 +59,18 @@ class ParticleDetector:
         frame", which is a normal outcome, not an error).
         """
         img = Image.fromarray(np.clip(frame, 0, 255).astype(np.uint8))
-        # Written to a real file rather than passed as a PIL/array object —
-        # matches Roboflow's own documented example exactly
-        # (CLIENT.infer("image.jpg", ...)), avoiding any ambiguity about
-        # which in-memory input types the SDK does/doesn't accept.
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=True) as tmp:
-            img.save(tmp.name)
-            result = self._client.infer(tmp.name, model_id=ROBOFLOW_MODEL_ID)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        buf.seek(0)
 
-        # Serverless API returns a single dict for one image; be tolerant
-        # of a list wrapper too (some SDK versions/batch paths do this).
-        if isinstance(result, list):
-            result = result[0] if result else {}
+        resp = requests.post(
+            f"{ROBOFLOW_API_URL}/{ROBOFLOW_MODEL_ID}",
+            params={"api_key": self._api_key, "confidence": ROBOFLOW_CONFIDENCE},
+            files={"file": ("capture.jpg", buf, "image/jpeg")},
+            timeout=_REQUEST_TIMEOUT_S,
+        )
+        resp.raise_for_status()
+        result = resp.json()
 
         polygons = []
         for pred in result.get("predictions", []):

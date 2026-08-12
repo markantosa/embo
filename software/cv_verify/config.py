@@ -75,7 +75,11 @@ WEIGHTS_PATH = "../cv-pipeline/weights/best.pt"
 # ROBOFLOW_API_KEY is intentionally NOT here — read from the
 # ROBOFLOW_API_KEY environment variable on the Pi instead (see
 # ~/.bashrc), so the key never lives in a committed file.
-ROBOFLOW_MODEL_ID = "vincent-santosa/particle-size-ecd/3"
+# "{project}/{version}", no workspace prefix — matches the REST endpoint's
+# /{dataset_id}/{version_id} path shape (detection.py posts directly to
+# ROBOFLOW_API_URL/ROBOFLOW_MODEL_ID); the API key already scopes which
+# workspace's project this resolves against.
+ROBOFLOW_MODEL_ID = "particle-size-ecd/3"
 ROBOFLOW_API_URL = "https://serverless.roboflow.com"
 # "Optimal" confidence threshold from the v3 model's evaluation page (best
 # F1 balance point, mAP@50 51.5%/F1 53.3% on a 10-image test set — small

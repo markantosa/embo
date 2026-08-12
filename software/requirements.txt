@@ -3,4 +3,4 @@ pyserial>=3.5
 numpy>=1.26
 ultralytics>=8.2
 pillow>=10.0
-inference-sdk>=0.9
+requests>=2.31

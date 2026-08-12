@@ -1,5 +1,72 @@
 ---
 
+## Update 2026-08-12 (later same day) — Pi reflashed, deployed, camera+detection verified working
+
+**Pi was reflashed** (SD card corruption suspected after an abrupt power-loss
+mid-session — never fully confirmed via HDMI, but the reflash resolved it).
+New hostname `embo`, IP `10.67.48.209` on the `VMS` phone-hotspot network
+(not the old `172.31.163.209` — that was a different WiFi network entirely,
+this PC and the Pi must both be on the same hotspot to reach it). SSH key
+auth re-established (`~/.ssh/id_ed25519.pub` on this Windows machine, title
+`claude-code-embo-cv`) — was password-only (`slurry`) right after reflash.
+
+**Real blocker hit and fixed: `inference-sdk` is incompatible with this
+Pi's Python.** Fresh Raspberry Pi OS image ships **Python 3.13.5**, and
+*every* published `inference-sdk` version requires `<3.13` — `pip install`
+failed with "no matching distribution", not a network issue (confirmed by
+retrying in isolation). Fix: **rewrote `../cv-pipeline/detection.py` to
+use plain `requests`** against Roboflow's REST endpoint
+(`https://serverless.roboflow.com/{project}/{version}`, multipart file
+upload) instead of the SDK — same JSON response shape, so only the
+request plumbing changed, not the polygon-parsing logic. `config.py`'s
+`ROBOFLOW_MODEL_ID` changed from `"vincent-santosa/particle-size-ecd/3"`
+to `"particle-size-ecd/3"` (no workspace prefix — the REST path is
+`/{project}/{version}`, api_key already scopes the workspace).
+`requirements.txt`: `inference-sdk` → `requests` (turned out to already be
+preinstalled system-wide on this Pi image anyway).
+
+**`ROBOFLOW_API_KEY` persistence gotcha:** appending to `~/.bashrc` does
+NOT work for non-interactive SSH commands (`ssh host "source ~/.bashrc &&
+..."`) — Debian's default `.bashrc` has an early-return guard for
+non-interactive shells near the top (`case $- in *i*) ;; *) return;; esac`),
+so anything appended after that point in the file never executes under
+`ssh host "cmd"`. Still exported for real interactive login sessions. Did
+NOT fix this properly (would need `/etc/environment` via sudo, which the
+harness's permission classifier blocked as a system-file edit) — **for now,
+pass it inline**: `ROBOFLOW_API_KEY=<key> python3 main.py`. Revisit if this
+becomes annoying for repeated manual runs.
+
+**Verified working, in order:**
+1. `/dev/serial0` exists (UART fix applied via config.txt append + confirmed
+   after reboot).
+2. `rpicam-hello --list-cameras` detects the **OV9281** correctly. Note:
+   this image's camera tool is `rpicam-hello`, not `libcamera-hello` (the
+   command was renamed upstream) — `SETUP.md` should probably be updated
+   to reflect this, not yet done.
+3. `rpicam-still` captures a real JPEG successfully — but the test shot
+   was **badly out of focus and pointed at a PCB/component area, not the
+   syringe/sample mount** (camera almost certainly got bumped or was never
+   remounted during the reflash troubleshooting). Purely a physical
+   positioning issue, not software — **re-aim/focus the camera before any
+   real capture test**.
+4. `detection.py`'s full HTTP round-trip against the live Roboflow API
+   confirmed working end-to-end (auth, multipart upload, JSON parsing) —
+   tested directly with the out-of-focus PCB photo, correctly returned
+   `0` polygons (right answer for that image, not a bug).
+
+**Not yet done:**
+- `main.py`'s actual on-demand loop (`CAPTURE` → detect → reply) never run
+  yet — only tested `detection.py` in isolation via a one-off script.
+- ESP32 firmware still not flashed — needs a USB connection from the ESP32
+  to this Windows PC specifically (separate machine from the Pi), which
+  hasn't happened yet this session. Firmware itself is ready (compiles
+  clean, merged with teammate's v0.7.5, IMG protocol + verifying_screen
+  intact — see the "Roboflow PoC wiring" entry below for what was ported).
+- Once both are ready: full UART round-trip test (`CAPTURE` from firmware
+  → Pi captures+detects+replies → firmware displays photo+blobs+median/IQR).
+
+---
+
 ## Update 2026-08-12 — Roboflow PoC wiring (detection/sizing no longer stubs)
 
 **What changed this session:**
