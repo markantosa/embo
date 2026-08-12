@@ -188,11 +188,12 @@ uint32_t calib_estimate_stroke_count_for_target(uint16_t targetSizeUm);
 // no stroke-count equation exists for Viscosity). Real measured
 // calibration, not a placeholder:
 //   viscosity_pa_s = VISCOSITY_EQ_SLOPE * force_grams + VISCOSITY_EQ_INTERCEPT
-// force_grams is the AVERAGE of both load cells (force_sensor_get_grams_1()/
-// _2()), read ONLY while a motor's position is within
-// [VISCOSITY_FORCE_READ_POS_MIN, VISCOSITY_FORCE_READ_POS_MAX] (config.h) —
-// scheduler.cpp gates this, not this function; this function just does the
-// conversion for whatever force value it's given.
+// force_grams is the RIGHT load cell only (force_sensor_get_grams_2(),
+// motor 2) — not an average of both — read ONLY while motor 2's own
+// position is within [VISCOSITY_FORCE_READ_POS_MIN,
+// VISCOSITY_FORCE_READ_POS_MAX] (config.h) — scheduler.cpp gates this, not
+// this function; this function just does the conversion for whatever
+// force value it's given.
 #define VISCOSITY_EQ_SLOPE       -1.66e-5f
 #define VISCOSITY_EQ_INTERCEPT    0.0494f
 

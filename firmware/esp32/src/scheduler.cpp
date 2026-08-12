@@ -363,24 +363,23 @@ void scheduler_update() {
         // Viscosity run's actual stop condition — position-gated force
         // read. Only evaluated for a Viscosity-targeted run; a Size run
         // ignores this entirely (its stop condition is the stroke count
-        // check below instead). Reads whenever EITHER motor is within
+        // check below instead). Reads only the RIGHT load cell
+        // (force_sensor_get_grams_2(), motor 2) — not an average of both
+        // — gated on motor 2's OWN position being within
         // [VISCOSITY_FORCE_READ_POS_MIN, VISCOSITY_FORCE_READ_POS_MAX]
-        // (config.h) — near the top of travel, not the full stroke —
-        // since only one motor is ever near ITS max at a time (they move
-        // to opposite ends concurrently), checking either covers both
-        // halves of the alternating pattern. Stops the instant the
-        // computed viscosity reads at or below target — monotonic,
+        // (config.h), near the top of ITS travel. Motor 1's position is
+        // irrelevant here now — it doesn't indicate whether a motor-2
+        // force reading is meaningful at that moment. Stops the instant
+        // the computed viscosity reads at or below target — monotonic,
         // irreversible mixing (same philosophy as the old UAS-based Size
         // check before it was replaced), not a tolerance window: once
         // mixed thinner than target, it doesn't un-mix back thicker.
         if (_isViscosityRun) {
-            int32_t p1 = motor_get_position(1);
             int32_t p2 = motor_get_position(2);
-            bool inWindow = (p1 >= VISCOSITY_FORCE_READ_POS_MIN && p1 <= VISCOSITY_FORCE_READ_POS_MAX) ||
-                            (p2 >= VISCOSITY_FORCE_READ_POS_MIN && p2 <= VISCOSITY_FORCE_READ_POS_MAX);
+            bool inWindow = (p2 >= VISCOSITY_FORCE_READ_POS_MIN && p2 <= VISCOSITY_FORCE_READ_POS_MAX);
             if (inWindow) {
-                float avgForceGrams = (force_sensor_get_grams_1() + force_sensor_get_grams_2()) / 2.0f;
-                float viscosityPaS = calib_estimate_viscosity_pa_s(avgForceGrams);
+                float forceGrams = force_sensor_get_grams_2();
+                float viscosityPaS = calib_estimate_viscosity_pa_s(forceGrams);
                 _lastMeasuredViscosityCp = viscosityPaS * 1000.0f;  // Pa*s -> cP, matching mixing_options_get_viscosity_target_cp()'s unit
                 if (_lastMeasuredViscosityCp <= (float)mixing_options_get_viscosity_target_cp()) {
                     _stopMotorsHold();
@@ -389,7 +388,7 @@ void scheduler_update() {
                     ble_log("Scheduler: viscosity target reached (measured=%.1fcP, target=%ucP, "
                             "force=%.2fg) at %lu strokes",
                             _lastMeasuredViscosityCp, mixing_options_get_viscosity_target_cp(),
-                            avgForceGrams, (unsigned long)_strokesDone);
+                            forceGrams, (unsigned long)_strokesDone);
                     return;
                 }
             }

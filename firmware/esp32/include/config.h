@@ -120,9 +120,9 @@
 #define MOTOR2_SOFT_LIMIT_MIN   0
 #define MOTOR2_SOFT_LIMIT_MAX   15000
 
-// Position window (either motor) the viscosity mixing loop reads force
-// within — see calib_estimate_viscosity_pa_s() (calibration.h). Near the
-// top of travel (MOTOR1/2_SOFT_LIMIT_MAX above), not the full range.
+// Position window (motor 2 / right side only) the viscosity mixing loop
+// reads force within — see calib_estimate_viscosity_pa_s() (calibration.h).
+// Near the top of travel (MOTOR2_SOFT_LIMIT_MAX above), not the full range.
 #define VISCOSITY_FORCE_READ_POS_MIN  14000
 #define VISCOSITY_FORCE_READ_POS_MAX  15000
 
