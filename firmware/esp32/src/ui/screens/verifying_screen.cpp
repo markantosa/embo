@@ -26,6 +26,9 @@ void VerifyingScreen::_draw(bool waiting, bool forceFull) {
     if (forceFull) {
         tft.fillScreen(TFT_WHITE);
         tft.setFont(&fonts::FreeSansBold12pt7b);
+        // Moved up from the original y=50 to y=20 to make room for the
+        // image + result layout below (image starts at y=45) — the old
+        // y=50 title would otherwise overlap the top of the image.
         ui_display_draw_centered("Camera Verify", 20, TFT_BLACK, 1);
         tft.setFont(&fonts::FreeSans9pt7b);
     }

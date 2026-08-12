@@ -186,6 +186,17 @@ float calib_estimate_particle_size_from_uas_delta_v_um(float deltaVoltageVolts) 
     return UAS_SIZE_EQ_COEFFICIENT * powf(deltaVoltageVolts, UAS_SIZE_EQ_EXPONENT);
 }
 
+uint32_t calib_estimate_stroke_count_for_target(uint16_t targetSizeUm) {
+    float ratio = (float)targetSizeUm / STROKE_COUNT_EQ_COEFFICIENT;
+    // pow() with a negative fractional exponent is undefined for a
+    // non-positive base — targetSizeUm is a uint16_t so ratio can't be
+    // negative, but guard the zero case explicitly anyway.
+    if (ratio <= 0.0f) return 0;
+    float strokes = powf(ratio, 1.0f / STROKE_COUNT_EQ_EXPONENT) - 1.0f;
+    if (strokes <= 0.0f) return 0;  // target at/above the coefficient — no mixing needed, not an error
+    return (uint32_t)(strokes + 0.5f);  // round to nearest, not truncate
+}
+
 // ---------------------------------------------------------------------------
 // Breakage kinetics — online linear-regression fit of the linearized model
 // ---------------------------------------------------------------------------

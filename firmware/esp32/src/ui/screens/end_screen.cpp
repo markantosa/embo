@@ -16,19 +16,7 @@ void EndScreen::setResult(const char *msg) {
     _resultMsg[sizeof(_resultMsg) - 1] = '\0';
 }
 
-// End-of-mixing chirp — distinct from both the boot chirp (523Hz/150ms,
-// ui.cpp) and the button-press feedback tone (800Hz/30ms, ui_input.cpp) —
-// higher pitch and longer than either, meant to read as a genuine "done"
-// signal rather than routine feedback. Fires for every way a run reaches
-// this screen (target reached, safety cap, or emergency stop) — not
-// specific to a successful finish, since all of those are "the end of
-// mixing." Gated on Settings > Sound via ui_chirp() itself.
-#define END_OF_MIXING_CHIRP_HZ  1046
-#define END_OF_MIXING_CHIRP_MS  300
-
 void EndScreen::onEnter() {
-    ui_chirp(END_OF_MIXING_CHIRP_HZ, END_OF_MIXING_CHIRP_MS);
-
     // Draw the result FIRST, before the blocking re-home below — so the
     // operator sees what actually happened (target reached, e-stop, etc.)
     // rather than a stale Mixing-screen frame during the homing wait.

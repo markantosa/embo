@@ -32,6 +32,12 @@ static bool _timed_out         = false;
 static uint32_t _capture_sent_ms = 0;
 
 void rpi_uart_init() {
+    // Default RX ring buffer is only 256 bytes — nowhere near enough to
+    // survive a stall elsewhere in loop() (e.g. a slow HX711 read) during
+    // the ~16KB raw-image transfer at 921600 baud. Undersized here caused
+    // visibly corrupted/shifted images (dropped bytes desync every
+    // subsequent pixel). Must be set before begin().
+    _rpi.setRxBufferSize(RPI_IMG_MAX_W * RPI_IMG_MAX_H + 256);
     _rpi.begin(BAUD_RPI, SERIAL_8N1, PIN_RPI_RX, PIN_RPI_TX);
 }
 

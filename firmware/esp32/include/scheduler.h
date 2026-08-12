@@ -4,26 +4,36 @@
 
 // Mixing control loop — replaces the old PID (pid.h/pid.cpp).
 //
-// STOP CONDITION: a direct UAS-voltage-to-size equation
-// (calib_estimate_particle_size_from_uas_voltage_um(), calibration.h) —
-// size_um = UAS_SIZE_EQ_COEFFICIENT * voltage_volts ^ UAS_SIZE_EQ_EXPONENT,
-// real measured calibration. Checked EVERY scheduler_update() call while
-// stroking — "always," per product decision — not just once per completed
-// stroke, so mixing can stop as soon as the target is CONFIRMED (debounced
-// by UAS_SIZE_IN_SPEC_HOLD_MS, config.h) rather than waiting on the current
-// stroke and risking overshoot on this irreversible process. This
-// REPLACED an earlier 4-sensor fusion approach (UAS attenuation + APDS9960
-// + MAX30102 turbidity + load-cell force, each calibrated against a
-// 9-point bench dataset and fused by median) as this scheduler's actual
-// stop decision. That fusion function
-// (calib_estimate_particle_size_um(), calibration.h) still exists and is
-// still used — just for bench calibration data collection (BLE
-// FUSION/FIT commands, ble_debug.cpp) rather than driving mixing itself.
+// STOP CONDITION (v0.7.0): OPEN-LOOP, by product decision — replaces the
+// previous continuous UAS-voltage closed-loop check. The required stroke
+// count is computed ONCE from the target size at the start of a run
+// (calib_estimate_stroke_count_for_target(), calibration.h):
+//   stroke_count = (target_size_um / STROKE_COUNT_EQ_COEFFICIENT) ^ (1 / STROKE_COUNT_EQ_EXPONENT) - 1
+// real measured calibration, not a placeholder. The run then simply
+// executes that many strokes and stops — nothing is measured and compared
+// against target during the run to decide when to stop anymore. This is a
+// genuine change in stopping philosophy, not just a different formula.
+//
+// The UAS delta-V size equation
+// (calib_estimate_particle_size_from_uas_delta_v_um(), calibration.h —
+// size_um = UAS_SIZE_EQ_COEFFICIENT * deltaV_volts ^ UAS_SIZE_EQ_EXPONENT)
+// and the live voltage/size reading it drives are BOTH still kept running
+// continuously every scheduler_update() call, and still shown live on
+// MixingRunningScreen and at the end on EndScreen — but purely for
+// display/diagnostics now, not control. That equation itself replaced an
+// even earlier 4-sensor fusion approach (calib_estimate_particle_size_um(),
+// calibration.h) as this scheduler's stop decision; that fusion function
+// still exists and is still used, just for bench calibration data
+// collection (BLE FUSION/FIT commands, ble_debug.cpp) rather than driving
+// mixing itself — same reason it survived the switch to delta-V, and the
+// same reason delta-V itself survives the switch to stroke count now: none
+// of these measurement/estimation paths get deleted when they stop being
+// the control input, only when they stop being useful for anything.
 //
 // CV (the RPi camera) is deliberately NOT part of the stop condition
-// either way. It's an optional, operator-triggered, single-shot
-// VERIFICATION (rpi_uart.h) the doctor can run before/after a run to
-// double-check the achieved size — slower and historically less
+// either way, and never has been. It's an optional, operator-triggered,
+// single-shot VERIFICATION (rpi_uart.h) the doctor can run before/after a
+// run to double-check the achieved size — slower and historically less
 // trustworthy as a continuous signal (see
 // docs/EMBO_UAS_CV_Technical_Advisory.txt), but a good independent check
 // precisely because it counts real particles rather than inferring from a
@@ -32,30 +42,31 @@
 //
 // WHY NOT PID: the breakage process is monotonic and IRREVERSIBLE — mixing
 // only breaks particles smaller, never larger. Overshoot isn't "error to
-// correct from the other side," it's a ruined batch. Even with a live,
-// fast, continuous estimate now available, this still argues against a
-// PID: the only real "control action" is "keep stroking or stop," not a
-// proportional correction, and an integral term in particular risks
-// pushing past a target that can't be un-passed. Instead:
-//   1. Stroke continuously once a run starts — motor 1 (left) and motor 2
-//      (right) move concurrently in opposite directions, driven to actual
-//      soft-limit positions (not a fixed elapsed time), alternating who's
-//      headed to max vs returning to min each half-stroke. Same mechanism
-//      as Stroke Testing (stroke_test_screen.cpp), which this scheduler's
+// correct from the other side," it's a ruined batch. This is true
+// regardless of which stop condition drives the loop — closed-loop
+// UAS-voltage or open-loop stroke count — the only real "control action"
+// was always "keep stroking or stop," never a proportional correction.
+// Sequence, as of v0.7.0:
+//   1. At scheduler_start(), compute the target stroke count once from
+//      the target size — see the equation above.
+//   2. Stroke continuously — motor 1 (left) and motor 2 (right) move
+//      concurrently in opposite directions, driven to actual soft-limit
+//      positions (not a fixed elapsed time), alternating who's headed to
+//      max vs returning to min each half-stroke. Same mechanism as
+//      Stroke Testing (stroke_test_screen.cpp), which this scheduler's
 //      stroke pattern was deliberately made to match.
-//   2. Every scheduler_update() call, compute the UAS-voltage size
-//      estimate and compare to target — "always," not gated on stroke
-//      completion.
-//   3. Stop (wherever the motors currently are, not waiting for a stroke
-//      boundary) once the estimate reads within TARGET_TOLERANCE_UM
-//      (config.h) of the target continuously for UAS_SIZE_IN_SPEC_HOLD_MS
-//      — debounced so a single noisy reading can't stop an irreversible
-//      process early.
+//   3. After each completed full stroke, check _strokesDone against the
+//      target stroke count from step 1 — stop (motors already at rest at
+//      a stroke boundary either way, unlike the old continuous check
+//      which could stop mid-half-stroke) once reached.
 //   4. A hard MIXING_MAX_STROKES_SAFETY_CAP (calibration.h) stops the run
-//      regardless, logging a warning, if the estimate never converges —
-//      guards against a miscalibrated equation running forever. Still
-//      counted per completed full stroke, unlike the continuous check
-//      above — a coarse backstop doesn't need finer granularity.
+//      regardless, logging a warning, if the target stroke count is
+//      somehow never reached (shouldn't normally happen now that the
+//      count is computed rather than measured, but this backstop is kept
+//      as defense-in-depth) — or if the target stroke count itself
+//      exceeds the cap for a small enough target size (currently true
+//      below ~56um at the current cap/equation values — worth knowing,
+//      not something this file silently works around).
 //
 // StallGuard is NOT part of the stop condition (never validated as a size
 // proxy, see the technical advisory) — it's a separate stall/jam FAULT
@@ -65,9 +76,10 @@ void scheduler_init();
 void scheduler_update();   // call every loop()
 
 // Start a mixing run targeting the current setpoint (see
-// scheduler_set_target_um()). Resets the continuous in-spec debounce
-// state. Does NOT reset the breakage-model fit (calibration.h) — that
-// accumulates across runs, see calib_breakage_reset().
+// scheduler_set_target_um()). Computes the target stroke count fresh from
+// that setpoint (see the file header comment) — does NOT reset the
+// breakage-model fit (calibration.h), that accumulates across runs, see
+// calib_breakage_reset().
 //
 // Homes first, UNCONDITIONALLY — every single time, regardless of any
 // homing already done via another function earlier in the session
@@ -105,15 +117,14 @@ bool scheduler_is_paused();
 // currently held.
 bool scheduler_is_running();
 
-// True once the UAS-voltage size estimate has read within tolerance of
-// target continuously for UAS_SIZE_IN_SPEC_HOLD_MS (a real, sensor-
-// confirmed stop) OR the safety-cap stroke count was hit (check
-// scheduler_hit_safety_cap() to distinguish the two).
+// True once the computed target stroke count (see the file header
+// comment) has been reached OR the safety-cap stroke count was hit first
+// (check scheduler_hit_safety_cap() to distinguish the two).
 bool scheduler_target_reached();
 
 // True if the run stopped because MIXING_MAX_STROKES_SAFETY_CAP was hit
-// rather than the UAS voltage equation actually converging — a sign the
-// calibration/equation needs attention, not a normal completion.
+// before the target stroke count was reached — a sign the target size,
+// equation, or safety cap itself needs a look, not a normal completion.
 bool scheduler_hit_safety_cap();
 
 // True if a stall (StallGuard) or a motor timing out mid-half-stroke
@@ -129,6 +140,11 @@ void     scheduler_set_target_um(uint16_t target_um);
 uint16_t scheduler_get_target_um();
 
 uint32_t scheduler_get_strokes_done();
+
+// The stroke count computed once at scheduler_start() from the target
+// size — this is the actual stop condition as of v0.7.0, see the file
+// header comment. 0 before any run has started this session.
+uint32_t scheduler_get_target_stroke_count();
 
 // Latest UAS-voltage size estimate, and whether a reading exists yet (0 or
 // 1 — kept as a "channels" count for API compatibility with existing

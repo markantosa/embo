@@ -64,7 +64,18 @@ v0.6.9
 - changed uas correlation equation
 
 v0.7.0
-- add camera functionality
+- ported rpi camera functionality from other code file
+- changed main mixing to stop at number of strokes instead of uas (just for the demo)
+- increased the detent per encoder rotation to 10um per detent
+- increased the max value of selectible particle size
+
+v0.7.1
+- remove sound setting totally, add chirp after mixing complete
+- remove screen after camera feature
+
+v0.7.2 
+- add auto home and push left motor if the camera feature is used
+- home pre nudge to 400 steps
 
 v0.8.0 (goal) - auto detect syringe inside using uas
 

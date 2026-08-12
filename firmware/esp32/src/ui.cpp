@@ -7,9 +7,7 @@
 #include "ui/screens/menu_screen.h"
 #include "ui/screens/telemetry_screen.h"
 #include "ui/screens/uas_debug_toggle_screen.h"
-#include "ui/screens/sound_toggle_screen.h"
 #include "mixing_options.h"
-#include "sound_settings.h"
 #include "ui/screens/mixing_menu_screen.h"
 #include "ui/screens/viscosity_menu_screen.h"
 #include "ui/screens/warning_screen.h"
@@ -42,10 +40,9 @@
 // Screen graph (see the flowchart this was built from):
 //   Insert syringe -> Start Menu -> [Start] -> Agent selection -> Target type -> Mixing Menu -> Warning
 //                                                                                              -> Mixing Running -> End -> (back to Start Menu)
-//                                -> [Settings] -> [Sound] (on/off toggle)
-//                                              -> [Motion] -> [Home Motors]
+//                                -> [Settings] -> [Motion] -> [Home Motors]
 //                                              -> [Developer mode] -> [UAS debug mode] (BLE toggle)
-//                                -> [Camera feature] -> mount check -> (stub, "developing in progress")
+//                                -> [Camera feature] -> Verifying (camera size check)
 //   End screen and Mixing/Warning screens can also reach Verifying (camera
 //   size check) via encoder long-press, same as before this redesign.
 
@@ -57,15 +54,12 @@ static BuzzerDriver _buzzer(PIN_BUZ_PWM, 2);  // channel 2 — motors explicitly
 static VerifyingScreen       _verifyingScreen;
 static ErrorScreen           _errorScreen;
 static UasDebugToggleScreen  _uasDebugToggleScreen;
-static SoundToggleScreen     _soundToggleScreen;
 static TelemetryScreen       _telemetryScreen;
 static MixingMenuScreen      _mixingMenuScreen;
 static ViscosityMenuScreen   _viscosityMenuScreen;
 static WarningScreen         _warningScreen;
 static MixingRunningScreen   _mixingRunningScreen;
 static EndScreen             _endScreen;
-static PlaceholderScreen     _cameraMountScreen;
-static PlaceholderScreen     _cameraStubScreen;
 static PlaceholderScreen     _insertSyringeScreen;
 static StrokeTestScreen      _strokeTestScreen;
 
@@ -168,12 +162,10 @@ static MenuScreen _developerModeMenuScreen("Developer Mode", kDeveloperModeItems
 // order matters: MenuItem callback bodies need referenced statics already
 // declared, unlike .wire() calls in ui_init() which run after everything
 // exists regardless of order). ────────────────────────────────────────────
-static void _settingsGoSound(ScreenManager &mgr)     { mgr.push(&_soundToggleScreen); }
 static void _settingsGoMotion(ScreenManager &mgr)    { mgr.push(&_motionMenuScreen); }
 static void _settingsGoDeveloper(ScreenManager &mgr) { mgr.push(&_developerModeMenuScreen); }
 
 static const MenuItem kSettingsItems[] = {
-    { "Sound",          _settingsGoSound },
     { "Motion",         _settingsGoMotion },
     { "Developer mode", _settingsGoDeveloper },
 };
@@ -250,7 +242,7 @@ static MenuScreen _agentSelectionMenuScreen("Select Agent", kAgentItems,
 // ── Start Menu ────────────────────────────────────────────────────────────────
 static void _startGoStart(ScreenManager &mgr)    { mgr.push(&_agentSelectionMenuScreen); }
 static void _startGoSettings(ScreenManager &mgr) { mgr.push(&_settingsMenuScreen); }
-static void _startGoCamera(ScreenManager &mgr)   { mgr.push(&_cameraMountScreen); }
+static void _startGoCamera(ScreenManager &mgr)   { mgr.push(&_verifyingScreen); }
 
 static const MenuItem kStartItems[] = {
     { "Start",          _startGoStart },
@@ -280,20 +272,11 @@ void ui_init() {
     Serial.printf("UI_INIT: pushing logo at x=%d y=%d\n", x, y);
     tft.pushImage(x, y, LOGO_WIDTH, LOGO_HEIGHT, epd_bitmap_embo_logoembologo320240);
     Serial.println("UI_INIT: boot splash drawn");
-    if (sound_is_enabled()) {
-        _buzzer.tone(523, 150);
-        delay(150); //brief splash hold
-        _buzzer.stop();
-    } else {
-        delay(150);
-    }
+    _buzzer.tone(523, 150);
+    delay(150); //brief splash hold
+    _buzzer.stop();
     delay(1350); //remainder of the splash hold
     Serial.println("UI_INIT: splash hold done, wiring screens");
-
-
-    _cameraMountScreen.configure("Camera Feature", "Ensure syringe is properly mounted", true);
-    _cameraMountScreen.setConfirmTarget(&_cameraStubScreen, true);  // push — Back pops to Start Menu
-    _cameraStubScreen.configure("Camera Feature", "Feature idea developing in progress", true);
 
     // Developer Mode submenu needs no wiring — its two items push
     // _telemetryScreen and _uasDebugToggleScreen directly, both already
@@ -312,12 +295,6 @@ void ui_init() {
 void ui_update() {
     _screenManager.update();
     _buzzer.update();
-}
-
-void ui_chirp(uint32_t frequencyHz, uint32_t durationMs) {
-    if (sound_is_enabled()) {
-        _buzzer.tone(frequencyHz, durationMs);
-    }
 }
 
 void ui_show_error(const char *msg) {

@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ── Firmware version ─────────────────────────────────────────────────────────
-#define FIRMWARE_VERSION "0.6.9"
+#define FIRMWARE_VERSION "0.7.2"
 
 // ── GPIO assignments (EMBO v3.4) ─────────────────────────────────────────────
 // Source: docs/EMBO_PCB_Design_Brief_v3_4.txt, docs/EMBO_Pinout_Cheatsheet.txt
@@ -182,7 +182,7 @@
 // consistent starting condition regardless of where the motor happened to
 // be sitting at boot (position is unknown pre-home). Both motors nudge
 // CONCURRENTLY, same as the real approach.
-#define HOMING_PRE_NUDGE_STEPS 200
+#define HOMING_PRE_NUDGE_STEPS 400
 // Abort homing if limit not reached within this time.
 #define HOMING_TIMEOUT_MS    30000
 // Direction toward the limit switch, intended to be anticlockwise —
@@ -198,9 +198,9 @@
 // ── Particle size target ─────────────────────────────────────────────────────
 // Encoder-adjustable setpoint range (clinical range TBD beyond this bound).
 #define TARGET_SIZE_UM_MIN      50
-#define TARGET_SIZE_UM_MAX      1000
+#define TARGET_SIZE_UM_MAX      2000
 #define TARGET_SIZE_UM_DEFAULT  300
-#define TARGET_SIZE_UM_STEP     5    // per encoder detent
+#define TARGET_SIZE_UM_STEP     10    // per encoder detent
 
 // Viscosity target — mirrors the particle-size constants above, same
 // pattern (min/max/default/step). PLACEHOLDER units (centipoise) and
@@ -217,18 +217,10 @@
 #define TARGET_VISCOSITY_CP_MAX      1000
 #define TARGET_VISCOSITY_CP_DEFAULT  100
 #define TARGET_VISCOSITY_CP_STEP     5
-// "In spec" window half-width around the setpoint. Placeholder — see
-// firmware/CALIBRATION.md §8 before trusting for auto-stop.
+// "In spec" window half-width around the setpoint — used by
+// VerifyingScreen's camera-check spec test. Placeholder — see
+// firmware/CALIBRATION.md §8 before trusting for that purpose.
 #define TARGET_TOLERANCE_UM     25
-// How long the UAS-voltage size estimate must read continuously within
-// TARGET_TOLERANCE_UM before the mixing loop actually stops (scheduler.cpp)
-// — the check itself runs every scheduler_update() call ("always", per
-// product decision), but a single instantaneous in-tolerance reading isn't
-// trusted to stop an irreversible process; this is the debounce. PLACEHOLDER
-// — not measured against real noise characteristics of the UAS voltage
-// signal yet, pick a value and tune from there once you have real
-// in-tolerance sensor traces.
-#define UAS_SIZE_IN_SPEC_HOLD_MS   1000
 
 // ── UI input timing (used by ui.cpp) ────────────────────────────────────────
 // BTN1 is dedicated to stop/e-stop only (no start function) — the encoder's
@@ -263,7 +255,8 @@
 // particle size) — kept separate on purpose.
 #define STROKE_RUN_HZ        8000   // step rate during a stroke 8000
 // Acceleration/deceleration ramp for stroke movement (scheduler.cpp only
-// Trapezoidal profile computed from
+// — Stroke Testing, stroke_test_screen.cpp, still runs at a flat speed;
+// say if you want the ramp there too). Trapezoidal profile computed from
 // actual position each scheduler_update() call, not time — speed ramps
 // linearly from STROKE_MIN_HZ up to STROKE_RUN_HZ over the first
 // STROKE_ACCEL_STEPS of a half-stroke, cruises at STROKE_RUN_HZ, then
