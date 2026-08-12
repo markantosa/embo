@@ -256,8 +256,7 @@
 // particle size) — kept separate on purpose.
 #define STROKE_RUN_HZ        8000   // step rate during a stroke 8000
 // Acceleration/deceleration ramp for stroke movement (scheduler.cpp only
-// — Stroke Testing, stroke_test_screen.cpp, still runs at a flat speed;
-// say if you want the ramp there too). Trapezoidal profile computed from
+// Trapezoidal profile computed from
 // actual position each scheduler_update() call, not time — speed ramps
 // linearly from STROKE_MIN_HZ up to STROKE_RUN_HZ over the first
 // STROKE_ACCEL_STEPS of a half-stroke, cruises at STROKE_RUN_HZ, then
