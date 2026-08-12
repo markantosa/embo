@@ -15,6 +15,16 @@ static int16_t _iqr_um    = -1;
 static char _buf[64];
 static uint8_t _buf_pos = 0;
 
+// ── Raw image receive state ──────────────────────────────────────────────
+// Static buffer, not malloc'd — this board most likely has no PSRAM, so a
+// fixed compile-time-sized buffer is the safer choice over anything
+// dynamically sized off an attacker/bug-controlled header value.
+static uint8_t _img_buf[RPI_IMG_MAX_W * RPI_IMG_MAX_H];
+static uint16_t _img_w = 0, _img_h = 0;
+static uint32_t _img_bytes_expected = 0;
+static uint32_t _img_bytes_received = 0;
+static bool _receiving_image = false;
+
 // ── On-demand capture state ──────────────────────────────────────────────────
 static bool _capture_pending   = false;
 static bool _result_ready      = false;
@@ -22,10 +32,34 @@ static bool _timed_out         = false;
 static uint32_t _capture_sent_ms = 0;
 
 void rpi_uart_init() {
+    // Default RX ring buffer is only 256 bytes — nowhere near enough to
+    // survive a stall elsewhere in loop() (e.g. a slow HX711 read) during
+    // the ~16KB raw-image transfer at 921600 baud. Undersized here caused
+    // visibly corrupted/shifted images (dropped bytes desync every
+    // subsequent pixel). Must be set before begin().
+    _rpi.setRxBufferSize(RPI_IMG_MAX_W * RPI_IMG_MAX_H + 256);
     _rpi.begin(BAUD_RPI, SERIAL_8N1, PIN_RPI_RX, PIN_RPI_TX);
 }
 
 static void _parse_line() {
+    // "IMG <width> <height>" — switches the reader into binary mode for
+    // the next width*height bytes, see rpi_uart_update(). Checked before
+    // SIZE since it's the prototype's primary path (see rpi_uart.h).
+    unsigned int w, h;
+    if (sscanf(_buf, "IMG %u %u", &w, &h) == 2) {
+        if (w > RPI_IMG_MAX_W || h > RPI_IMG_MAX_H || w == 0 || h == 0) {
+            ble_log("RPi: IMG header %ux%u exceeds %ux%u max, ignored",
+                    w, h, RPI_IMG_MAX_W, RPI_IMG_MAX_H);
+            return;
+        }
+        _img_w = (uint16_t)w;
+        _img_h = (uint16_t)h;
+        _img_bytes_expected = (uint32_t)w * h;
+        _img_bytes_received = 0;
+        _receiving_image = true;
+        return;
+    }
+
     // Expected format: "SIZE <median_um> <iqr_um>"
     // Values are positive integers. Anything else is silently discarded.
     int median, iqr;
@@ -45,6 +79,25 @@ static void _parse_line() {
 
 void rpi_uart_update() {
     while (_rpi.available()) {
+        if (_receiving_image) {
+            // Binary mode: consume raw bytes directly, no line buffering —
+            // image bytes may legitimately contain \n/\r, so the line
+            // parser below must not see them.
+            int n = _rpi.readBytes(_img_buf + _img_bytes_received,
+                                    min((uint32_t)_rpi.available(),
+                                        _img_bytes_expected - _img_bytes_received));
+            _img_bytes_received += n;
+            if (_img_bytes_received >= _img_bytes_expected) {
+                _receiving_image = false;
+                ble_log("RPi: image received %ux%u", _img_w, _img_h);
+                if (_capture_pending) {
+                    _capture_pending = false;
+                    _result_ready = true;
+                }
+            }
+            continue;
+        }
+
         char c = _rpi.read();
         if (c == '\r') continue;  // strip Windows-style CR if present
         if (c == '\n' || _buf_pos >= sizeof(_buf) - 1) {
@@ -62,6 +115,10 @@ void rpi_uart_update() {
         ble_log("RPi: capture request timed out after %lu ms", (unsigned long)RPI_CAPTURE_TIMEOUT_MS);
     }
 }
+
+const uint8_t *rpi_get_last_image()      { return _img_buf; }
+uint16_t rpi_get_last_image_width()      { return _img_w; }
+uint16_t rpi_get_last_image_height()     { return _img_h; }
 
 int16_t rpi_get_median_um() { return _median_um; }
 int16_t rpi_get_iqr_um()    { return _iqr_um; }

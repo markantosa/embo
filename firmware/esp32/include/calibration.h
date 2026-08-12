@@ -160,6 +160,27 @@ FusedSizeEstimate calib_estimate_particle_size_um(float uasAttenuation, float tu
 // sensor problem.
 float calib_estimate_particle_size_from_uas_delta_v_um(float deltaVoltageVolts);
 
+// ── Target-size-to-stroke-count equation ─────────────────────────────────────
+// This is the ACTUAL mixing stop condition as of v0.7.0 (scheduler.cpp),
+// replacing the UAS delta-V continuous check above — that function (and the
+// live voltage/size reading it drives) stays in place for display/
+// diagnostics on MixingRunningScreen/EndScreen, but no longer determines
+// when a run stops. This is now open-loop: the required stroke count is
+// computed ONCE from the target size at the start of a run
+// (scheduler_start()), then the run simply executes that many strokes and
+// stops — not a continuous measure-and-compare loop like the UAS check was.
+// Real measured calibration, not a placeholder:
+//   stroke_count = (target_size_um / STROKE_COUNT_EQ_COEFFICIENT) ^ (1 / STROKE_COUNT_EQ_EXPONENT) - 1
+#define STROKE_COUNT_EQ_COEFFICIENT   2250.6f
+#define STROKE_COUNT_EQ_EXPONENT      -0.4853f
+
+// Returns the computed stroke count for a given target size, rounded to
+// the nearest whole stroke, clamped to >= 0 (a target size at or above
+// STROKE_COUNT_EQ_COEFFICIENT would otherwise compute a negative/near-zero
+// result — clamped to 0 rather than treated as an error, since "no
+// mixing needed" is a legitimate answer for a large enough target).
+uint32_t calib_estimate_stroke_count_for_target(uint16_t targetSizeUm);
+
 // ---------------------------------------------------------------------------
 // Mixing stop condition — debounce, see CALIBRATION.md §6
 // ---------------------------------------------------------------------------

@@ -37,3 +37,11 @@ void ui_display_draw_spinner(int16_t cy);
 // ui_display_draw_centered, which centers across the whole screen width).
 void ui_display_draw_touch_button(int16_t x, int16_t y, int16_t w, int16_t h,
                                    const char *label, uint16_t bgColor, uint16_t textColor);
+
+// Draws a raw 8-bit greyscale image 1:1 (no scaling) with its top-left at
+// (x, y) — converts each byte to RGB565 inline via startWrite()/writePixel()
+// rather than building a converted RGB565 copy first, so it works
+// regardless of how little free RAM is available (relevant on a board
+// that most likely has no PSRAM — see rpi_uart.h's RPI_IMG_MAX_W/H note).
+void ui_display_draw_grayscale_image(int16_t x, int16_t y, uint16_t w, uint16_t h,
+                                      const uint8_t *pixels);

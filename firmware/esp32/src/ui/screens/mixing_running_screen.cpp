@@ -5,6 +5,8 @@
 #include "ui_display.h"
 #include "scheduler.h"
 #include "ui.h"
+#include <Arduino.h>
+#include <stdio.h>
 
 // Single large E-STOP button — ANY input at all (this button, BTN1
 // short/long press, or the encoder knob short/long press) triggers
@@ -13,6 +15,13 @@
 // screen — deliberately simplified so there's exactly one outcome for any
 // operator interaction while mixing is active: stop now.
 static const TouchButton kStopButton = { 60, 255, 200, 45, "EMERGENCY STOP" };
+
+// Live UAS readout refresh rate — throttled separately from forceFull.
+// The underlying value (scheduler.cpp) updates roughly every loop()
+// iteration, but that's far faster than useful for a number a person is
+// reading, not measuring — a few times a second is plenty and avoids
+// redrawing text on every single iteration.
+#define MIXING_SCREEN_UAS_REFRESH_INTERVAL_MS 250
 
 void MixingRunningScreen::onEnter() {
     // Draw the Mixing screen itself FIRST, before the blocking homing call
@@ -38,6 +47,23 @@ void MixingRunningScreen::_draw(bool forceFull) {
         ui_display_draw_centered("Press any button to emergency stop", 220, COLOR_ASH, 1);
         ui_display_draw_touch_button(kStopButton.x, kStopButton.y, kStopButton.w, kStopButton.h,
                                       kStopButton.label, COLOR_CLOWN_NOSE, TFT_WHITE);
+    }
+
+    // Live UAS readout — same values EndScreen shows at the end, just
+    // continuously refreshed here while a run is actually in progress.
+    static uint32_t lastUasDrawMs = 0;
+    uint32_t now = millis();
+    if (forceFull || now - lastUasDrawMs >= MIXING_SCREEN_UAS_REFRESH_INTERVAL_MS) {
+        lastUasDrawMs = now;
+        tft.fillRect(0, 100, tft.width(), 48, TFT_WHITE);
+        char line[48];
+        snprintf(line, sizeof(line), "%.1f um", scheduler_get_last_fused_size_um());
+        tft.setFont(&fonts::FreeSansBold12pt7b);
+        ui_display_draw_centered(line, 103, TFT_BLACK, 1);
+        tft.setFont(&fonts::FreeSans9pt7b);
+        snprintf(line, sizeof(line), "V=%.3fV  target=%u um",
+                 scheduler_get_last_measured_voltage(), scheduler_get_target_um());
+        ui_display_draw_centered(line, 132, COLOR_ASH, 1);
     }
 
     ui_display_draw_spinner(160);
