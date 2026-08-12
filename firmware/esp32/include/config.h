@@ -134,7 +134,7 @@
 #define STROKE_TEST_COUNT_MIN       1
 #define STROKE_TEST_COUNT_MAX       50
 #define STROKE_TEST_COUNT_DEFAULT   5
-#define MOTOR_STROKE_TEST_HZ        4000 //4000Hz 
+#define MOTOR_STROKE_TEST_HZ        10000 //10000Hz 
 // SG_RESULT (motor_sg_result(), motors.h) is 0-1023, HIGHER = LESS load —
 // a value below this is treated as a stall (either TMC torque loss or a
 // genuine mechanical jam) and stops the motor(s) immediately with a
