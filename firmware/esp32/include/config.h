@@ -28,6 +28,17 @@
 // device is marked not-ok. See turbidity.cpp.
 #define TURBIDITY_REINIT_INTERVAL_MS  2000
 
+// Syringe-presence note on WarningScreen (UI hint only — never gates
+// starting a run). APDS9960 clear channel (fixed 4x gain, no
+// auto-exposure) reads HIGHER once a syringe is mounted (not lower —
+// corrected after an initial wrong assumption). Simple single-baseline
+// delta (first sample taken on this screen visit vs. current) — known to
+// be vulnerable to ambient light drift between baseline and check, being
+// tried anyway for comparison against a rolling-window approach. See
+// warning_screen.cpp.
+#define SYRINGE_DETECT_RISE_COUNTS       100
+#define SYRINGE_DETECT_SAMPLE_INTERVAL_MS 50
+
 // Motor driver — shared PDN_UART bus, genuinely separate TX/RX pins
 #define PIN_TMC_UART_TX     4
 #define PIN_TMC_UART_RX     44

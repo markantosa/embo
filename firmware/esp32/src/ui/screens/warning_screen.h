@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include "ui_screen.h"
 
 class MixingRunningScreen;
@@ -21,6 +22,7 @@ public:
         _viscosityRunningScreen = &viscosityRunningScreen;
     }
 
+    void onEnter() override;
     void update(ScreenManager &mgr, bool forceFull) override;
 
 private:
@@ -28,4 +30,14 @@ private:
     ViscosityMixingRunningScreen  *_viscosityRunningScreen = nullptr;
 
     void _draw();
+
+    // Syringe-presence note — see SYRINGE_DETECT_* in config.h.
+    uint16_t _alsBaseline = 0;
+    bool     _alsBaselineSet = false;
+    uint32_t _lastAlsSampleMs = 0;
+    bool     _syringeDetected = false;
+    bool     _noteNeedsRedraw = false;
+
+    void _pollSyringeDetect();
+    void _drawSyringeNote();
 };
