@@ -4,6 +4,7 @@ CAD files and fabrication drawings for the EMBO physical structure.
 
 ## What lives here
 
+- `Final Pure Assembly.f3z` — current top-level Fusion 360 assembly
 - SolidWorks / Fusion 360 assembly and part files
 - 3D print files (FDM `.stl`, SLA `.stl`)
 - Fabrication drawings

@@ -94,6 +94,7 @@ EMBO/
 │   │   │                              #   main board (v3.4, current) + display breakout
 │   │   └── README.md
 │   └── mechanical/                    # CAD files (SolidWorks / Fusion 360)
+│                                      #   Final Pure Assembly.f3z is the current top-level assembly
 │       └── README.md
 │
 ├── firmware/
